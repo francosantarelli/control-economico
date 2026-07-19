@@ -104,6 +104,8 @@ tr:last-child td{ border-bottom:none; }
 td.num, th.num{ text-align:right; font-family:'IBM Plex Mono',monospace; }
 .ingreso{ color:var(--accent); }
 .egreso{ color:var(--danger); }
+tr.fila-incompleta{ background:var(--danger-soft); }
+tr.fila-incompleta:hover{ background:#F5D9D2; }
 tfoot td{ border-top:2px solid var(--accent); border-bottom:none; font-weight:600; font-family:'IBM Plex Mono',monospace; }
 
 .empty{ color:var(--ink-soft); font-style:italic; padding:16px 4px; font-size:13px; }
@@ -195,8 +197,8 @@ var sb = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_A
 
 var STATE = { centros: [], categorias: [], subcategorias: [], movimientos: [], vencimientos: [], activeTab: 'movimientos', editing: null, ready:false,
   importEntidad:'mp', importAnio:'26', importBanco:'nacion', importVencimiento:'', importRaw:'', importPreview:null, importPreviewExcel:null, importMsg:null,
-  bulkCatMsg:null, confirmState:null, movFormMsg:null, resumenFiltros:{centro:'', categoria:'', mes:'', vista:'categoria'}, abmSubTab:'categorias', grillaRango:'todo',
-  bulkVencMsg:null, vencFormMsg:null, dbError:null };
+  bulkCatMsg:null, confirmState:null, subDeleteState:null, movFormMsg:null, resumenFiltros:{centro:'', categoria:'', mes:'', vista:'categoria'}, abmSubTab:'categorias', grillaRango:'todo',
+  bulkVencMsg:null, vencFormMsg:null, dbError:null, saldosCache:null, saldosDirty:true };
 
 function uid(){
   if(window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID();
@@ -273,6 +275,7 @@ async function mostrarApp(){
   }catch(e){
     STATE.dbError = 'No se pudo cargar la información desde la base de datos: ' + (e.message||e);
   }
+  STATE.saldosDirty = true;
   STATE.ready = true;
   render();
 }
@@ -843,6 +846,28 @@ function render(){
     '</div></div>';
   }
 
+  if(STATE.subDeleteState){
+    var sds = STATE.subDeleteState;
+    var otrasSubs = STATE.subcategorias.filter(function(s){ return s.categoriaId===sds.categoriaId && s.id!==sds.id; });
+    var mensajeSub = sds.afectados > 0
+      ? '¿Borrar la subcategoría "'+esc(sds.nombre)+'"? Hay <strong>'+sds.afectados+' movimiento(s)</strong> que la tienen asignada.'
+      : '¿Borrar la subcategoría "'+esc(sds.nombre)+'"? No tiene movimientos asignados.';
+    var selectorReasignar = (sds.afectados > 0 && otrasSubs.length > 0) ? ''+
+      '<div class="field" style="margin-top:12px;margin-bottom:16px">'+
+        '<label>¿Qué hacer con esos '+sds.afectados+' movimiento(s)?</label>'+
+        '<select id="sub-delete-reasignar">'+
+          '<option value="">Dejarlos sin subcategoría</option>'+
+          otrasSubs.map(function(s){ return '<option value="'+s.id+'">Reasignar a: '+esc(s.nombre)+'</option>'; }).join('')+
+        '</select>'+
+      '</div>' : '';
+    MODAL_HTML = '<div class="modal-overlay" data-modal-backdrop="subdelete"><div class="modal-card">'+
+      '<div style="margin-bottom:8px">'+mensajeSub+'</div>'+
+      selectorReasignar+
+      '<button class="danger" data-action="sub-delete-confirmar">Sí, borrar</button> '+
+      '<button class="secondary" data-action="sub-delete-cancel">Cancelar</button>'+
+    '</div></div>';
+  }
+
   var html = '<div class="layout">'+sidebarHtml+'<div class="main-content">'+contentHtml+'</div></div>' + MODAL_HTML;
 
   app.innerHTML = html;
@@ -1033,8 +1058,18 @@ function getMeses(){
   return Object.keys(set).sort().reverse();
 }
 
+function camposFaltantes(m){
+  var faltan = [];
+  if(!m.fecha) faltan.push('Fecha');
+  if(!m.centroId) faltan.push('Centro de Costo');
+  if(!m.categoriaId) faltan.push('Categoría');
+  if(!m.proveedor) faltan.push('Proveedor');
+  if(!(Number(m.ingreso)>0) && !(Number(m.egreso)>0)) faltan.push('Ingreso/Egreso');
+  return faltan;
+}
+
 function renderMovimientos(){
-  var f = STATE.filtros || {centro:'', categoria:'', mes:'', texto:'', subcategoria:''};
+  var f = STATE.filtros || {centro:'', categoria:'', mes:'', texto:'', subcategoria:'', soloIncompletos:false};
 
   var centroOptions = '<option value="">Todos</option>' + STATE.centros.map(function(c){ return '<option value="'+c.id+'" '+(f.centro===c.id?'selected':'')+'>'+esc(c.codigo)+'</option>'; }).join('');
   var categoriaOptions = '<option value="">Todas</option>' + STATE.categorias.map(function(c){ return '<option value="'+c.id+'" '+(f.categoria===c.id?'selected':'')+'>'+esc(c.nombre)+'</option>'; }).join('');
@@ -1048,12 +1083,15 @@ function renderMovimientos(){
       return '<option value="'+s.id+'" '+(f.subcategoria===s.id?'selected':'')+'>'+etiqueta+'</option>';
     }).join('');
 
+  var cantidadIncompletos = STATE.movimientos.filter(function(m){ return camposFaltantes(m).length>0; }).length;
+
   var lista = STATE.movimientos.filter(function(m){
     if(f.centro && m.centroId !== f.centro) return false;
     if(f.categoria && m.categoriaId !== f.categoria) return false;
     if(f.mes && (m.fecha||'').slice(0,7) !== f.mes) return false;
     if(f.subcategoria === '__vacio__'){ if(m.subcategoriaId) return false; }
     else if(f.subcategoria){ if(m.subcategoriaId !== f.subcategoria) return false; }
+    if(f.soloIncompletos && camposFaltantes(m).length===0) return false;
     if(f.texto){
       var t = f.texto.toLowerCase();
       if((m.proveedor||'').toLowerCase().indexOf(t)===-1 && (m.detalle||'').toLowerCase().indexOf(t)===-1) return false;
@@ -1065,8 +1103,10 @@ function renderMovimientos(){
   var totalEgreso = lista.reduce(function(s,m){ return esTipoCategoria(m.categoriaId,'tec') ? s : s + (Number(m.egreso)||0); },0);
 
   var rows = lista.map(function(m){
-    return '<tr>'+
-      '<td class="mono">'+esc(m.fecha||'')+'</td>'+
+    var faltan = camposFaltantes(m);
+    var incompleto = faltan.length>0;
+    return '<tr'+(incompleto?' class="fila-incompleta" title="Falta: '+esc(faltan.join(', '))+'"':'')+'>'+
+      '<td class="mono">'+(incompleto?'⚠️ ':'')+esc(m.fecha||'')+'</td>'+
       '<td class="mono">'+esc(nombreCentro(m.centroId)).split(' · ')[0]+'</td>'+
       '<td>'+esc(nombreCategoria(m.categoriaId))+'</td>'+
       '<td>'+esc(nombreSubcategoria(m.subcategoriaId))+'</td>'+
@@ -1141,6 +1181,9 @@ function renderMovimientos(){
       '<div class="field"><label>Mes</label><select id="ff-mes">'+mesOptions+'</select></div>'+
       '<div class="field"><label>Subcategoría</label><select id="ff-subcategoria">'+subcategoriaOptions+'</select></div>'+
       '<div class="field"><label>Buscar</label><input type="text" id="ff-texto" placeholder="proveedor o detalle" value="'+esc(f.texto)+'" style="width:180px"></div>'+
+      '<div class="field"><label>&nbsp;</label><label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:normal;white-space:nowrap;padding:7px 0">'+
+        '<input type="checkbox" id="ff-solo-incompletos" '+(f.soloIncompletos?'checked':'')+' style="width:auto"> Solo incompletos ('+cantidadIncompletos+')'+
+      '</label></div>'+
     '</div>'+
   '</div>';
 
@@ -1381,7 +1424,7 @@ function titularDeCentro(codigo){
   if(c.slice(-1) === 'F') return 'Franco';
   return 'Otros';
 }
-function renderSaldos(){
+function calcularSaldos(){
   var saldoPorCentro = {};
   STATE.centros.forEach(function(c){ saldoPorCentro[c.id] = 0; });
   var saldoSinCentro = 0;
@@ -1405,12 +1448,27 @@ function renderSaldos(){
   var totalOtros = filas.filter(function(f){return f.titular==='Otros';}).reduce(function(s,f){return s+f.saldo;},0) + saldoSinCentro;
   var totalGeneral = totalAna + totalFranco + totalOtros;
 
+  return { filas:filas, saldoSinCentro:saldoSinCentro, totalAna:totalAna, totalFranco:totalFranco, hayOtros:hayOtros, totalOtros:totalOtros, totalGeneral:totalGeneral, calculadoEn: new Date() };
+}
+function obtenerSaldos(){
+  if(STATE.saldosDirty || !STATE.saldosCache){
+    STATE.saldosCache = calcularSaldos();
+    STATE.saldosDirty = false;
+  }
+  return STATE.saldosCache;
+}
+function renderSaldos(){
+  var s = obtenerSaldos();
+  var filas = s.filas, saldoSinCentro = s.saldoSinCentro;
+
+  var horaCalculo = s.calculadoEn.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+
   var cards = ''+
   '<div class="summary-cards">'+
-    '<div class="summary-card"><div class="label">Saldo total</div><div class="value">'+fmtMonto(totalGeneral)+'</div></div>'+
-    '<div class="summary-card"><div class="label">Ana</div><div class="value">'+fmtMonto(totalAna)+'</div></div>'+
-    '<div class="summary-card"><div class="label">Franco</div><div class="value">'+fmtMonto(totalFranco)+'</div></div>'+
-    (hayOtros ? '<div class="summary-card"><div class="label">Otros</div><div class="value">'+fmtMonto(totalOtros)+'</div></div>' : '')+
+    '<div class="summary-card"><div class="label">Saldo total</div><div class="value">'+fmtMonto(s.totalGeneral)+'</div></div>'+
+    '<div class="summary-card"><div class="label">Ana</div><div class="value">'+fmtMonto(s.totalAna)+'</div></div>'+
+    '<div class="summary-card"><div class="label">Franco</div><div class="value">'+fmtMonto(s.totalFranco)+'</div></div>'+
+    (s.hayOtros ? '<div class="summary-card"><div class="label">Otros</div><div class="value">'+fmtMonto(s.totalOtros)+'</div></div>' : '')+
   '</div>';
 
   var rows = filas.map(function(f){
@@ -1418,8 +1476,15 @@ function renderSaldos(){
   }).join('');
   var filaSinCentro = saldoSinCentro !== 0 ? '<tr><td class="mono">—</td><td>Movimientos sin Centro de Costo asignado</td><td>—</td><td class="num mono">'+fmtMonto(saldoSinCentro)+'</td></tr>' : '';
 
-  var tabla = '<div class="card"><h3>Saldo por Centro de Costo</h3>'+
-    '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Parte del saldo inicial cargado en la categoría "Saldo Inicial" (0 si no tiene) y suma/resta todos los ingresos y egresos, sin excluir TEC ni Obra, para reflejar el saldo real de cada cuenta.</div>'+
+  var tabla = '<div class="card">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:4px">'+
+      '<h3 style="margin-bottom:0">Saldo por Centro de Costo</h3>'+
+      '<div style="display:flex;align-items:center;gap:8px">'+
+        '<span style="font-size:11px;color:var(--ink-soft)">Calculado a las '+horaCalculo+'</span>'+
+        '<button class="secondary" data-action="recalcular-saldos" style="font-size:12px;padding:6px 12px">↻ Recalcular</button>'+
+      '</div>'+
+    '</div>'+
+    '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Parte del saldo inicial cargado en la categoría "Saldo Inicial" (0 si no tiene) y suma/resta todos los ingresos y egresos, sin excluir TEC ni Obra, para reflejar el saldo real de cada cuenta. Se recalcula solo con cada movimiento nuevo; usá "Recalcular" para traer también cambios hechos desde otra sesión.</div>'+
     (filas.length ? '<table><thead><tr><th>Código</th><th>Nombre</th><th>Titular</th><th class="num">Saldo</th></tr></thead><tbody>'+rows+filaSinCentro+'</tbody></table>' : '<div class="empty">Todavía no cargaste ningún Centro de Costo.</div>')+
   '</div>';
 
@@ -1700,7 +1765,8 @@ function bindEvents(){
     overlay.addEventListener('click', function(ev){
       if(ev.target !== overlay) return; // sólo si el click fue directo en el fondo, no en el contenido del modal
       var tipo = overlay.getAttribute('data-modal-backdrop');
-      handleAction(tipo==='confirm' ? 'confirm-no' : 'cancel-edit');
+      var accion = tipo==='confirm' ? 'confirm-no' : (tipo==='subdelete' ? 'sub-delete-cancel' : 'cancel-edit');
+      handleAction(accion);
     });
   });
 
@@ -1720,7 +1786,7 @@ function bindEvents(){
   }
 
   // Filtros de movimientos
-  ['ff-centro','ff-categoria','ff-mes','ff-subcategoria','ff-texto'].forEach(function(id){
+  ['ff-centro','ff-categoria','ff-mes','ff-subcategoria','ff-texto','ff-solo-incompletos'].forEach(function(id){
     var el = document.getElementById(id);
     if(!el) return;
     var evt = (id==='ff-texto') ? 'input' : 'change';
@@ -1730,7 +1796,8 @@ function bindEvents(){
         categoria: document.getElementById('ff-categoria').value,
         mes: document.getElementById('ff-mes').value,
         subcategoria: (id==='ff-categoria') ? '' : document.getElementById('ff-subcategoria').value,
-        texto: document.getElementById('ff-texto').value
+        texto: document.getElementById('ff-texto').value,
+        soloIncompletos: document.getElementById('ff-solo-incompletos').checked
       };
       render();
     });
@@ -1853,6 +1920,7 @@ async function handleAction(action, id){
     try{
       await dbDelete('centros', id);
       STATE.centros = STATE.centros.filter(function(c){return c.id!==id;});
+      STATE.saldosDirty = true;
     }catch(e){ STATE.dbError = 'No se pudo borrar el centro de costo: '+(e.message||e); }
     render(); return;
   }
@@ -1871,6 +1939,7 @@ async function handleAction(action, id){
         await dbInsert('centros', toDbCentro(nuevoC));
         STATE.centros.push(nuevoC);
       }
+      STATE.saldosDirty = true;
       STATE.editing = null;
     }catch(e){ STATE.dbError = 'No se pudo guardar el centro de costo: '+(e.message||e); }
     render(); return;
@@ -1957,16 +2026,40 @@ async function handleAction(action, id){
     render(); return;
   }
 
+  // ---- SALDOS ----
+  if(action==='recalcular-saldos'){
+    STATE.dbError = null;
+    try{
+      await cargarTodo(); // trae datos frescos, por si hubo cambios desde otra sesión
+    }catch(e){ STATE.dbError = 'No se pudo actualizar desde la base de datos: '+(e.message||e); }
+    STATE.saldosDirty = true;
+    render(); return;
+  }
+
   // ---- SUBCATEGORÍAS ----
   if(action==='edit-subcategoria'){ STATE.editing = {type:'subcategoria', id:id}; render(); return; }
   if(action==='del-subcategoria'){
-    STATE.confirmState = { message:'¿Borrar esta subcategoría?', action:'del-subcategoria-do', id:id };
+    var subABorrar = STATE.subcategorias.find(function(s){return s.id===id;});
+    if(!subABorrar) return;
+    var afectados = STATE.movimientos.filter(function(m){return m.subcategoriaId===id;}).length;
+    STATE.subDeleteState = { id:id, nombre:subABorrar.nombre, categoriaId:subABorrar.categoriaId, afectados:afectados, reasignarA:'' };
     render(); return;
   }
-  if(action==='del-subcategoria-do'){
+  if(action==='sub-delete-cancel'){ STATE.subDeleteState = null; render(); return; }
+  if(action==='sub-delete-confirmar'){
+    var sds = STATE.subDeleteState;
+    if(!sds) return;
+    var reasignarA = document.getElementById('sub-delete-reasignar') ? document.getElementById('sub-delete-reasignar').value : '';
     try{
-      await dbDelete('subcategorias', id);
-      STATE.subcategorias = STATE.subcategorias.filter(function(s){return s.id!==id;});
+      if(sds.afectados > 0 && reasignarA){
+        await sb.from('movimientos').update({subcategoria_id: reasignarA}).eq('subcategoria_id', sds.id);
+        STATE.movimientos.forEach(function(m){ if(m.subcategoriaId===sds.id) m.subcategoriaId = reasignarA; });
+      } else if(sds.afectados > 0){
+        STATE.movimientos.forEach(function(m){ if(m.subcategoriaId===sds.id) m.subcategoriaId = ''; });
+      }
+      await dbDelete('subcategorias', sds.id);
+      STATE.subcategorias = STATE.subcategorias.filter(function(s){return s.id!==sds.id;});
+      STATE.subDeleteState = null;
     }catch(e){ STATE.dbError = 'No se pudo borrar la subcategoría: '+(e.message||e); }
     render(); return;
   }
@@ -2000,6 +2093,7 @@ async function handleAction(action, id){
     try{
       await dbDelete('movimientos', id);
       STATE.movimientos = STATE.movimientos.filter(function(m){return m.id!==id;});
+      STATE.saldosDirty = true;
     }catch(e){ STATE.dbError = 'No se pudo borrar el movimiento: '+(e.message||e); }
     render(); return;
   }
@@ -2027,6 +2121,7 @@ async function handleAction(action, id){
         await dbInsert('movimientos', toDbMovimiento(nuevoM));
         STATE.movimientos.push(nuevoM);
       }
+      STATE.saldosDirty = true;
       STATE.editing = null;
     }catch(e){ STATE.dbError = 'No se pudo guardar el movimiento: '+(e.message||e); }
     render(); return;
@@ -2090,6 +2185,7 @@ async function handleAction(action, id){
       await dbInsert('movimientos', toDbMovimiento(nuevoMov));
       await dbUpdate('vencimientos', id, {estado:'pagado'});
       STATE.movimientos.push(nuevoMov);
+      STATE.saldosDirty = true;
       vm.estado = 'pagado';
       STATE.activeTab = 'movimientos'; STATE.editing = null;
     }catch(e){ STATE.dbError = 'No se pudo convertir el vencimiento en movimiento: '+(e.message||e); }
@@ -2174,7 +2270,7 @@ async function handleAction(action, id){
       var found = STATE.centros.find(function(c){ return (c.codigo||'').toUpperCase() === ccText.toUpperCase(); });
       if(found) return found.id;
       var nuevo = {id:uid(), codigo: ccText.toUpperCase(), nombre: ccText};
-      STATE.centros.push(nuevo); nuevosCentros.push(nuevo);
+      STATE.centros.push(nuevo); nuevosCentros.push(nuevo); STATE.saldosDirty = true;
       return nuevo.id;
     }
     function resolverCategoria(nombreText){
@@ -2205,6 +2301,7 @@ async function handleAction(action, id){
       };
       nuevosMovimientos.push(nm);
       STATE.movimientos.push(nm);
+      STATE.saldosDirty = true;
     });
 
     try{
@@ -2253,6 +2350,7 @@ async function handleAction(action, id){
     try{
       await dbInsert('movimientos', nuevosMov.map(toDbMovimiento));
       STATE.movimientos = STATE.movimientos.concat(nuevosMov);
+      STATE.saldosDirty = true;
       STATE.importPreview = null; STATE.importRaw = ''; STATE.importMsg = {type:'ok', text: seleccionadas.length+' movimiento(s) importado(s) correctamente.'};
       STATE.activeTab = 'movimientos'; STATE.editing = null;
     }catch(e){ STATE.dbError = 'No se pudo completar la importación: '+(e.message||e); }
