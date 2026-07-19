@@ -803,6 +803,14 @@ function render(){
   var app = document.getElementById('app');
   if(!STATE.ready){ app.innerHTML = '<div class="loading">Cargando datos...</div>'; return; }
 
+  // Guardar qué campo de texto tenía el foco (y en qué posición del cursor), para
+  // restaurarlo después de reconstruir el HTML — si no, cada letra tipeada te saca el foco.
+  var focoActivo = document.activeElement;
+  var focoPendiente = null;
+  if(focoActivo && focoActivo.id && (focoActivo.tagName==='INPUT' || focoActivo.tagName==='TEXTAREA')){
+    focoPendiente = { id: focoActivo.id, start: focoActivo.selectionStart, end: focoActivo.selectionEnd };
+  }
+
   MODAL_HTML = '';
 
   var tabs = [
@@ -874,6 +882,16 @@ function render(){
 
   app.innerHTML = html;
   bindEvents();
+
+  if(focoPendiente){
+    var elFoco = document.getElementById(focoPendiente.id);
+    if(elFoco && (elFoco.tagName==='INPUT' || elFoco.tagName==='TEXTAREA')){
+      elFoco.focus();
+      if(typeof elFoco.setSelectionRange === 'function' && focoPendiente.start !== null && focoPendiente.start !== undefined){
+        try{ elFoco.setSelectionRange(focoPendiente.start, focoPendiente.end); }catch(e){}
+      }
+    }
+  }
 }
 
 var MODAL_HTML = '';
