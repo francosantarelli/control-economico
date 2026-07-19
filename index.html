@@ -1064,7 +1064,7 @@ function camposFaltantes(m){
   if(!m.centroId) faltan.push('Centro de Costo');
   if(!m.categoriaId) faltan.push('Categoría');
   if(!m.proveedor) faltan.push('Proveedor');
-  if(!(Number(m.ingreso)>0) && !(Number(m.egreso)>0)) faltan.push('Ingreso/Egreso');
+  if(Number(m.ingreso)===0 && Number(m.egreso)===0) faltan.push('Ingreso/Egreso');
   return faltan;
 }
 
@@ -1084,6 +1084,15 @@ function renderMovimientos(){
     }).join('');
 
   var cantidadIncompletos = STATE.movimientos.filter(function(m){ return camposFaltantes(m).length>0; }).length;
+
+  // Control de integridad de TEC: debería dar 0 (cada transferencia es un ingreso en un centro y un egreso en otro, por el mismo monto)
+  var movsTec = STATE.movimientos.filter(function(m){ return esTipoCategoria(m.categoriaId,'tec'); });
+  var ingresoTec = movsTec.reduce(function(s,m){ return s+(Number(m.ingreso)||0); },0);
+  var egresoTec = movsTec.reduce(function(s,m){ return s+(Number(m.egreso)||0); },0);
+  var difTec = ingresoTec - egresoTec;
+  var categoriasSospechosas = STATE.categorias.filter(function(c){
+    return c.tipo !== 'tec' && /tec|transfer/i.test(c.nombre||'');
+  });
 
   var lista = STATE.movimientos.filter(function(m){
     if(f.centro && m.centroId !== f.centro) return false;
@@ -1131,6 +1140,15 @@ function renderMovimientos(){
     .map(function(s){ return '<option value="'+s.id+'" '+(e.subcategoriaId===s.id?'selected':'')+'>'+esc(s.nombre)+'</option>'; }).join('');
 
   function camposMov(e, subOptions){
+    var catSel = STATE.categorias.find(function(c){return c.id===e.categoriaId;});
+    var esTec = catSel && catSel.tipo === 'tec';
+    var campoDestino = (!editing && esTec) ? ''+
+      '<div class="row" style="margin-top:10px">'+
+        '<div class="field" style="flex:1 1 240px"><label>Centro de Costo Destino (transferencia)</label><select id="f-mov-centro-destino"><option value="">Elegir...</option>'+
+          STATE.centros.filter(function(c){return c.id!==e.centroId;}).map(function(c){ return '<option value="'+c.id+'">'+esc(c.codigo)+' · '+esc(c.nombre)+'</option>'; }).join('')+
+        '</select></div>'+
+        '<div class="field" style="flex:2 1 260px;justify-content:flex-end"><div style="font-size:11px;color:var(--ink-soft);padding-bottom:8px">Se va a crear automáticamente el movimiento espejo en ese centro: misma fecha y categoría, mismo monto, tipo contrario.</div></div>'+
+      '</div>' : '';
     return ''+
       (STATE.movFormMsg ? '<div class="msg err">'+esc(STATE.movFormMsg)+'</div>' : '')+
       '<div class="row">'+
@@ -1143,6 +1161,7 @@ function renderMovimientos(){
         '</select></div>'+
         '<div class="field"><label>Subcategoría</label><select id="f-mov-subcategoria"><option value="">Elegir...</option>'+subOptions+'</select></div>'+
       '</div>'+
+      campoDestino+
       '<div class="row" style="margin-top:10px">'+
         '<div class="field"><label>Proveedor</label><input type="text" id="f-mov-proveedor" value="'+esc(e.proveedor)+'" style="width:200px"></div>'+
         '<div class="field"><label>Detalle</label><input type="text" id="f-mov-detalle" value="'+esc(e.detalle)+'" style="width:200px"></div>'+
@@ -1172,6 +1191,20 @@ function renderMovimientos(){
     '</div>';
   }
 
+  var controlTecHtml = (Math.abs(difTec) > 0.005 || categoriasSospechosas.length > 0) ? ''+
+  '<div class="card" style="border-color:var(--danger);background:var(--danger-soft)">'+
+    '<h3 style="color:var(--danger)">⚠️ Control TEC</h3>'+
+    (Math.abs(difTec) > 0.005 ? ''+
+      '<div style="font-size:13px;margin-bottom:6px">Ingresos TEC: <strong class="mono">'+fmtMonto(ingresoTec)+'</strong> — Egresos TEC: <strong class="mono">'+fmtMonto(egresoTec)+'</strong> — Diferencia: <strong class="mono">'+fmtMonto(difTec)+'</strong></div>'+
+      '<div style="font-size:12px;color:var(--ink-soft)">Debería dar $0,00. Si no da cero, hay transferencias sin su par correspondiente en el otro Centro de Costo (revisá con el filtro de Categoría = TEC).</div>'
+      : '')+
+    (categoriasSospechosas.length > 0 ? ''+
+      '<div style="font-size:12px;color:var(--ink-soft);margin-top:'+(Math.abs(difTec)>0.005?'10px':'0')+'">'+
+        'La(s) categoría(s) '+categoriasSospechosas.map(function(c){return '"'+esc(c.nombre)+'"';}).join(', ')+' parece(n) ser de transferencias pero no tiene(n) el Tipo "TEC" asignado en ABM → Categorías — por eso se están contando como ingreso/egreso real en el Resumen.'+
+      '</div>'
+      : '')+
+  '</div>' : '';
+
   var filtersHtml = ''+
   '<div class="card">'+
     '<h3>Filtros</h3>'+
@@ -1197,7 +1230,7 @@ function renderMovimientos(){
     '</table>' : '<div class="empty">No hay movimientos que coincidan con los filtros.</div>')+
   '</div>';
 
-  return formHtml + filtersHtml + tableHtml;
+  return controlTecHtml + formHtml + filtersHtml + tableHtml;
 }
 
 // ===================== IMPORTAR =====================
@@ -2099,10 +2132,27 @@ async function handleAction(action, id){
   }
   if(action==='save-mov'){
     var v = getMovFormValues();
+    STATE.movDraft = v; // conservar lo tipeado si la validación falla más abajo
     if(!v.fecha || !v.centroId || !v.categoriaId || !v.proveedor || !v.monto){
       STATE.movFormMsg = 'Completá al menos: fecha, centro de costo, categoría, proveedor y monto.';
       render(); return;
     }
+    var catElegida = STATE.categorias.find(function(c){return c.id===v.categoriaId;});
+    var esTecMov = catElegida && catElegida.tipo === 'tec';
+    var centroDestinoEl = document.getElementById('f-mov-centro-destino');
+    var centroDestino = centroDestinoEl ? centroDestinoEl.value : '';
+
+    if(!id && esTecMov){
+      if(!centroDestino){
+        STATE.movFormMsg = 'Esta categoría es de tipo TEC: elegí el Centro de Costo Destino de la transferencia.';
+        render(); return;
+      }
+      if(centroDestino === v.centroId){
+        STATE.movFormMsg = 'El Centro de Costo Destino tiene que ser distinto al de origen.';
+        render(); return;
+      }
+    }
+
     STATE.movFormMsg = null; STATE.dbError = null;
     var monto = Math.abs(parseFloat(v.monto))||0;
     var mov = {
@@ -2116,13 +2166,25 @@ async function handleAction(action, id){
         await dbUpdate('movimientos', id, toDbMovimiento(Object.assign({id:id}, mov)));
         var idx = STATE.movimientos.findIndex(function(m){return m.id===id;});
         if(idx>-1) STATE.movimientos[idx] = Object.assign({id:id}, mov);
-      } else {
+      } else if(esTecMov){
+        // crear el movimiento de origen + el espejo automático en el centro destino, con tipo contrario
         var nuevoM = Object.assign({id:uid()}, mov);
-        await dbInsert('movimientos', toDbMovimiento(nuevoM));
-        STATE.movimientos.push(nuevoM);
+        var espejo = {
+          id: uid(), fecha: v.fecha, centroId: centroDestino, categoriaId: v.categoriaId, subcategoriaId: v.subcategoriaId,
+          proveedor: v.proveedor, detalle: (v.detalle ? v.detalle+' ' : '')+'(transferencia automática)',
+          ingreso: v.tipo==='ingreso' ? 0 : monto,
+          egreso: v.tipo==='ingreso' ? monto : 0
+        };
+        await dbInsert('movimientos', [toDbMovimiento(nuevoM), toDbMovimiento(espejo)]);
+        STATE.movimientos.push(nuevoM, espejo);
+      } else {
+        var nuevoM2 = Object.assign({id:uid()}, mov);
+        await dbInsert('movimientos', toDbMovimiento(nuevoM2));
+        STATE.movimientos.push(nuevoM2);
       }
       STATE.saldosDirty = true;
       STATE.editing = null;
+      STATE.movDraft = null;
     }catch(e){ STATE.dbError = 'No se pudo guardar el movimiento: '+(e.message||e); }
     render(); return;
   }
