@@ -804,6 +804,7 @@ function render(){
     {id:'movimientos', label:'Movimientos'},
     {id:'importar', label:'Importar'},
     {id:'vencimientos', label:'Vencimientos'},
+    {id:'saldos', label:'Saldos'},
     {id:'resumen', label:'Resumen'},
     {id:'abm', label:'ABM'}
   ];
@@ -827,6 +828,7 @@ function render(){
   if(STATE.activeTab==='movimientos') contentHtml += renderMovimientos();
   else if(STATE.activeTab==='importar') contentHtml += renderImportar();
   else if(STATE.activeTab==='vencimientos') contentHtml += renderVencimientos();
+  else if(STATE.activeTab==='saldos') contentHtml += renderSaldos();
   else if(STATE.activeTab==='resumen') contentHtml += renderResumen();
   else if(STATE.activeTab==='abm') contentHtml += renderABM();
   contentHtml += '</div>';
@@ -1370,6 +1372,58 @@ function renderVencimientos(){
   '</div>';
 
   return formHtml + tableHtml;
+}
+
+// ===================== SALDOS =====================
+function titularDeCentro(codigo){
+  var c = (codigo||'').trim().toUpperCase();
+  if(c.slice(-1) === 'A') return 'Ana';
+  if(c.slice(-1) === 'F') return 'Franco';
+  return 'Otros';
+}
+function renderSaldos(){
+  var saldoPorCentro = {};
+  STATE.centros.forEach(function(c){ saldoPorCentro[c.id] = 0; });
+  var saldoSinCentro = 0;
+
+  STATE.movimientos.forEach(function(m){
+    var delta = (Number(m.ingreso)||0) - (Number(m.egreso)||0);
+    if(m.centroId && saldoPorCentro.hasOwnProperty(m.centroId)){
+      saldoPorCentro[m.centroId] += delta;
+    } else {
+      saldoSinCentro += delta;
+    }
+  });
+
+  var filas = STATE.centros.map(function(c){
+    return { id:c.id, codigo:c.codigo, nombre:c.nombre, titular: titularDeCentro(c.codigo), saldo: saldoPorCentro[c.id]||0 };
+  }).sort(function(a,b){ return a.titular.localeCompare(b.titular) || a.codigo.localeCompare(b.codigo); });
+
+  var totalAna = filas.filter(function(f){return f.titular==='Ana';}).reduce(function(s,f){return s+f.saldo;},0);
+  var totalFranco = filas.filter(function(f){return f.titular==='Franco';}).reduce(function(s,f){return s+f.saldo;},0);
+  var hayOtros = filas.some(function(f){return f.titular==='Otros';}) || saldoSinCentro !== 0;
+  var totalOtros = filas.filter(function(f){return f.titular==='Otros';}).reduce(function(s,f){return s+f.saldo;},0) + saldoSinCentro;
+  var totalGeneral = totalAna + totalFranco + totalOtros;
+
+  var cards = ''+
+  '<div class="summary-cards">'+
+    '<div class="summary-card"><div class="label">Saldo total</div><div class="value">'+fmtMonto(totalGeneral)+'</div></div>'+
+    '<div class="summary-card"><div class="label">Ana</div><div class="value">'+fmtMonto(totalAna)+'</div></div>'+
+    '<div class="summary-card"><div class="label">Franco</div><div class="value">'+fmtMonto(totalFranco)+'</div></div>'+
+    (hayOtros ? '<div class="summary-card"><div class="label">Otros</div><div class="value">'+fmtMonto(totalOtros)+'</div></div>' : '')+
+  '</div>';
+
+  var rows = filas.map(function(f){
+    return '<tr><td class="mono">'+esc(f.codigo)+'</td><td>'+esc(f.nombre)+'</td><td>'+esc(f.titular)+'</td><td class="num mono">'+fmtMonto(f.saldo)+'</td></tr>';
+  }).join('');
+  var filaSinCentro = saldoSinCentro !== 0 ? '<tr><td class="mono">—</td><td>Movimientos sin Centro de Costo asignado</td><td>—</td><td class="num mono">'+fmtMonto(saldoSinCentro)+'</td></tr>' : '';
+
+  var tabla = '<div class="card"><h3>Saldo por Centro de Costo</h3>'+
+    '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Parte del saldo inicial cargado en la categoría "Saldo Inicial" (0 si no tiene) y suma/resta todos los ingresos y egresos, sin excluir TEC ni Obra, para reflejar el saldo real de cada cuenta.</div>'+
+    (filas.length ? '<table><thead><tr><th>Código</th><th>Nombre</th><th>Titular</th><th class="num">Saldo</th></tr></thead><tbody>'+rows+filaSinCentro+'</tbody></table>' : '<div class="empty">Todavía no cargaste ningún Centro de Costo.</div>')+
+  '</div>';
+
+  return cards + tabla;
 }
 
 // ===================== RESUMEN =====================
