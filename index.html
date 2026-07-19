@@ -124,6 +124,8 @@ tfoot td{ border-top:2px solid var(--accent); border-bottom:none; font-weight:60
 .bar-row .name{ width:180px; font-size:12px; flex-shrink:0; }
 .bar-track{ flex:1; background:var(--accent-soft); border-radius:3px; height:8px; overflow:hidden; }
 .bar-fill{ background:var(--danger); height:100%; }
+.bar-fill.egreso-fill{ background:var(--danger); }
+.bar-fill.ingreso-fill{ background:var(--accent); }
 .bar-row .amt{ width:100px; text-align:right; font-family:'IBM Plex Mono',monospace; font-size:12px; flex-shrink:0; }
 
 footer.small{ margin-top:28px; font-size:11px; color:var(--ink-soft); text-align:center; }
@@ -917,14 +919,16 @@ function renderCentros(){
 
 // ===================== CATEGORÍAS =====================
 function tipoLabel(tipo){
-  var map = { ingreso:'Ingreso', egreso:'Egreso', ahorro:'Ahorro', tec:'TEC' };
-  return map[tipo] || '—';
+  return tipo==='tec' ? 'TEC' : '—';
+}
+function esPalabraDeTipo(s){
+  // reconoce las palabras que suelen venir en la columna "Cuenta" del Excel (Ingresos/Egresos/Ahorros/TeC),
+  // solo para poder detectar el orden de las columnas al pegar — el valor real que se guarda sale de normalizarTipo()
+  s = (s||'').trim().toLowerCase();
+  return /^ingres/.test(s) || /^egres/.test(s) || /^ahorr/.test(s) || /^tec$/.test(s) || /transfer.*cuenta/.test(s);
 }
 function normalizarTipo(s){
   s = (s||'').trim().toLowerCase();
-  if(/^ingres/.test(s)) return 'ingreso';
-  if(/^egres/.test(s)) return 'egreso';
-  if(/^ahorr/.test(s)) return 'ahorro';
   if(/^tec$/.test(s) || /transfer.*cuenta/.test(s)) return 'tec';
   return '';
 }
@@ -950,13 +954,9 @@ function renderABM(){
 
 function campoCategoria(nombre, tipo){
   return '<div class="field"><label>Nombre</label><input type="text" id="f-categoria-nombre" placeholder="Ej: Alimentos" value="'+esc(nombre)+'" style="width:220px"></div>'+
-    '<div class="field"><label>Tipo</label><select id="f-categoria-tipo">'+
-      '<option value="" '+(tipo===''?'selected':'')+'>Sin definir</option>'+
-      '<option value="ingreso" '+(tipo==='ingreso'?'selected':'')+'>Ingreso</option>'+
-      '<option value="egreso" '+(tipo==='egreso'?'selected':'')+'>Egreso</option>'+
-      '<option value="ahorro" '+(tipo==='ahorro'?'selected':'')+'>Ahorro</option>'+
-      '<option value="tec" '+(tipo==='tec'?'selected':'')+'>TEC (Transferencia entre Cuentas)</option>'+
-    '</select></div>';
+    '<div class="field"><label>&nbsp;</label><label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:normal;white-space:nowrap;padding:7px 0">'+
+      '<input type="checkbox" id="f-categoria-es-tec" '+(tipo==='tec'?'checked':'')+' style="width:auto"> Es TEC (transferencia entre cuentas)'+
+    '</label></div>';
 }
 function renderCategorias(){
   var rows = STATE.categorias.map(function(c){
@@ -1694,35 +1694,35 @@ function renderResumen(){
   var totalObra = movsObra.reduce(function(s,m){ return s + (Number(m.egreso)||0) - (Number(m.ingreso)||0); },0);
   var saldo = totalIngreso - totalEgreso - totalObra;
 
-  // Desglose por categoría o por centro de costo, según STATE.resumenFiltros.vista
+  // Desglose por categoría o por centro de costo, según STATE.resumenFiltros.vista: total neto (ingresos - egresos)
   var porGrupo = {};
   movsSinObra.forEach(function(m){
     var key = f.vista === 'centro' ? (m.centroId||'') : (m.categoriaId||'');
-    porGrupo[key] = (porGrupo[key]||0) + (Number(m.egreso)||0);
+    porGrupo[key] = (porGrupo[key]||0) + (Number(m.ingreso)||0) - (Number(m.egreso)||0);
   });
   var lista = Object.keys(porGrupo).map(function(k){
     var nombre = f.vista === 'centro' ? (k ? nombreCentro(k).split(' · ')[0] : 'Sin centro') : (k ? nombreCategoria(k) : 'Sin categoría');
     return { nombre: nombre, monto: porGrupo[k] };
-  }).filter(function(x){return x.monto>0;}).sort(function(a,b){ return b.monto-a.monto; });
-  var maxBar = lista.length ? lista[0].monto : 1;
+  }).filter(function(x){return x.monto!==0;}).sort(function(a,b){ return Math.abs(b.monto)-Math.abs(a.monto); });
+  var maxBar = lista.length ? Math.abs(lista[0].monto) : 1;
 
   var bars = lista.map(function(x){
-    var pct = maxBar ? Math.round((x.monto/maxBar)*100) : 0;
+    var pct = maxBar ? Math.round((Math.abs(x.monto)/maxBar)*100) : 0;
+    var claseColor = x.monto >= 0 ? 'ingreso' : 'egreso';
     return '<div class="bar-row"><div class="name">'+esc(x.nombre)+'</div>'+
-      '<div class="bar-track"><div class="bar-fill" style="width:'+pct+'%"></div></div>'+
-      '<div class="amt">'+fmtMonto(x.monto)+'</div></div>';
+      '<div class="bar-track"><div class="bar-fill '+claseColor+'-fill" style="width:'+pct+'%"></div></div>'+
+      '<div class="amt '+claseColor+'">'+fmtMonto(x.monto)+'</div></div>';
   }).join('');
 
-  // Donut: top 6 + "Otros", más Obra como porción aparte
-  var segmentos = lista.slice(0,6).map(function(x,i){ return {label:x.nombre, value:x.monto, color:PALETA_DONUT[i%PALETA_DONUT.length]}; });
-  var restoMonto = lista.slice(6).reduce(function(s,x){return s+x.monto;},0);
-  if(restoMonto>0) segmentos.push({label:'Otros', value:restoMonto, color:'#E3ECE6'});
-  if(totalObra>0) segmentos.push({label:'Obra', value:totalObra, color:'#F0C48A'});
+  // Donut: top 8 + "Otros" (no incluye Obra, que ya tiene su propia tarjeta aparte). Usa el valor absoluto para el tamaño de cada porción (una torta no puede tener porciones negativas), pero muestra el monto real (con signo) en la leyenda.
+  var segmentos = lista.slice(0,8).map(function(x,i){ return {label:x.nombre, value:Math.abs(x.monto), montoReal:x.monto, color:PALETA_DONUT[i%PALETA_DONUT.length]}; });
+  var restoMonto = lista.slice(8).reduce(function(s,x){return s+x.monto;},0);
+  if(restoMonto!==0) segmentos.push({label:'Otros', value:Math.abs(restoMonto), montoReal:restoMonto, color:'#E3ECE6'});
   var donutSvg = donutChart(segmentos, 160);
   var leyenda = segmentos.filter(function(s){return s.value>0;}).map(function(s){
     return '<div style="display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:4px">'+
       '<span style="width:10px;height:10px;border-radius:2px;background:'+s.color+';display:inline-block;flex-shrink:0"></span>'+
-      '<span style="flex:1">'+esc(s.label)+'</span><span class="mono">'+fmtMonto(s.value)+'</span></div>';
+      '<span style="flex:1">'+esc(s.label)+'</span><span class="mono '+(s.montoReal>=0?'ingreso':'egreso')+'">'+fmtMonto(s.montoReal)+'</span></div>';
   }).join('');
 
   // Tendencia mensual (Ingreso vs Egreso), respetando filtro de Centro/Categoría pero mostrando todos los meses disponibles
@@ -1767,9 +1767,9 @@ function renderResumen(){
     '</div>'+
   '</div>'+
   '<div class="card">'+
-    '<h3>Egresos por '+(f.vista==='centro'?'Centro de Costo':'Categoría')+'</h3>'+
-    '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">No incluye TEC (transferencias entre cuentas) ni Obra (se muestra aparte).</div>'+
-    (lista.length ? bars : '<div class="empty">Todavía no hay egresos cargados.</div>')+
+    '<h3>Total por '+(f.vista==='centro'?'Centro de Costo':'Categoría')+'</h3>'+
+    '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Ingresos menos egresos de cada '+(f.vista==='centro'?'centro':'categoría')+'. Verde = neto a favor (ingreso), coral = neto en contra (egreso). No incluye TEC (transferencias entre cuentas) ni Obra (se muestra aparte).</div>'+
+    (lista.length ? bars : '<div class="empty">Todavía no hay movimientos cargados.</div>')+
   '</div>'+
   '<div class="card">'+
     '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:4px">'+
@@ -1994,7 +1994,7 @@ async function handleAction(action, id){
   }
   if(action==='save-categoria'){
     var nombre = document.getElementById('f-categoria-nombre').value.trim();
-    var tipo = document.getElementById('f-categoria-tipo').value;
+    var tipo = document.getElementById('f-categoria-es-tec').checked ? 'tec' : '';
     if(!nombre) return;
     STATE.dbError = null;
     try{
@@ -2026,12 +2026,13 @@ async function handleAction(action, id){
       if(/^categor[ií]a$/i.test(col0) || /^categor[ií]a$/i.test(col1) || /^cuenta$/i.test(col0) || /^cuenta$/i.test(col1)) return;
 
       // detectar automáticamente si el orden es (Nombre, Tipo) o (Tipo, Nombre)
-      var t0 = normalizarTipo(col0);
-      var t1 = col1 ? normalizarTipo(col1) : '';
-      var nombreLinea, tipoLinea;
-      if(t0 && !t1){ tipoLinea = t0; nombreLinea = col1; }         // ej: "Ingresos  Aguinaldo"
-      else if(t1 || (!t0 && partes.length>1)){ nombreLinea = col0; tipoLinea = t1; } // ej: "Aguinaldo  Ingreso" (o sin tipo reconocible)
-      else { nombreLinea = col0; tipoLinea = t0; }                  // una sola columna, o ambas parecen tipo (ej "TeC  TeC")
+      var t0 = esPalabraDeTipo(col0);
+      var t1 = col1 ? esPalabraDeTipo(col1) : false;
+      var nombreLinea, colTipoTexto;
+      if(t0 && !t1){ colTipoTexto = col0; nombreLinea = col1; }         // ej: "Ingresos  Aguinaldo"
+      else if(t1 || (!t0 && partes.length>1)){ nombreLinea = col0; colTipoTexto = col1; } // ej: "Aguinaldo  Ingreso" (o sin tipo reconocible)
+      else { nombreLinea = col0; colTipoTexto = col0; }                  // una sola columna, o ambas parecen tipo (ej "TeC  TeC")
+      var tipoLinea = normalizarTipo(colTipoTexto);
 
       if(!nombreLinea) return;
       var existente = STATE.categorias.find(function(c){ return c.nombre.toLowerCase() === nombreLinea.toLowerCase(); });
@@ -2042,7 +2043,7 @@ async function handleAction(action, id){
           actualizadas++;
         } else { sinCambios++; }
       } else {
-        if(partes.length < 2 && /^(ingresos?|egresos?|ahorros?)$/i.test(nombreLinea)){
+        if(partes.length < 2 && /^(ingresos?|egresos?|ahorros?|tec)$/i.test(nombreLinea)){
           return; // probablemente una columna de "tipo" que quedó suelta por un pegado sin tabs; no la creamos como categoría
         }
         var nueva = {id:uid(), nombre:nombreLinea, tipo:tipoLinea};
