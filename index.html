@@ -220,9 +220,18 @@ function fromDbVencimiento(r){ return {id:r.id, concepto:r.concepto, fecha:r.fec
 
 // ---- CRUD genérico contra Supabase ----
 async function dbFetchAll(table){
-  var res = await sb.from(table).select('*');
-  if(res.error) throw res.error;
-  return res.data || [];
+  var allRows = [];
+  var pageSize = 1000;
+  var from = 0;
+  while(true){
+    var res = await sb.from(table).select('*').range(from, from + pageSize - 1);
+    if(res.error) throw res.error;
+    var rows = res.data || [];
+    allRows = allRows.concat(rows);
+    if(rows.length < pageSize) break; // ya no hay más filas
+    from += pageSize;
+  }
+  return allRows;
 }
 async function dbInsert(table, rowOrRows){
   var res = await sb.from(table).insert(rowOrRows).select();
