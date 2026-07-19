@@ -1533,6 +1533,10 @@ function esCategoriaObra(categoriaId){
   var cat = STATE.categorias.find(function(c){ return c.id === categoriaId; });
   return !!cat && cat.nombre.trim().toLowerCase() === 'obra';
 }
+function esCategoriaSueldo(categoriaId){
+  var cat = STATE.categorias.find(function(c){ return c.id === categoriaId; });
+  return !!cat && cat.nombre.trim().toLowerCase() === 'sueldo';
+}
 
 var PALETA_DONUT = ['#4E9D77','#A8D8BE','#D97B6C','#F0C48A','#8FBFE0','#C3AEDB','#E3C08D','#7FC4B8','#F2A6A6','#B7D89A'];
 var NOMBRES_MES_CORTO = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
@@ -1694,9 +1698,9 @@ function renderResumen(){
   var totalObra = movsObra.reduce(function(s,m){ return s + (Number(m.egreso)||0) - (Number(m.ingreso)||0); },0);
   var saldo = totalIngreso - totalEgreso - totalObra;
 
-  // Desglose por categoría o por centro de costo, según STATE.resumenFiltros.vista: total neto (ingresos - egresos)
+  // Desglose por categoría o por centro de costo, según STATE.resumenFiltros.vista: total neto (ingresos - egresos). No incluye Sueldo (queda afuera de esta comparación, como Obra).
   var porGrupo = {};
-  movsSinObra.forEach(function(m){
+  movsSinObra.filter(function(m){ return !esCategoriaSueldo(m.categoriaId); }).forEach(function(m){
     var key = f.vista === 'centro' ? (m.centroId||'') : (m.categoriaId||'');
     porGrupo[key] = (porGrupo[key]||0) + (Number(m.ingreso)||0) - (Number(m.egreso)||0);
   });
@@ -1768,7 +1772,7 @@ function renderResumen(){
   '</div>'+
   '<div class="card">'+
     '<h3>Total por '+(f.vista==='centro'?'Centro de Costo':'Categoría')+'</h3>'+
-    '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Ingresos menos egresos de cada '+(f.vista==='centro'?'centro':'categoría')+'. Verde = neto a favor (ingreso), coral = neto en contra (egreso). No incluye TEC (transferencias entre cuentas) ni Obra (se muestra aparte).</div>'+
+    '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Ingresos menos egresos de cada '+(f.vista==='centro'?'centro':'categoría')+'. Verde = neto a favor (ingreso), coral = neto en contra (egreso). No incluye TEC (transferencias entre cuentas), Obra ni Sueldo (quedan afuera de esta comparación).</div>'+
     (lista.length ? bars : '<div class="empty">Todavía no hay movimientos cargados.</div>')+
   '</div>'+
   '<div class="card">'+
