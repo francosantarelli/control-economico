@@ -172,6 +172,21 @@ footer.small{ margin-top:28px; font-size:11px; color:var(--ink-soft); text-align
 
   .summary-cards{ gap:10px; }
   .summary-card{ min-width:130px; }
+
+  /* Tablas de listados -> tarjetas apiladas con etiqueta, en vez de scroll horizontal */
+  table.tabla-movil{ width:100%; }
+  table.tabla-movil thead{ position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; }
+  table.tabla-movil, table.tabla-movil tbody, table.tabla-movil tr{ display:block; }
+  table.tabla-movil tr{ border:1px solid var(--rule); border-radius:8px; margin-bottom:10px; padding:10px 12px; background:var(--paper); }
+  table.tabla-movil tr:last-child{ margin-bottom:0; }
+  table.tabla-movil td{ display:flex; justify-content:space-between; align-items:center; gap:10px; border-bottom:1px solid var(--rule); padding:7px 0; text-align:right; }
+  table.tabla-movil td:last-child{ border-bottom:none; }
+  table.tabla-movil td::before{ content:attr(data-label); font-size:11px; font-weight:600; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.03em; text-align:left; flex-shrink:0; }
+  table.tabla-movil td[data-label=""]::before, table.tabla-movil td:not([data-label])::before{ content:none; }
+  table.tabla-movil td.actions-cell{ justify-content:flex-end; padding-top:10px; }
+  table.tabla-movil td.actions-cell::before{ content:none; }
+  table.tabla-movil tfoot, table.tabla-movil tfoot tr{ display:block; }
+  table.tabla-movil tfoot td{ display:flex; justify-content:space-between; border-bottom:none; border-top:2px solid var(--accent); padding:8px 0 0; }
 }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -952,7 +967,7 @@ function campoCentro(codigo, nombre){
 }
 function renderCentros(){
   var rows = STATE.centros.map(function(c){
-    return '<tr><td class="mono">'+esc(c.codigo)+'</td><td>'+esc(c.nombre)+'</td>'+
+    return '<tr><td class="mono" data-label="Código">'+esc(c.codigo)+'</td><td data-label="Nombre">'+esc(c.nombre)+'</td>'+
       '<td class="actions-cell"><button class="link" data-action="edit-centro" data-id="'+c.id+'">editar</button>'+
       '<button class="link" data-action="del-centro" data-id="'+c.id+'">borrar</button></td></tr>';
   }).join('');
@@ -980,7 +995,7 @@ function renderCentros(){
   return formNuevoCentro +
   '<div class="card">'+
     '<h3>Centros de costo cargados</h3>'+
-    (STATE.centros.length ? '<table><thead><tr><th>Código</th><th>Nombre</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>' : '<div class="empty">Todavía no cargaste ningún centro de costo.</div>')+
+    (STATE.centros.length ? '<table class="tabla-movil"><thead><tr><th>Código</th><th>Nombre</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>' : '<div class="empty">Todavía no cargaste ningún centro de costo.</div>')+
   '</div>';
 }
 
@@ -1028,7 +1043,7 @@ function campoCategoria(nombre, tipo){
 function renderCategorias(){
   var rows = STATE.categorias.map(function(c){
     var subCount = STATE.subcategorias.filter(function(s){return s.categoriaId===c.id;}).length;
-    return '<tr><td>'+esc(c.nombre)+'</td><td class="mono">'+tipoLabel(c.tipo)+'</td><td class="mono">'+subCount+' subcategoría(s)</td>'+
+    return '<tr><td data-label="Nombre">'+esc(c.nombre)+'</td><td class="mono" data-label="Tipo">'+tipoLabel(c.tipo)+'</td><td class="mono" data-label="Subcategorías">'+subCount+' subcategoría(s)</td>'+
       '<td class="actions-cell"><button class="link" data-action="edit-categoria" data-id="'+c.id+'">editar</button>'+
       '<button class="link" data-action="del-categoria" data-id="'+c.id+'">borrar</button></td></tr>';
   }).join('');
@@ -1065,7 +1080,7 @@ function renderCategorias(){
   '</div>'+
   '<div class="card">'+
     '<h3>Categorías cargadas</h3>'+
-    (STATE.categorias.length ? '<table><thead><tr><th>Nombre</th><th>Tipo</th><th>Subcategorías</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>' : '<div class="empty">Todavía no cargaste ninguna categoría.</div>')+
+    (STATE.categorias.length ? '<table class="tabla-movil"><thead><tr><th>Nombre</th><th>Tipo</th><th>Subcategorías</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>' : '<div class="empty">Todavía no cargaste ninguna categoría.</div>')+
   '</div>';
 }
 
@@ -1077,7 +1092,7 @@ function campoSubcategoria(catOptions, nombre){
 function renderSubcategorias(){
   var catOptions = STATE.categorias.map(function(c){ return '<option value="'+c.id+'">'+esc(c.nombre)+'</option>'; }).join('');
   var rows = STATE.subcategorias.map(function(s){
-    return '<tr><td>'+esc(nombreCategoria(s.categoriaId))+'</td><td>'+esc(s.nombre)+'</td>'+
+    return '<tr><td data-label="Categoría">'+esc(nombreCategoria(s.categoriaId))+'</td><td data-label="Subcategoría">'+esc(s.nombre)+'</td>'+
       '<td class="actions-cell"><button class="link" data-action="edit-subcategoria" data-id="'+s.id+'">editar</button>'+
       '<button class="link" data-action="del-subcategoria" data-id="'+s.id+'">borrar</button></td></tr>';
   }).join('');
@@ -1109,7 +1124,7 @@ function renderSubcategorias(){
   return formNuevaSub +
   '<div class="card">'+
     '<h3>Subcategorías cargadas</h3>'+
-    (STATE.subcategorias.length ? '<table><thead><tr><th>Categoría</th><th>Subcategoría</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>' : '<div class="empty">Todavía no cargaste ninguna subcategoría.</div>')+
+    (STATE.subcategorias.length ? '<table class="tabla-movil"><thead><tr><th>Categoría</th><th>Subcategoría</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>' : '<div class="empty">Todavía no cargaste ninguna subcategoría.</div>')+
   '</div>';
 
   // Nota: si hay editing, seteamos el select después en bindEvents (post-render) porque innerHTML no respeta "selected" con reflow directo en todos los navegadores.
@@ -1182,14 +1197,14 @@ function renderMovimientos(){
     var faltan = camposFaltantes(m);
     var incompleto = faltan.length>0;
     return '<tr'+(incompleto?' class="fila-incompleta" title="Falta: '+esc(faltan.join(', '))+'"':'')+'>'+
-      '<td class="mono">'+(incompleto?'⚠️ ':'')+esc(m.fecha||'')+'</td>'+
-      '<td class="mono">'+esc(nombreCentro(m.centroId)).split(' · ')[0]+'</td>'+
-      '<td>'+esc(nombreCategoria(m.categoriaId))+'</td>'+
-      '<td>'+esc(nombreSubcategoria(m.subcategoriaId))+'</td>'+
-      '<td>'+esc(m.proveedor||'')+'</td>'+
-      '<td>'+esc(m.detalle||'')+'</td>'+
-      '<td class="num ingreso">'+(Number(m.ingreso)?fmtMonto(m.ingreso):'')+'</td>'+
-      '<td class="num egreso">'+(Number(m.egreso)?fmtMonto(m.egreso):'')+'</td>'+
+      '<td class="mono" data-label="Fecha">'+(incompleto?'⚠️ ':'')+esc(m.fecha||'')+'</td>'+
+      '<td class="mono" data-label="Centro">'+esc(nombreCentro(m.centroId)).split(' · ')[0]+'</td>'+
+      '<td data-label="Categoría">'+esc(nombreCategoria(m.categoriaId))+'</td>'+
+      '<td data-label="Subcategoría">'+esc(nombreSubcategoria(m.subcategoriaId))+'</td>'+
+      '<td data-label="Proveedor">'+esc(m.proveedor||'')+'</td>'+
+      '<td data-label="Detalle">'+esc(m.detalle||'')+'</td>'+
+      '<td class="num ingreso" data-label="Ingreso">'+(Number(m.ingreso)?fmtMonto(m.ingreso):'')+'</td>'+
+      '<td class="num egreso" data-label="Egreso">'+(Number(m.egreso)?fmtMonto(m.egreso):'')+'</td>'+
       '<td class="actions-cell"><button class="link" data-action="edit-mov" data-id="'+m.id+'">editar</button>'+
       '<button class="link" data-action="del-mov" data-id="'+m.id+'">borrar</button></td>'+
     '</tr>';
@@ -1291,9 +1306,9 @@ function renderMovimientos(){
   '<div class="card">'+
     '<h3>Movimientos ('+lista.length+')</h3>'+
     (lista.length ? ''+
-    '<table><thead><tr><th>Fecha</th><th>CC</th><th>Categoría</th><th>Subcategoría</th><th>Proveedor</th><th>Detalle</th><th class="num">Ingreso</th><th class="num">Egreso</th><th></th></tr></thead>'+
+    '<table class="tabla-movil"><thead><tr><th>Fecha</th><th>CC</th><th>Categoría</th><th>Subcategoría</th><th>Proveedor</th><th>Detalle</th><th class="num">Ingreso</th><th class="num">Egreso</th><th></th></tr></thead>'+
     '<tbody>'+rows+'</tbody>'+
-    '<tfoot><tr><td colspan="6">Totales (sin TEC)</td><td class="num ingreso">'+fmtMonto(totalIngreso)+'</td><td class="num egreso">'+fmtMonto(totalEgreso)+'</td><td></td></tr></tfoot>'+
+    '<tfoot><tr><td colspan="6" data-label="">Totales (sin TEC)</td><td class="num ingreso" data-label="Total Ingreso">'+fmtMonto(totalIngreso)+'</td><td class="num egreso" data-label="Total Egreso">'+fmtMonto(totalEgreso)+'</td><td class="actions-cell"></td></tr></tfoot>'+
     '</table>' : '<div class="empty">No hay movimientos que coincidan con los filtros.</div>')+
   '</div>';
 
@@ -1496,11 +1511,11 @@ function renderVencimientos(){
     var diasTxt = dias===null ? '' : (dias<0 ? Math.abs(dias)+' día(s) vencido' : (dias===0 ? 'Vence hoy' : 'en '+dias+' día(s)'));
     var colorDias = dias!==null && dias<=3 ? 'egreso' : (dias!==null && dias<=7 ? '' : 'ingreso');
     return '<tr>'+
-      '<td>'+esc(v.concepto)+'</td>'+
-      '<td class="mono">'+esc(fechaISOaDDMMAAAA(v.fecha))+'</td>'+
-      '<td class="mono '+(v.estado==='pagado'?'':colorDias)+'">'+(v.estado==='pagado'?'Pagado':diasTxt)+'</td>'+
-      '<td class="mono">'+esc(v.centroId?nombreCentro(v.centroId).split(' · ')[0]:'—')+'</td>'+
-      '<td class="num mono">'+fmtMonto(v.monto)+'</td>'+
+      '<td data-label="Concepto">'+esc(v.concepto)+'</td>'+
+      '<td class="mono" data-label="Fecha">'+esc(fechaISOaDDMMAAAA(v.fecha))+'</td>'+
+      '<td class="mono '+(v.estado==='pagado'?'':colorDias)+'" data-label="Estado">'+(v.estado==='pagado'?'Pagado':diasTxt)+'</td>'+
+      '<td class="mono" data-label="Centro">'+esc(v.centroId?nombreCentro(v.centroId).split(' · ')[0]:'—')+'</td>'+
+      '<td class="num mono" data-label="Monto">'+fmtMonto(v.monto)+'</td>'+
       '<td class="actions-cell">'+
         '<button class="link" data-action="toggle-venc-estado" data-id="'+v.id+'">'+(v.estado==='pagado'?'marcar pendiente':'marcar pagado')+'</button>'+
         (v.estado!=='pagado' ? '<button class="link" data-action="venc-a-movimiento" data-id="'+v.id+'">cargar como movimiento</button>' : '')+
@@ -1511,7 +1526,7 @@ function renderVencimientos(){
   }).join('');
 
   var tableHtml = '<div class="card"><h3>Vencimientos ('+lista.length+')</h3>'+
-    (lista.length ? '<table><thead><tr><th>Concepto</th><th>Fecha</th><th>Estado</th><th>Centro</th><th class="num">Monto</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>' : '<div class="empty">Todavía no cargaste ningún vencimiento.</div>')+
+    (lista.length ? '<table class="tabla-movil"><thead><tr><th>Concepto</th><th>Fecha</th><th>Estado</th><th>Centro</th><th class="num">Monto</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>' : '<div class="empty">Todavía no cargaste ningún vencimiento.</div>')+
   '</div>';
 
   return formHtml + tableHtml;
@@ -1572,9 +1587,9 @@ function renderSaldos(){
   '</div>';
 
   var rows = filas.map(function(f){
-    return '<tr><td class="mono">'+esc(f.codigo)+'</td><td>'+esc(f.nombre)+'</td><td>'+esc(f.titular)+'</td><td class="num mono">'+fmtMonto(f.saldo)+'</td></tr>';
+    return '<tr><td class="mono" data-label="Código">'+esc(f.codigo)+'</td><td data-label="Nombre">'+esc(f.nombre)+'</td><td data-label="Titular">'+esc(f.titular)+'</td><td class="num mono" data-label="Saldo">'+fmtMonto(f.saldo)+'</td></tr>';
   }).join('');
-  var filaSinCentro = saldoSinCentro !== 0 ? '<tr><td class="mono">—</td><td>Movimientos sin Centro de Costo asignado</td><td>—</td><td class="num mono">'+fmtMonto(saldoSinCentro)+'</td></tr>' : '';
+  var filaSinCentro = saldoSinCentro !== 0 ? '<tr><td class="mono" data-label="Código">—</td><td data-label="Nombre">Movimientos sin Centro de Costo asignado</td><td data-label="Titular">—</td><td class="num mono" data-label="Saldo">'+fmtMonto(saldoSinCentro)+'</td></tr>' : '';
 
   var tabla = '<div class="card">'+
     '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:4px">'+
@@ -1585,7 +1600,7 @@ function renderSaldos(){
       '</div>'+
     '</div>'+
     '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Parte del saldo inicial cargado en la categoría "Saldo Inicial" (0 si no tiene) y suma/resta todos los ingresos y egresos, sin excluir TEC ni Obra, para reflejar el saldo real de cada cuenta. Se recalcula solo con cada movimiento nuevo; usá "Recalcular" para traer también cambios hechos desde otra sesión.</div>'+
-    (filas.length ? '<table><thead><tr><th>Código</th><th>Nombre</th><th>Titular</th><th class="num">Saldo</th></tr></thead><tbody>'+rows+filaSinCentro+'</tbody></table>' : '<div class="empty">Todavía no cargaste ningún Centro de Costo.</div>')+
+    (filas.length ? '<table class="tabla-movil"><thead><tr><th>Código</th><th>Nombre</th><th>Titular</th><th class="num">Saldo</th></tr></thead><tbody>'+rows+filaSinCentro+'</tbody></table>' : '<div class="empty">Todavía no cargaste ningún Centro de Costo.</div>')+
   '</div>';
 
   return cards + tabla;
