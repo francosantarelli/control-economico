@@ -200,7 +200,8 @@ var sb = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_A
 var STATE = { centros: [], categorias: [], subcategorias: [], movimientos: [], vencimientos: [], activeTab: 'movimientos', editing: null, ready:false,
   importEntidad:'mp', importAnio:'26', importBanco:'nacion', importVencimiento:'', importRaw:'', importPreview:null, importPreviewExcel:null, importMsg:null,
   bulkCatMsg:null, confirmState:null, subDeleteState:null, movFormMsg:null, resumenFiltros:{centro:'', categoria:'', mes:'', vista:'categoria'}, abmSubTab:'categorias', grillaRango:'todo',
-  bulkVencMsg:null, vencFormMsg:null, dbError:null, saldosCache:null, saldosDirty:true };
+  bulkVencMsg:null, vencFormMsg:null, dbError:null, saldosCache:null, saldosDirty:true,
+  usuarioEmail:null, efectivoAbierto:false, efectivoMsg:null };
 
 function uid(){
   if(window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID();
@@ -295,6 +296,7 @@ async function intentarLogin(){
   mostrarLogin('Iniciando sesión...');
   var res = await sb.auth.signInWithPassword({ email: email, password: password });
   if(res.error){ mostrarLogin('No pudimos iniciar sesión: ' + res.error.message); return; }
+  STATE.usuarioEmail = (res.data && res.data.user) ? res.data.user.email : email;
   await mostrarApp();
 }
 
@@ -307,6 +309,7 @@ async function initAuth(){
   if(!sb){ mostrarLogin('No se pudo cargar la librería de Supabase. Revisá tu conexión a internet y refrescá la página.'); return; }
   var { data } = await sb.auth.getSession();
   if(data && data.session){
+    STATE.usuarioEmail = data.session.user ? data.session.user.email : null;
     await mostrarApp();
   } else {
     mostrarLogin();
@@ -325,6 +328,19 @@ function nombreCentro(id){ var c = STATE.centros.find(function(x){return x.id===
 function nombreCategoria(id){ var c = STATE.categorias.find(function(x){return x.id===id;}); return c ? c.nombre : '—'; }
 function nombreSubcategoria(id){ var s = STATE.subcategorias.find(function(x){return x.id===id;}); return s ? s.nombre : '—'; }
 function esc(s){ return (s==null?'':String(s)).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+function codigoCentroPorUsuario(){
+  var email = (STATE.usuarioEmail||'').trim().toLowerCase();
+  if(email === 'fhsantarelli@gmail.com') return 'EF';
+  if(email === 'anitacasadei@gmail.com') return 'EA';
+  return '';
+}
+function fechaHoyISO(){
+  var d = new Date();
+  var yyyy = d.getFullYear();
+  var mm = String(d.getMonth()+1).padStart(2,'0');
+  var dd = String(d.getDate()).padStart(2,'0');
+  return yyyy+'-'+mm+'-'+dd;
+}
 
 // ===================== PARSERS PORTADOS DEL CONVERSOR =====================
 function matchRule(prov){ return null; } // acá la categorización se hace a mano en la previsualización
@@ -824,6 +840,7 @@ function render(){
 
   var sidebarHtml = '<div class="sidebar">'+
     '<div class="masthead"><h1>Control</h1><div class="tagline">Control económico<br>datos compartidos</div></div>'+
+    '<button data-action="abrir-efectivo" style="width:100%;margin-bottom:16px;background:var(--danger);border-color:var(--danger);font-size:14px;padding:12px">💵 Efectivo</button>'+
     '<div class="tabs">';
   tabs.forEach(function(t){
     sidebarHtml += '<div class="tab '+(STATE.activeTab===t.id?'active':'')+'" data-tab="'+t.id+'">'+t.label+'</div>';
@@ -875,6 +892,38 @@ function render(){
       selectorReasignar+
       '<button class="danger" data-action="sub-delete-confirmar">Sí, borrar</button> '+
       '<button class="secondary" data-action="sub-delete-cancel">Cancelar</button>'+
+    '</div></div>';
+  }
+
+  if(STATE.efectivoAbierto){
+    var codigoDefault = codigoCentroPorUsuario();
+    var centroDefault = STATE.centros.find(function(c){ return (c.codigo||'').toUpperCase()===codigoDefault; });
+    var centroDefaultId = centroDefault ? centroDefault.id : '';
+    MODAL_HTML = '<div class="modal-overlay" data-modal-backdrop="efectivo"><div class="modal-card">'+
+      '<h2>💵 Cargar efectivo</h2>'+
+      (STATE.efectivoMsg ? '<div class="msg err">'+esc(STATE.efectivoMsg)+'</div>' : '')+
+      '<div class="row">'+
+        '<div class="field"><label>Fecha</label><input type="date" id="ef-fecha" value="'+fechaHoyISO()+'"></div>'+
+        '<div class="field"><label>Centro de Costo</label><select id="ef-centro"><option value="">Elegir...</option>'+
+          STATE.centros.map(function(c){ return '<option value="'+c.id+'" '+(centroDefaultId===c.id?'selected':'')+'>'+esc(c.codigo)+' · '+esc(c.nombre)+'</option>'; }).join('')+
+        '</select></div>'+
+        '<div class="field"><label>Tipo</label><select id="ef-tipo">'+
+          '<option value="egreso" selected>Egreso</option>'+
+          '<option value="ingreso">Ingreso</option>'+
+        '</select></div>'+
+      '</div>'+
+      '<div class="row" style="margin-top:10px">'+
+        '<div class="field" style="flex:1 1 100%"><label>Monto</label><input type="number" step="0.01" id="ef-monto" placeholder="0.00" style="font-size:18px"></div>'+
+      '</div>'+
+      '<div class="row" style="margin-top:10px">'+
+        '<div class="field"><label>Proveedor (opcional)</label><input type="text" id="ef-proveedor" placeholder="Ej: Kiosco"></div>'+
+        '<div class="field"><label>Detalle (opcional)</label><input type="text" id="ef-detalle"></div>'+
+      '</div>'+
+      '<div style="font-size:11px;color:var(--ink-soft);margin-top:10px">Se carga sin Categoría ni Subcategoría — las completás después desde Movimientos.</div>'+
+      '<div class="row" style="margin-top:14px">'+
+        '<button data-action="guardar-efectivo">Guardar</button>'+
+        '<button class="secondary" data-action="cerrar-efectivo">Cancelar</button>'+
+      '</div>'+
     '</div></div>';
   }
 
@@ -1820,7 +1869,7 @@ function bindEvents(){
     overlay.addEventListener('click', function(ev){
       if(ev.target !== overlay) return; // sólo si el click fue directo en el fondo, no en el contenido del modal
       var tipo = overlay.getAttribute('data-modal-backdrop');
-      var accion = tipo==='confirm' ? 'confirm-no' : (tipo==='subdelete' ? 'sub-delete-cancel' : 'cancel-edit');
+      var accion = tipo==='confirm' ? 'confirm-no' : (tipo==='subdelete' ? 'sub-delete-cancel' : (tipo==='efectivo' ? 'cerrar-efectivo' : 'cancel-edit'));
       handleAction(accion);
     });
   });
@@ -2079,6 +2128,45 @@ async function handleAction(action, id){
       STATE.bulkCatMsg = { type:(agregadas>0||actualizadas>0)?'ok':'err',
         text: agregadas+' agregada(s), '+actualizadas+' actualizada(s) con nuevo tipo, '+sinCambios+' sin cambios.' };
     }catch(e){ STATE.dbError = 'No se pudo guardar la carga masiva: '+(e.message||e); }
+    render(); return;
+  }
+
+  // ---- EFECTIVO (carga rápida) ----
+  if(action==='abrir-efectivo'){
+    STATE.efectivoMsg = null;
+    STATE.efectivoAbierto = true;
+    render(); return;
+  }
+  if(action==='cerrar-efectivo'){
+    STATE.efectivoAbierto = false;
+    STATE.efectivoMsg = null;
+    render(); return;
+  }
+  if(action==='guardar-efectivo'){
+    var efFecha = document.getElementById('ef-fecha').value;
+    var efCentro = document.getElementById('ef-centro').value;
+    var efTipo = document.getElementById('ef-tipo').value;
+    var efMonto = Math.abs(parseFloat(document.getElementById('ef-monto').value))||0;
+    var efProveedor = document.getElementById('ef-proveedor').value.trim();
+    var efDetalle = document.getElementById('ef-detalle').value.trim();
+
+    if(!efFecha || !efMonto){
+      STATE.efectivoMsg = 'Completá al menos la fecha y el monto.';
+      render(); return;
+    }
+    STATE.efectivoMsg = null; STATE.dbError = null;
+    var nuevoEf = {
+      id: uid(), fecha: efFecha, centroId: efCentro, categoriaId: '', subcategoriaId: '',
+      proveedor: efProveedor, detalle: efDetalle,
+      ingreso: efTipo==='ingreso' ? efMonto : 0,
+      egreso: efTipo==='egreso' ? efMonto : 0
+    };
+    try{
+      await dbInsert('movimientos', toDbMovimiento(nuevoEf));
+      STATE.movimientos.push(nuevoEf);
+      STATE.saldosDirty = true;
+      STATE.efectivoAbierto = false;
+    }catch(e){ STATE.dbError = 'No se pudo guardar el movimiento: '+(e.message||e); }
     render(); return;
   }
 
