@@ -40,6 +40,10 @@ h1,h2,h3{ font-family:'Source Serif 4',serif; font-weight:600; margin:0; }
 }
 .main-content{ flex:1; min-width:0; padding:28px 24px 60px; }
 
+.mobile-topbar{ display:none; }
+.sidebar-backdrop{ display:none; }
+.hamburger-btn{ background:none; border:none; color:var(--ink); font-size:22px; padding:6px 10px; min-height:auto; line-height:1; }
+
 .masthead{
   border-bottom:2px solid var(--accent); padding-bottom:14px; margin-bottom:16px;
 }
@@ -147,11 +151,31 @@ footer.small{ margin-top:28px; font-size:11px; color:var(--ink-soft); text-align
 }
 .modal-card h2{ font-size:16px; margin-bottom:14px; }
 @media (max-width: 640px){
-  .layout{ flex-direction:column; }
-  .sidebar{ width:100%; height:auto; position:static; border-right:none; border-bottom:1px solid var(--rule); padding:16px; padding-top:calc(16px + env(safe-area-inset-top)); }
-  .tabs{ flex-direction:row; flex-wrap:wrap; }
-  .tab{ border-left:none; border-bottom:3px solid transparent; border-radius:6px 6px 0 0; padding:10px 14px; }
-  .tab.active{ border-left:none; border-bottom-color:var(--accent); }
+  .layout{ flex-direction:column; padding-top:56px; }
+
+  .mobile-topbar{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    position:fixed; top:0; left:0; right:0; z-index:950;
+    background:var(--paper); border-bottom:1px solid var(--rule);
+    padding:10px 8px; padding-top:calc(10px + env(safe-area-inset-top));
+  }
+  .mobile-topbar h1{ font-family:'Source Serif 4',serif; font-size:18px; }
+
+  .sidebar-backdrop.visible{
+    display:block; position:fixed; inset:0; background:rgba(51,65,59,.45); z-index:960;
+  }
+
+  .sidebar{
+    position:fixed; top:0; left:0; height:100vh; width:82%; max-width:300px;
+    border-right:1px solid var(--rule); border-bottom:none;
+    transform:translateX(-105%); transition:transform .22s ease-out;
+    z-index:970; background:var(--bg); overflow-y:auto;
+    padding:16px; padding-top:calc(16px + env(safe-area-inset-top));
+  }
+  .sidebar.abierto{ transform:translateX(0); box-shadow:4px 0 16px rgba(0,0,0,.25); }
+  .tabs{ flex-direction:column; }
+  .tab{ border-left:3px solid transparent; border-bottom:none; border-radius:0 6px 6px 0; padding:10px 12px; }
+  .tab.active{ border-bottom:none; border-left-color:var(--accent); }
   .main-content{ padding:16px; padding-bottom:calc(16px + env(safe-area-inset-bottom)); }
 
   .card{ padding:14px; border-radius:8px; }
@@ -170,8 +194,9 @@ footer.small{ margin-top:28px; font-size:11px; color:var(--ink-soft); text-align
   .login-wrap{ padding:16px; }
   .login-card{ width:100%; max-width:340px; }
 
-  .summary-cards{ gap:10px; }
-  .summary-card{ min-width:130px; }
+  .summary-cards{ gap:10px; flex-direction:column; }
+  .summary-card{ min-width:100%; width:100%; box-sizing:border-box; }
+  .summary-card .value{ font-size:20px; word-break:break-word; }
 
   /* Tablas de listados -> tarjetas apiladas con etiqueta, en vez de scroll horizontal */
   table.tabla-movil{ width:100%; }
@@ -216,7 +241,7 @@ var STATE = { centros: [], categorias: [], subcategorias: [], movimientos: [], v
   importEntidad:'mp', importAnio:'26', importBanco:'nacion', importVencimiento:'', importRaw:'', importPreview:null, importPreviewExcel:null, importMsg:null,
   bulkCatMsg:null, confirmState:null, subDeleteState:null, movFormMsg:null, resumenFiltros:{centro:'', categoria:'', mes:'', vista:'categoria'}, abmSubTab:'categorias', grillaRango:'todo',
   bulkVencMsg:null, vencFormMsg:null, dbError:null, saldosCache:null, saldosDirty:true,
-  usuarioEmail:null, efectivoAbierto:false, efectivoMsg:null };
+  usuarioEmail:null, efectivoAbierto:false, efectivoMsg:null, backupMsg:null, backupPendiente:null, menuMovilAbierto:false };
 
 function uid(){
   if(window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID();
@@ -853,7 +878,7 @@ function render(){
     {id:'abm', label:'ABM'}
   ];
 
-  var sidebarHtml = '<div class="sidebar">'+
+  var sidebarHtml = '<div class="sidebar'+(STATE.menuMovilAbierto?' abierto':'')+'">'+
     '<div class="masthead"><h1>Control</h1><div class="tagline">Control económico<br>datos compartidos</div></div>'+
     '<button data-action="abrir-efectivo" style="width:100%;margin-bottom:16px;background:var(--danger);border-color:var(--danger);font-size:14px;padding:12px">💵 Efectivo</button>'+
     '<div class="tabs">';
@@ -863,6 +888,13 @@ function render(){
   sidebarHtml += '</div>'+
     '<div style="margin-top:20px"><button class="secondary" id="btnLogout" style="width:100%;font-size:12px">Cerrar sesión</button></div>'+
     '</div>';
+
+  var mobileTopbarHtml = '<div class="mobile-topbar">'+
+    '<button class="hamburger-btn" data-action="toggle-menu-movil" aria-label="Abrir menú">☰</button>'+
+    '<h1>Control</h1>'+
+    '<span style="width:40px"></span>'+
+  '</div>'+
+  '<div class="sidebar-backdrop'+(STATE.menuMovilAbierto?' visible':'')+'" data-action="cerrar-menu-movil"></div>';
 
   var contentHtml = '';
   if(STATE.dbError){
@@ -942,7 +974,7 @@ function render(){
     '</div></div>';
   }
 
-  var html = '<div class="layout">'+sidebarHtml+'<div class="main-content">'+contentHtml+'</div></div>' + MODAL_HTML;
+  var html = mobileTopbarHtml + '<div class="layout">'+sidebarHtml+'<div class="main-content">'+contentHtml+'</div></div>' + MODAL_HTML;
 
   app.innerHTML = html;
   bindEvents();
@@ -1019,7 +1051,8 @@ function renderABM(){
   var subtabs = [
     {id:'categorias', label:'Categorías'},
     {id:'subcategorias', label:'Subcategorías'},
-    {id:'centros', label:'Centros de Costo'}
+    {id:'centros', label:'Centros de Costo'},
+    {id:'backup', label:'Backup'}
   ];
   var html = '<div class="subtabs">';
   subtabs.forEach(function(t){
@@ -1029,9 +1062,29 @@ function renderABM(){
 
   if(STATE.abmSubTab === 'subcategorias') html += renderSubcategorias();
   else if(STATE.abmSubTab === 'centros') html += renderCentros();
+  else if(STATE.abmSubTab === 'backup') html += renderBackup();
   else html += renderCategorias();
 
   return html;
+}
+
+function renderBackup(){
+  var msgHtml = STATE.backupMsg ? '<div class="msg '+(STATE.backupMsg.type==='ok'?'ok':'err')+'">'+esc(STATE.backupMsg.text)+'</div>' : '';
+  return ''+
+  '<div class="card">'+
+    '<h2>Descargar backup</h2>'+
+    '<div style="font-size:12px;color:var(--ink-soft);margin-bottom:12px">Genera un archivo con todo lo que hay cargado hoy (Centros, Categorías, Subcategorías, Movimientos y Vencimientos). Guardalo en Google Drive, tu mail, o donde prefieras — te sirve para restaurar todo si algún día se pierde algo en la base de datos. El plan gratis de Supabase no hace backups automáticos, así que conviene descargar uno de tanto en tanto (por ejemplo, una vez al mes).</div>'+
+    '<button data-action="descargar-backup">⬇ Descargar backup completo (.json)</button>'+
+  '</div>'+
+  '<div class="card">'+
+    '<h2>Restaurar desde un backup</h2>'+
+    msgHtml+
+    '<div style="font-size:12px;color:var(--ink-soft);margin-bottom:12px">Elegí un archivo .json descargado antes con "Descargar backup". Esto <strong>no borra</strong> lo que ya tenés cargado: agrega lo que falte y actualiza lo que coincida por ID. Te va a pedir confirmación antes de aplicar nada.</div>'+
+    '<div class="row">'+
+      '<input type="file" id="backup-file" accept="application/json,.json">'+
+      '<button data-action="restaurar-backup-preview">Restaurar</button>'+
+    '</div>'+
+  '</div>';
 }
 
 function campoCategoria(nombre, tipo){
@@ -1890,7 +1943,7 @@ function bindEvents(){
   });
 
   document.querySelectorAll('.tab').forEach(function(t){
-    t.addEventListener('click', function(){ STATE.activeTab = t.getAttribute('data-tab'); STATE.editing = null; STATE.movDraft = null; render(); });
+    t.addEventListener('click', function(){ STATE.activeTab = t.getAttribute('data-tab'); STATE.editing = null; STATE.movDraft = null; STATE.menuMovilAbierto = false; render(); });
   });
 
   document.querySelectorAll('.subtab').forEach(function(t){
@@ -2027,7 +2080,7 @@ async function handleAction(action, id){
     if(pending) await handleAction(pending.action, pending.id);
     return;
   }
-  if(action==='confirm-no'){ STATE.confirmState = null; render(); return; }
+  if(action==='confirm-no'){ STATE.confirmState = null; STATE.backupPendiente = null; render(); return; }
 
   // ---- CENTROS ----
   if(action==='edit-centro'){ STATE.editing = {type:'centro', id:id}; render(); return; }
@@ -2146,10 +2199,76 @@ async function handleAction(action, id){
     render(); return;
   }
 
+  // ---- BACKUP ----
+  if(action==='descargar-backup'){
+    var backupObj = {
+      version: 1,
+      exportadoEn: new Date().toISOString(),
+      centros: STATE.centros,
+      categorias: STATE.categorias,
+      subcategorias: STATE.subcategorias,
+      movimientos: STATE.movimientos,
+      vencimientos: STATE.vencimientos
+    };
+    var blob = new Blob([JSON.stringify(backupObj, null, 2)], {type:'application/json'});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    var fecha = fechaHoyISO();
+    a.href = url;
+    a.download = 'backup-control-economico-'+fecha+'.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+    STATE.backupMsg = { type:'ok', text:'Backup descargado.' };
+    render(); return;
+  }
+  if(action==='restaurar-backup-preview'){
+    var archivo = document.getElementById('backup-file').files[0];
+    if(!archivo){ STATE.backupMsg = {type:'err', text:'Elegí primero un archivo .json.'}; render(); return; }
+    try{
+      var texto = await archivo.text();
+      var datos = JSON.parse(texto);
+      if(!datos || typeof datos !== 'object'){ throw new Error('El archivo no tiene el formato esperado.'); }
+      var nCentros = (datos.centros||[]).length;
+      var nCategorias = (datos.categorias||[]).length;
+      var nSubcategorias = (datos.subcategorias||[]).length;
+      var nMovimientos = (datos.movimientos||[]).length;
+      var nVencimientos = (datos.vencimientos||[]).length;
+      STATE.backupPendiente = datos;
+      STATE.confirmState = {
+        message: '¿Restaurar este backup (del '+(datos.exportadoEn ? new Date(datos.exportadoEn).toLocaleString('es-AR') : 'fecha desconocida')+')? Se van a agregar o actualizar: '+nCentros+' centro(s), '+nCategorias+' categoría(s), '+nSubcategorias+' subcategoría(s), '+nMovimientos+' movimiento(s) y '+nVencimientos+' vencimiento(s). No se borra nada de lo que ya tenés.',
+        action: 'restaurar-backup-confirmado'
+      };
+    }catch(e){ STATE.backupMsg = {type:'err', text:'No se pudo leer el archivo: '+(e.message||e)}; }
+    render(); return;
+  }
+  if(action==='restaurar-backup-confirmado'){
+    var datosR = STATE.backupPendiente;
+    STATE.backupPendiente = null;
+    if(!datosR){ render(); return; }
+    try{
+      if((datosR.centros||[]).length) await dbUpsert('centros', datosR.centros.map(toDbCentro));
+      if((datosR.categorias||[]).length) await dbUpsert('categorias', datosR.categorias.map(toDbCategoria));
+      if((datosR.subcategorias||[]).length) await dbUpsert('subcategorias', datosR.subcategorias.map(toDbSubcategoria));
+      if((datosR.movimientos||[]).length) await dbUpsert('movimientos', datosR.movimientos.map(toDbMovimiento));
+      if((datosR.vencimientos||[]).length) await dbUpsert('vencimientos', datosR.vencimientos.map(toDbVencimiento));
+      await cargarTodo();
+      STATE.saldosDirty = true;
+      STATE.backupMsg = { type:'ok', text:'Backup restaurado correctamente.' };
+    }catch(e){ STATE.dbError = 'No se pudo restaurar el backup: '+(e.message||e); }
+    render(); return;
+  }
+
+  // ---- MENÚ MÓVIL ----
+  if(action==='toggle-menu-movil'){ STATE.menuMovilAbierto = !STATE.menuMovilAbierto; render(); return; }
+  if(action==='cerrar-menu-movil'){ STATE.menuMovilAbierto = false; render(); return; }
+
   // ---- EFECTIVO (carga rápida) ----
   if(action==='abrir-efectivo'){
     STATE.efectivoMsg = null;
     STATE.efectivoAbierto = true;
+    STATE.menuMovilAbierto = false;
     render(); return;
   }
   if(action==='cerrar-efectivo'){
