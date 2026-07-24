@@ -646,6 +646,45 @@ function parseTarjeta(raw, vencimientoStr){
   return rows;
 }
 
+function parseProvincia(raw){
+  var lines = raw.split('\n').map(function(l){ return l.replace(/\r$/,'').trim(); }).filter(function(l){ return l.length>0; });
+  var reFecha = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+  var reSaldoLabel = /^saldo:?$/i;
+  var reMontoSolo = /^\$\s*[\d.,]+$/;
+  var reMontoConSigno = /^(-?)\$\s*([\d.,]+)$/;
+  var rows = [];
+  var i = 0;
+  while(i < lines.length){
+    var fm = lines[i].match(reFecha);
+    if(!fm){ i++; continue; }
+    var fecha = fm[1]+'-'+fm[2]+'-'+fm[3].slice(2);
+    i++;
+    var detalleLineas = [];
+    while(i < lines.length && !reSaldoLabel.test(lines[i]) && !reFecha.test(lines[i])){
+      detalleLineas.push(lines[i]);
+      i++;
+    }
+    if(i < lines.length && reSaldoLabel.test(lines[i])) i++; // saltar "Saldo:"
+    if(i < lines.length && reMontoSolo.test(lines[i])) i++; // saltar el saldo resultante ("$ X.XXX,XX")
+    if(i >= lines.length) break;
+    var mm = lines[i].match(reMontoConSigno);
+    if(!mm){ i++; continue; }
+    i++;
+    var val = parseMonto(mm[2]);
+    var monto = mm[1]==='-' ? -Math.abs(val) : Math.abs(val);
+    var detalle = detalleLineas.join(' ').trim();
+    rows.push({
+      fecha: fecha,
+      proveedor: detalle || 'Movimiento',
+      tipo: '',
+      monto: monto,
+      ingreso: monto>0 ? formatMonto(monto) : '',
+      egreso: monto<0 ? formatMonto(monto) : ''
+    });
+  }
+  return rows;
+}
+
 function parseNacion(raw){
   var lines = raw.split('\n').map(function(l){ return l.replace(/\r$/,''); }).filter(function(l){ return l.trim().length>0; });
   var reFecha = /^(\d{2})\/(\d{2})\/(\d{4})$/;
@@ -842,7 +881,7 @@ function runParser(){
   if(entidad === 'mp') return { rows: procesarTexto(raw, STATE.importAnio||'26'), error: null };
   if(entidad === 'santander') return { rows: parseSantander(raw), error: null };
   if(entidad === 'nacion') return { rows: parseNacion(raw), error: null };
-  if(entidad === 'provincia') return { rows: [], error: 'El formato de Banco Provincia (cuenta) todavía no está configurado. Pasame un ejemplo de texto para agregarlo.' };
+  if(entidad === 'provincia') return { rows: parseProvincia(raw), error: null };
   if(entidad === 'tarjeta'){
     var venc = STATE.importVencimiento || '';
     if(!venc.trim()) return { rows: [], error: 'Ingresá la fecha de vencimiento del resumen.' };
