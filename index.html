@@ -1288,13 +1288,31 @@ function renderMovimientos(){
   var rows = lista.map(function(m){
     var faltan = camposFaltantes(m);
     var incompleto = faltan.length>0;
+
+    var celdaCentro, celdaCategoria, celdaSubcategoria, celdaProveedor, celdaDetalle;
+    if(f.soloIncompletos){
+      var subOpcionesFila = STATE.subcategorias.filter(function(s){ return s.categoriaId===m.categoriaId; })
+        .map(function(s){ return '<option value="'+s.id+'" '+(m.subcategoriaId===s.id?'selected':'')+'>'+esc(s.nombre)+'</option>'; }).join('');
+      celdaCentro = '<td data-label="Centro"><select data-mov-id="'+m.id+'" data-field="centroId"><option value="">—</option>'+
+        STATE.centros.map(function(c){ return '<option value="'+c.id+'" '+(m.centroId===c.id?'selected':'')+'>'+esc(c.codigo)+'</option>'; }).join('')+
+        '</select></td>';
+      celdaCategoria = '<td data-label="Categoría"><select data-mov-id="'+m.id+'" data-field="categoriaId"><option value="">—</option>'+
+        STATE.categorias.map(function(c){ return '<option value="'+c.id+'" '+(m.categoriaId===c.id?'selected':'')+'>'+esc(c.nombre)+'</option>'; }).join('')+
+        '</select></td>';
+      celdaSubcategoria = '<td data-label="Subcategoría"><select data-mov-id="'+m.id+'" data-field="subcategoriaId"><option value="">—</option>'+subOpcionesFila+'</select></td>';
+      celdaProveedor = '<td data-label="Proveedor"><input type="text" data-mov-id="'+m.id+'" data-field="proveedor" value="'+esc(m.proveedor||'')+'" style="width:100%;box-sizing:border-box"></td>';
+      celdaDetalle = '<td data-label="Detalle"><input type="text" data-mov-id="'+m.id+'" data-field="detalle" value="'+esc(m.detalle||'')+'" style="width:100%;box-sizing:border-box"></td>';
+    } else {
+      celdaCentro = '<td class="mono" data-label="Centro">'+esc(nombreCentro(m.centroId)).split(' · ')[0]+'</td>';
+      celdaCategoria = '<td data-label="Categoría">'+esc(nombreCategoria(m.categoriaId))+'</td>';
+      celdaSubcategoria = '<td data-label="Subcategoría">'+esc(nombreSubcategoria(m.subcategoriaId))+'</td>';
+      celdaProveedor = '<td data-label="Proveedor">'+esc(m.proveedor||'')+'</td>';
+      celdaDetalle = '<td data-label="Detalle">'+esc(m.detalle||'')+'</td>';
+    }
+
     return '<tr'+(incompleto?' class="fila-incompleta" title="Falta: '+esc(faltan.join(', '))+'"':'')+'>'+
       '<td class="mono" data-label="Fecha">'+(incompleto?'⚠️ ':'')+esc(m.fecha||'')+'</td>'+
-      '<td class="mono" data-label="Centro">'+esc(nombreCentro(m.centroId)).split(' · ')[0]+'</td>'+
-      '<td data-label="Categoría">'+esc(nombreCategoria(m.categoriaId))+'</td>'+
-      '<td data-label="Subcategoría">'+esc(nombreSubcategoria(m.subcategoriaId))+'</td>'+
-      '<td data-label="Proveedor">'+esc(m.proveedor||'')+'</td>'+
-      '<td data-label="Detalle">'+esc(m.detalle||'')+'</td>'+
+      celdaCentro + celdaCategoria + celdaSubcategoria + celdaProveedor + celdaDetalle +
       '<td class="num ingreso" data-label="Ingreso">'+(Number(m.ingreso)?fmtMonto(m.ingreso):'')+'</td>'+
       '<td class="num egreso" data-label="Egreso">'+(Number(m.egreso)?fmtMonto(m.egreso):'')+'</td>'+
       '<td class="actions-cell"><button class="link" data-action="edit-mov" data-id="'+m.id+'">editar</button>'+
@@ -1398,7 +1416,7 @@ function renderMovimientos(){
   '<div class="card">'+
     '<h3>Movimientos ('+lista.length+')</h3>'+
     (lista.length ? ''+
-    '<table class="tabla-movil"><thead><tr><th>Fecha</th><th>CC</th><th>Categoría</th><th>Subcategoría</th><th>Proveedor</th><th>Detalle</th><th class="num">Ingreso</th><th class="num">Egreso</th><th></th></tr></thead>'+
+    '<table id="tabla-movimientos" class="tabla-movil"><thead><tr><th>Fecha</th><th>CC</th><th>Categoría</th><th>Subcategoría</th><th>Proveedor</th><th>Detalle</th><th class="num">Ingreso</th><th class="num">Egreso</th><th></th></tr></thead>'+
     '<tbody>'+rows+'</tbody>'+
     '<tfoot><tr><td colspan="6" data-label="">Totales (sin TEC)</td><td class="num ingreso" data-label="Total Ingreso">'+fmtMonto(totalIngreso)+'</td><td class="num egreso" data-label="Total Egreso">'+fmtMonto(totalEgreso)+'</td><td class="actions-cell"></td></tr></tfoot>'+
     '</table>' : '<div class="empty">No hay movimientos que coincidan con los filtros.</div>')+
@@ -2073,6 +2091,37 @@ function bindEvents(){
       if(field==='incluir') row.incluir = t.checked;
       else if(field==='categoriaId'){ row.categoriaId = t.value; row.subcategoriaId=''; }
       else row[field] = t.value;
+      render();
+    });
+  }
+
+  var tablaMovimientos = document.getElementById('tabla-movimientos');
+  if(tablaMovimientos){
+    tablaMovimientos.addEventListener('change', async function(ev){
+      var t = ev.target;
+      var movId = t.getAttribute('data-mov-id');
+      var campo = t.getAttribute('data-field');
+      if(!movId || !campo) return;
+      var mov = STATE.movimientos.find(function(m){ return m.id===movId; });
+      if(!mov) return;
+      var valor = t.value;
+      var camposDb = {};
+      if(campo==='categoriaId'){
+        mov.categoriaId = valor; mov.subcategoriaId = '';
+        camposDb = { categoria_id: valor||null, subcategoria_id: null };
+      } else if(campo==='centroId'){
+        mov.centroId = valor;
+        camposDb = { centro_id: valor||null };
+      } else if(campo==='subcategoriaId'){
+        mov.subcategoriaId = valor;
+        camposDb = { subcategoria_id: valor||null };
+      } else if(campo==='proveedor' || campo==='detalle'){
+        mov[campo] = valor;
+        camposDb[campo] = valor||null;
+      } else { return; }
+      try{
+        await dbUpdate('movimientos', movId, camposDb);
+      }catch(e){ STATE.dbError = 'No se pudo guardar el cambio: '+(e.message||e); }
       render();
     });
   }
