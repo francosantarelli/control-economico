@@ -365,6 +365,9 @@ function fmtMonto(n){
   return n.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2});
 }
 function nombreCentro(id){ var c = STATE.centros.find(function(x){return x.id===id;}); return c ? c.codigo+' · '+c.nombre : '—'; }
+function centrosOrdenados(){ return STATE.centros.slice().sort(function(a,b){ return (a.codigo||'').localeCompare(b.codigo||'', 'es', {sensitivity:'base'}); }); }
+function categoriasOrdenadas(){ return STATE.categorias.slice().sort(function(a,b){ return (a.nombre||'').localeCompare(b.nombre||'', 'es', {sensitivity:'base'}); }); }
+function subcategoriasOrdenadas(lista){ return lista.slice().sort(function(a,b){ return (a.nombre||'').localeCompare(b.nombre||'', 'es', {sensitivity:'base'}); }); }
 function nombreCategoria(id){ var c = STATE.categorias.find(function(x){return x.id===id;}); return c ? c.nombre : '—'; }
 function nombreSubcategoria(id){ var s = STATE.subcategorias.find(function(x){return x.id===id;}); return s ? s.nombre : '—'; }
 function esc(s){ return (s==null?'':String(s)).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
@@ -961,7 +964,7 @@ function render(){
 
   if(STATE.subDeleteState){
     var sds = STATE.subDeleteState;
-    var otrasSubs = STATE.subcategorias.filter(function(s){ return s.categoriaId===sds.categoriaId && s.id!==sds.id; });
+    var otrasSubs = subcategoriasOrdenadas(STATE.subcategorias.filter(function(s){ return s.categoriaId===sds.categoriaId && s.id!==sds.id; }));
     var mensajeSub = sds.afectados > 0
       ? '¿Borrar la subcategoría "'+esc(sds.nombre)+'"? Hay <strong>'+sds.afectados+' movimiento(s)</strong> que la tienen asignada.'
       : '¿Borrar la subcategoría "'+esc(sds.nombre)+'"? No tiene movimientos asignados.';
@@ -991,7 +994,7 @@ function render(){
       '<div class="row">'+
         '<div class="field"><label>Fecha</label><input type="date" id="ef-fecha" value="'+fechaHoyISO()+'"></div>'+
         '<div class="field"><label>Centro de Costo</label><select id="ef-centro"><option value="">Elegir...</option>'+
-          STATE.centros.map(function(c){ return '<option value="'+c.id+'" '+(centroDefaultId===c.id?'selected':'')+'>'+esc(c.codigo)+' · '+esc(c.nombre)+'</option>'; }).join('')+
+          centrosOrdenados().map(function(c){ return '<option value="'+c.id+'" '+(centroDefaultId===c.id?'selected':'')+'>'+esc(c.codigo)+' · '+esc(c.nombre)+'</option>'; }).join('')+
         '</select></div>'+
         '<div class="field"><label>Tipo</label><select id="ef-tipo">'+
           '<option value="egreso" selected>Egreso</option>'+
@@ -1182,7 +1185,7 @@ function campoSubcategoria(catOptions, nombre){
     '<div class="field"><label>Nombre</label><input type="text" id="f-sub-nombre" placeholder="Ej: Supermercado" value="'+esc(nombre)+'" style="width:220px"></div>';
 }
 function renderSubcategorias(){
-  var catOptions = STATE.categorias.map(function(c){ return '<option value="'+c.id+'">'+esc(c.nombre)+'</option>'; }).join('');
+  var catOptions = categoriasOrdenadas().map(function(c){ return '<option value="'+c.id+'">'+esc(c.nombre)+'</option>'; }).join('');
   var rows = STATE.subcategorias.map(function(s){
     return '<tr><td data-label="Categoría">'+esc(nombreCategoria(s.categoriaId))+'</td><td data-label="Subcategoría">'+esc(s.nombre)+'</td>'+
       '<td class="actions-cell"><button class="link" data-action="edit-subcategoria" data-id="'+s.id+'">editar</button>'+
@@ -1245,11 +1248,11 @@ function camposFaltantes(m){
 function renderMovimientos(){
   var f = STATE.filtros || {centro:'', categoria:'', mes:'', texto:'', subcategoria:'', soloIncompletos:false};
 
-  var centroOptions = '<option value="">Todos</option>' + STATE.centros.map(function(c){ return '<option value="'+c.id+'" '+(f.centro===c.id?'selected':'')+'>'+esc(c.codigo)+'</option>'; }).join('');
-  var categoriaOptions = '<option value="">Todas</option>' + STATE.categorias.map(function(c){ return '<option value="'+c.id+'" '+(f.categoria===c.id?'selected':'')+'>'+esc(c.nombre)+'</option>'; }).join('');
+  var centroOptions = '<option value="">Todos</option>' + centrosOrdenados().map(function(c){ return '<option value="'+c.id+'" '+(f.centro===c.id?'selected':'')+'>'+esc(c.codigo)+'</option>'; }).join('');
+  var categoriaOptions = '<option value="">Todas</option>' + categoriasOrdenadas().map(function(c){ return '<option value="'+c.id+'" '+(f.categoria===c.id?'selected':'')+'>'+esc(c.nombre)+'</option>'; }).join('');
   var meses = getMeses();
   var mesOptions = '<option value="">Todos</option>' + meses.map(function(m){ return '<option value="'+m+'" '+(f.mes===m?'selected':'')+'>'+m+'</option>'; }).join('');
-  var subsParaFiltro = f.categoria ? STATE.subcategorias.filter(function(s){ return s.categoriaId === f.categoria; }) : STATE.subcategorias;
+  var subsParaFiltro = subcategoriasOrdenadas(f.categoria ? STATE.subcategorias.filter(function(s){ return s.categoriaId === f.categoria; }) : STATE.subcategorias);
   var subcategoriaOptions = '<option value="">Todas</option>' +
     '<option value="__vacio__" '+(f.subcategoria==='__vacio__'?'selected':'')+'>(Sin subcategoría)</option>' +
     subsParaFiltro.map(function(s){
@@ -1295,13 +1298,13 @@ function renderMovimientos(){
 
     var celdaCentro, celdaCategoria, celdaSubcategoria, celdaProveedor, celdaDetalle;
     if(f.soloIncompletos){
-      var subOpcionesFila = STATE.subcategorias.filter(function(s){ return s.categoriaId===m.categoriaId; })
+      var subOpcionesFila = subcategoriasOrdenadas(STATE.subcategorias.filter(function(s){ return s.categoriaId===m.categoriaId; }))
         .map(function(s){ return '<option value="'+s.id+'" '+(m.subcategoriaId===s.id?'selected':'')+'>'+esc(s.nombre)+'</option>'; }).join('');
       celdaCentro = '<td data-label="Centro"><select data-mov-id="'+m.id+'" data-field="centroId"><option value="">—</option>'+
-        STATE.centros.map(function(c){ return '<option value="'+c.id+'" '+(m.centroId===c.id?'selected':'')+'>'+esc(c.codigo)+'</option>'; }).join('')+
+        centrosOrdenados().map(function(c){ return '<option value="'+c.id+'" '+(m.centroId===c.id?'selected':'')+'>'+esc(c.codigo)+'</option>'; }).join('')+
         '</select></td>';
       celdaCategoria = '<td data-label="Categoría"><select data-mov-id="'+m.id+'" data-field="categoriaId"><option value="">—</option>'+
-        STATE.categorias.map(function(c){ return '<option value="'+c.id+'" '+(m.categoriaId===c.id?'selected':'')+'>'+esc(c.nombre)+'</option>'; }).join('')+
+        categoriasOrdenadas().map(function(c){ return '<option value="'+c.id+'" '+(m.categoriaId===c.id?'selected':'')+'>'+esc(c.nombre)+'</option>'; }).join('')+
         '</select></td>';
       celdaSubcategoria = '<td data-label="Subcategoría"><select data-mov-id="'+m.id+'" data-field="subcategoriaId"><option value="">—</option>'+subOpcionesFila+'</select></td>';
       celdaProveedor = '<td data-label="Proveedor"><input type="text" data-mov-id="'+m.id+'" data-field="proveedor" value="'+esc(m.proveedor||'')+'" style="width:100%;box-sizing:border-box"></td>';
@@ -1332,7 +1335,7 @@ function renderMovimientos(){
     monto: Number(editing.ingreso) > 0 ? editing.ingreso : editing.egreso
   } : null;
   var e = STATE.movDraft || editingNormalizado || {fecha:'', centroId:'', categoriaId:'', subcategoriaId:'', proveedor:'', detalle:'', tipo:'egreso', monto:''};
-  var subOptions = STATE.subcategorias.filter(function(s){ return s.categoriaId === e.categoriaId; })
+  var subOptions = subcategoriasOrdenadas(STATE.subcategorias.filter(function(s){ return s.categoriaId === e.categoriaId; }))
     .map(function(s){ return '<option value="'+s.id+'" '+(e.subcategoriaId===s.id?'selected':'')+'>'+esc(s.nombre)+'</option>'; }).join('');
 
   function camposMov(e, subOptions){
@@ -1350,10 +1353,10 @@ function renderMovimientos(){
       '<div class="row">'+
         '<div class="field"><label>Fecha</label><input type="date" id="f-mov-fecha" value="'+esc(e.fecha)+'"></div>'+
         '<div class="field"><label>Centro de Costo</label><select id="f-mov-centro"><option value="">Elegir...</option>'+
-          STATE.centros.map(function(c){ return '<option value="'+c.id+'" '+(e.centroId===c.id?'selected':'')+'>'+esc(c.codigo)+' · '+esc(c.nombre)+'</option>'; }).join('') +
+          centrosOrdenados().map(function(c){ return '<option value="'+c.id+'" '+(e.centroId===c.id?'selected':'')+'>'+esc(c.codigo)+' · '+esc(c.nombre)+'</option>'; }).join('') +
         '</select></div>'+
         '<div class="field"><label>Categoría</label><select id="f-mov-categoria"><option value="">Elegir...</option>'+
-          STATE.categorias.map(function(c){ return '<option value="'+c.id+'" '+(e.categoriaId===c.id?'selected':'')+'>'+esc(c.nombre)+'</option>'; }).join('') +
+          categoriasOrdenadas().map(function(c){ return '<option value="'+c.id+'" '+(e.categoriaId===c.id?'selected':'')+'>'+esc(c.nombre)+'</option>'; }).join('') +
         '</select></div>'+
         '<div class="field"><label>Subcategoría</label><select id="f-mov-subcategoria"><option value="">Elegir...</option>'+subOptions+'</select></div>'+
       '</div>'+
@@ -1473,15 +1476,15 @@ function renderImportar(){
 
   var previewHtml = '';
   if(STATE.importPreview){
-    var centroOpts = STATE.centros.map(function(c){ return '<option value="'+c.id+'">'+esc(c.codigo)+'</option>'; }).join('');
-    var catOpts = STATE.categorias.map(function(c){ return '<option value="'+c.id+'">'+esc(c.nombre)+'</option>'; }).join('');
+    var centroOpts = centrosOrdenados().map(function(c){ return '<option value="'+c.id+'">'+esc(c.codigo)+'</option>'; }).join('');
+    var catOpts = categoriasOrdenadas().map(function(c){ return '<option value="'+c.id+'">'+esc(c.nombre)+'</option>'; }).join('');
 
     var rows = STATE.importPreview.map(function(r){
       var centroSel = '<select data-rowid="'+r.id+'" data-field="centroId"><option value="">—</option>'+
-        STATE.centros.map(function(c){ return '<option value="'+c.id+'" '+(r.centroId===c.id?'selected':'')+'>'+esc(c.codigo)+'</option>'; }).join('')+'</select>';
+        centrosOrdenados().map(function(c){ return '<option value="'+c.id+'" '+(r.centroId===c.id?'selected':'')+'>'+esc(c.codigo)+'</option>'; }).join('')+'</select>';
       var catSel = '<select data-rowid="'+r.id+'" data-field="categoriaId"><option value="">Sin categoría</option>'+
-        STATE.categorias.map(function(c){ return '<option value="'+c.id+'" '+(r.categoriaId===c.id?'selected':'')+'>'+esc(c.nombre)+'</option>'; }).join('')+'</select>';
-      var subOpts = STATE.subcategorias.filter(function(s){return s.categoriaId===r.categoriaId;})
+        categoriasOrdenadas().map(function(c){ return '<option value="'+c.id+'" '+(r.categoriaId===c.id?'selected':'')+'>'+esc(c.nombre)+'</option>'; }).join('')+'</select>';
+      var subOpts = subcategoriasOrdenadas(STATE.subcategorias.filter(function(s){return s.categoriaId===r.categoriaId;}))
         .map(function(s){ return '<option value="'+s.id+'" '+(r.subcategoriaId===s.id?'selected':'')+'>'+esc(s.nombre)+'</option>'; }).join('');
       var subSel = '<select data-rowid="'+r.id+'" data-field="subcategoriaId"><option value="">—</option>'+subOpts+'</select>';
       return '<tr>'+
@@ -1582,7 +1585,7 @@ function campoVenc(e){
     '<div class="field"><label>Fecha de vencimiento</label><input type="date" id="f-venc-fecha" value="'+esc(e.fecha)+'"></div>'+
     '<div class="field"><label>Monto</label><input type="number" step="0.01" id="f-venc-monto" value="'+esc(e.monto)+'" style="width:130px"></div>'+
     '<div class="field"><label>Centro de Costo</label><select id="f-venc-centro"><option value="">(sin asignar)</option>'+
-      STATE.centros.map(function(c){ return '<option value="'+c.id+'" '+(e.centroId===c.id?'selected':'')+'>'+esc(c.codigo)+' · '+esc(c.nombre)+'</option>'; }).join('') +
+      centrosOrdenados().map(function(c){ return '<option value="'+c.id+'" '+(e.centroId===c.id?'selected':'')+'>'+esc(c.codigo)+' · '+esc(c.nombre)+'</option>'; }).join('') +
     '</select></div>';
 }
 function renderVencimientos(){
@@ -1872,8 +1875,8 @@ function renderGrillaMensual(movs, rango){
 function renderResumen(){
   var f = STATE.resumenFiltros || {centro:'', categoria:'', mes:'', vista:'categoria'};
 
-  var centroOptions = '<option value="">Todos</option>' + STATE.centros.map(function(c){ return '<option value="'+c.id+'" '+(f.centro===c.id?'selected':'')+'>'+esc(c.codigo)+'</option>'; }).join('');
-  var categoriaOptions = '<option value="">Todas</option>' + STATE.categorias.map(function(c){ return '<option value="'+c.id+'" '+(f.categoria===c.id?'selected':'')+'>'+esc(c.nombre)+'</option>'; }).join('');
+  var centroOptions = '<option value="">Todos</option>' + centrosOrdenados().map(function(c){ return '<option value="'+c.id+'" '+(f.centro===c.id?'selected':'')+'>'+esc(c.codigo)+'</option>'; }).join('');
+  var categoriaOptions = '<option value="">Todas</option>' + categoriasOrdenadas().map(function(c){ return '<option value="'+c.id+'" '+(f.categoria===c.id?'selected':'')+'>'+esc(c.nombre)+'</option>'; }).join('');
   var meses = getMeses();
   var mesOptions = '<option value="">Todos</option>' + meses.map(function(m){ return '<option value="'+m+'" '+(f.mes===m?'selected':'')+'>'+esc(mesLabelCorto(m))+'</option>'; }).join('');
 
