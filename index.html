@@ -241,7 +241,7 @@ var STATE = { centros: [], categorias: [], subcategorias: [], movimientos: [], v
   importEntidad:'mp', importAnio:'26', importBanco:'nacion', importVencimiento:'', importRaw:'', importPreview:null, importPreviewExcel:null, importMsg:null,
   bulkCatMsg:null, confirmState:null, subDeleteState:null, movFormMsg:null, resumenFiltros:{centro:'', categoria:'', mes:'', vista:'categoria'}, abmSubTab:'categorias', grillaRango:'todo',
   bulkVencMsg:null, vencFormMsg:null, dbError:null, saldosCache:null, saldosDirty:true,
-  usuarioEmail:null, efectivoAbierto:false, efectivoMsg:null, backupMsg:null, backupPendiente:null, menuMovilAbierto:false };
+  usuarioEmail:null, efectivoAbierto:false, efectivoMsg:null, backupMsg:null, backupPendiente:null, menuMovilAbierto:false, incompletosSnapshotIds:null };
 
 function uid(){
   if(window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID();
@@ -1274,7 +1274,11 @@ function renderMovimientos(){
     if(f.mes && (m.fecha||'').slice(0,7) !== f.mes) return false;
     if(f.subcategoria === '__vacio__'){ if(m.subcategoriaId) return false; }
     else if(f.subcategoria){ if(m.subcategoriaId !== f.subcategoria) return false; }
-    if(f.soloIncompletos && camposFaltantes(m).length===0) return false;
+    if(f.soloIncompletos){
+      var idsCongelados = STATE.incompletosSnapshotIds;
+      if(idsCongelados){ if(idsCongelados.indexOf(m.id)===-1) return false; }
+      else if(camposFaltantes(m).length===0){ return false; }
+    }
     if(f.texto){
       var t = f.texto.toLowerCase();
       if((m.proveedor||'').toLowerCase().indexOf(t)===-1 && (m.detalle||'').toLowerCase().indexOf(t)===-1) return false;
@@ -1409,6 +1413,7 @@ function renderMovimientos(){
       '<div class="field"><label>&nbsp;</label><label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:normal;white-space:nowrap;padding:7px 0">'+
         '<input type="checkbox" id="ff-solo-incompletos" '+(f.soloIncompletos?'checked':'')+' style="width:auto"> Solo incompletos ('+cantidadIncompletos+')'+
       '</label></div>'+
+      (f.soloIncompletos ? '<div class="field"><label>&nbsp;</label><button class="secondary" data-action="refrescar-incompletos" style="font-size:12px;padding:6px 12px">🔄 Actualizar lista</button></div>' : '')+
     '</div>'+
   '</div>';
 
@@ -2020,13 +2025,21 @@ function bindEvents(){
     if(!el) return;
     var evt = (id==='ff-texto') ? 'input' : 'change';
     el.addEventListener(evt, function(){
+      var soloIncompletosChecked = document.getElementById('ff-solo-incompletos').checked;
+      if(id==='ff-solo-incompletos'){
+        if(soloIncompletosChecked){
+          STATE.incompletosSnapshotIds = STATE.movimientos.filter(function(m){ return camposFaltantes(m).length>0; }).map(function(m){ return m.id; });
+        } else {
+          STATE.incompletosSnapshotIds = null;
+        }
+      }
       STATE.filtros = {
         centro: document.getElementById('ff-centro').value,
         categoria: document.getElementById('ff-categoria').value,
         mes: document.getElementById('ff-mes').value,
         subcategoria: (id==='ff-categoria') ? '' : document.getElementById('ff-subcategoria').value,
         texto: document.getElementById('ff-texto').value,
-        soloIncompletos: document.getElementById('ff-solo-incompletos').checked
+        soloIncompletos: soloIncompletosChecked
       };
       render();
     });
@@ -2345,6 +2358,11 @@ async function handleAction(action, id){
       STATE.saldosDirty = true;
       STATE.backupMsg = { type:'ok', text:'Backup restaurado correctamente.' };
     }catch(e){ STATE.dbError = 'No se pudo restaurar el backup: '+(e.message||e); }
+    render(); return;
+  }
+
+  if(action==='refrescar-incompletos'){
+    STATE.incompletosSnapshotIds = STATE.movimientos.filter(function(m){ return camposFaltantes(m).length>0; }).map(function(m){ return m.id; });
     render(); return;
   }
 
