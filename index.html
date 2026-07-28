@@ -2783,12 +2783,14 @@ async function handleAction(action, id){
     if(!seleccionadas.length){ STATE.importMsg = {type:'err', text:'No hay movimientos seleccionados para importar.'}; render(); return; }
     var faltaCentro = seleccionadas.some(function(r){return !r.centroId;});
     if(faltaCentro){ STATE.importMsg = {type:'err', text:'Hay movimientos sin Centro de Costo asignado. Asignalo antes de importar.'}; render(); return; }
+    var esTarjeta = STATE.importEntidad === 'tarjeta';
     var nuevosMov = seleccionadas.map(function(r){
       return {
         id: uid(), fecha: r.fecha, centroId: r.centroId, categoriaId: r.categoriaId, subcategoriaId: r.subcategoriaId,
         proveedor: r.proveedor, detalle: r.detalle,
         ingreso: r.monto>0 ? r.monto : 0,
-        egreso: r.monto<0 ? -r.monto : 0
+        egreso: r.monto<0 ? -r.monto : 0,
+        tarjeta: esTarjeta
       };
     });
     try{
