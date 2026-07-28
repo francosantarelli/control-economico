@@ -850,6 +850,20 @@ function calcularDuplicados(filasNormalizadas){
   return dupIds;
 }
 
+// Suma n meses a una fecha ISO (YYYY-MM-DD), ajustando al último día del mes
+// destino si este tiene menos días (ej: 31-01 + 1 mes -> 28/29-02, no 03-03).
+function sumarMeses(fechaISO, n){
+  var m = (fechaISO||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if(!m) return fechaISO;
+  var y = parseInt(m[1],10), mes = parseInt(m[2],10), dia = parseInt(m[3],10);
+  var total = (mes-1) + n;
+  var nuevoY = y + Math.floor(total/12);
+  var nuevoMes = ((total % 12) + 12) % 12; // 0-11
+  var ultimoDia = new Date(nuevoY, nuevoMes+1, 0).getDate();
+  var nuevoDia = Math.min(dia, ultimoDia);
+  return nuevoY+'-'+String(nuevoMes+1).padStart(2,'0')+'-'+String(nuevoDia).padStart(2,'0');
+}
+
 function parseFechaFlexible(s){
   if(!s) return '';
   s = s.trim();
@@ -1383,9 +1397,9 @@ function renderMovimientos(){
     proveedor: editing.proveedor, detalle: editing.detalle,
     tipo: Number(editing.ingreso) > 0 ? 'ingreso' : 'egreso',
     monto: Number(editing.ingreso) > 0 ? editing.ingreso : editing.egreso,
-    tarjeta: !!editing.tarjeta
+    tarjeta: !!editing.tarjeta, fechaConsumo:'', cuotas:1
   } : null;
-  var e = STATE.movDraft || editingNormalizado || {fecha:'', centroId:'', categoriaId:'', subcategoriaId:'', proveedor:'', detalle:'', tipo:'egreso', monto:'', tarjeta:false};
+  var e = STATE.movDraft || editingNormalizado || {fecha:'', centroId:'', categoriaId:'', subcategoriaId:'', proveedor:'', detalle:'', tipo:'egreso', monto:'', tarjeta:false, fechaConsumo:'', cuotas:1};
   var subOptions = subcategoriasOrdenadas(STATE.subcategorias.filter(function(s){ return s.categoriaId === e.categoriaId; }))
     .map(function(s){ return '<option value="'+s.id+'" '+(e.subcategoriaId===s.id?'selected':'')+'>'+esc(s.nombre)+'</option>'; }).join('');
 
@@ -1398,6 +1412,15 @@ function renderMovimientos(){
           STATE.centros.filter(function(c){return c.id!==e.centroId;}).map(function(c){ return '<option value="'+c.id+'">'+esc(c.codigo)+' · '+esc(c.nombre)+'</option>'; }).join('')+
         '</select></div>'+
         '<div class="field" style="flex:2 1 260px;justify-content:flex-end"><div style="font-size:11px;color:var(--ink-soft);padding-bottom:8px">Se va a crear automáticamente el movimiento espejo en ese centro: misma fecha y categoría, mismo monto, tipo contrario.</div></div>'+
+      '</div>' : '';
+    var cuotasNum = Math.max(1, parseInt(e.cuotas,10)||1);
+    var campoCuotas = (e.tarjeta && !editing) ? ''+
+      '<div class="row" style="margin-top:10px">'+
+        '<div class="field"><label>Fecha de consumo (opcional)</label><input type="date" id="f-mov-fecha-consumo" value="'+esc(e.fechaConsumo||'')+'"></div>'+
+        '<div class="field"><label>Cantidad de cuotas</label><input type="number" min="1" step="1" id="f-mov-cuotas" value="'+cuotasNum+'" style="width:100px"></div>'+
+        '<div class="field" style="flex:2 1 260px;justify-content:flex-end"><div style="font-size:11px;color:var(--ink-soft);padding-bottom:8px">'+
+          (cuotasNum>1 ? 'La Fecha de arriba se toma como vencimiento de la 1ª cuota. Se van a crear '+cuotasNum+' movimientos, uno por mes, con este mismo monto cada uno.' : 'La Fecha de arriba se toma como vencimiento del resumen en que se paga.')+
+        '</div></div>'+
       '</div>' : '';
     return ''+
       (STATE.movFormMsg ? '<div class="msg err">'+esc(STATE.movFormMsg)+'</div>' : '')+
@@ -1422,7 +1445,8 @@ function renderMovimientos(){
         '<div class="field"><label>Monto</label><input type="number" step="0.01" id="f-mov-monto" value="'+esc(e.monto)+'" style="width:120px"></div>'+
         '<div class="field"><label>&nbsp;</label><label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:normal;white-space:nowrap;padding:7px 0">'+
           '<input type="checkbox" id="f-mov-tarjeta" '+(e.tarjeta?'checked':'')+' style="width:auto"> 💳 Pagado con tarjeta de crédito'+
-        '</label></div>';
+        '</label></div>'+
+      campoCuotas;
   }
 
   var formHtml = '';
@@ -2163,6 +2187,27 @@ function bindEvents(){
     });
   }
 
+  // Mostrar/ocultar los campos de cuotas al tildar "Pagado con tarjeta de crédito",
+  // y refrescar la ayuda ("se van a crear N movimientos...") al cambiar la cantidad de cuotas.
+  var movTarjetaChk = document.getElementById('f-mov-tarjeta');
+  if(movTarjetaChk){
+    movTarjetaChk.addEventListener('change', function(){
+      var draft = getMovFormValues();
+      draft.tarjeta = movTarjetaChk.checked;
+      STATE.movDraft = draft;
+      render();
+    });
+  }
+  var movCuotasInput = document.getElementById('f-mov-cuotas');
+  if(movCuotasInput){
+    movCuotasInput.addEventListener('input', function(){
+      var draft = getMovFormValues();
+      draft.cuotas = movCuotasInput.value;
+      STATE.movDraft = draft;
+      render();
+    });
+  }
+
   // Formulario de Importar
   var impEntidad = document.getElementById('imp-entidad');
   if(impEntidad){ impEntidad.addEventListener('change', function(){ STATE.importEntidad = impEntidad.value; STATE.importPreview = null; STATE.importPreviewExcel = null; STATE.importMsg = null; render(); }); }
@@ -2251,7 +2296,9 @@ function getMovFormValues(){
     detalle: (document.getElementById('f-mov-detalle')||{}).value || '',
     tipo: (document.getElementById('f-mov-tipo')||{}).value || 'egreso',
     monto: (document.getElementById('f-mov-monto')||{}).value || '',
-    tarjeta: (document.getElementById('f-mov-tarjeta')||{}).checked || false
+    tarjeta: (document.getElementById('f-mov-tarjeta')||{}).checked || false,
+    fechaConsumo: (document.getElementById('f-mov-fecha-consumo')||{}).value || '',
+    cuotas: (document.getElementById('f-mov-cuotas')||{}).value || 1
   };
 }
 
@@ -2597,27 +2644,40 @@ async function handleAction(action, id){
       egreso: v.tipo==='egreso' ? monto : 0,
       tarjeta: !!v.tarjeta
     };
+    // Compra en cuotas con tarjeta: la Fecha cargada es el vencimiento de la 1ª cuota;
+    // las siguientes caen un mes después cada una, con el mismo monto (no se divide).
+    var cuotasTotal = (!id && v.tarjeta) ? Math.max(1, parseInt(v.cuotas,10)||1) : 1;
+    var fechasCuotas = [];
+    for(var ci=0; ci<cuotasTotal; ci++){ fechasCuotas.push(ci===0 ? v.fecha : sumarMeses(v.fecha, ci)); }
     try{
       if(id){
         await dbUpdate('movimientos', id, toDbMovimiento(Object.assign({id:id}, mov)));
         var idx = STATE.movimientos.findIndex(function(m){return m.id===id;});
         if(idx>-1) STATE.movimientos[idx] = Object.assign({id:id}, mov);
-      } else if(esTecMov){
-        // crear el movimiento de origen + el espejo automático en el centro destino, con tipo contrario
-        var nuevoM = Object.assign({id:uid()}, mov);
-        var espejo = {
-          id: uid(), fecha: v.fecha, centroId: centroDestino, categoriaId: v.categoriaId, subcategoriaId: v.subcategoriaId,
-          proveedor: v.proveedor, detalle: (v.detalle ? v.detalle+' ' : '')+'(transferencia automática)',
-          ingreso: v.tipo==='ingreso' ? 0 : monto,
-          egreso: v.tipo==='ingreso' ? monto : 0,
-          tarjeta: !!v.tarjeta
-        };
-        await dbInsert('movimientos', [toDbMovimiento(nuevoM), toDbMovimiento(espejo)]);
-        STATE.movimientos.push(nuevoM, espejo);
       } else {
-        var nuevoM2 = Object.assign({id:uid()}, mov);
-        await dbInsert('movimientos', toDbMovimiento(nuevoM2));
-        STATE.movimientos.push(nuevoM2);
+        var detalleBase = v.detalle||'';
+        var nuevosLote = [];
+        fechasCuotas.forEach(function(fechaCuota, i){
+          var extra = (v.fechaConsumo ? ' · Consumo '+v.fechaConsumo : '') + (cuotasTotal>1 ? ' ('+(i+1)+'/'+cuotasTotal+')' : '');
+          var detalleFinal = detalleBase + extra;
+          var base = Object.assign({}, mov, { fecha: fechaCuota, detalle: detalleFinal });
+          if(esTecMov){
+            // crear el movimiento de origen + el espejo automático en el centro destino, con tipo contrario
+            var nuevoM = Object.assign({id:uid()}, base);
+            var espejo = {
+              id: uid(), fecha: fechaCuota, centroId: centroDestino, categoriaId: v.categoriaId, subcategoriaId: v.subcategoriaId,
+              proveedor: v.proveedor, detalle: (detalleFinal ? detalleFinal+' ' : '')+'(transferencia automática)',
+              ingreso: v.tipo==='ingreso' ? 0 : monto,
+              egreso: v.tipo==='ingreso' ? monto : 0,
+              tarjeta: !!v.tarjeta
+            };
+            nuevosLote.push(nuevoM, espejo);
+          } else {
+            nuevosLote.push(Object.assign({id:uid()}, base));
+          }
+        });
+        await dbInsert('movimientos', nuevosLote.map(toDbMovimiento));
+        STATE.movimientos.push.apply(STATE.movimientos, nuevosLote);
       }
       STATE.saldosDirty = true;
       STATE.editing = null;
