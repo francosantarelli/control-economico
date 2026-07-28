@@ -1414,13 +1414,19 @@ function renderMovimientos(){
         '<div class="field" style="flex:2 1 260px;justify-content:flex-end"><div style="font-size:11px;color:var(--ink-soft);padding-bottom:8px">Se va a crear automáticamente el movimiento espejo en ese centro: misma fecha y categoría, mismo monto, tipo contrario.</div></div>'+
       '</div>' : '';
     var cuotasNum = Math.max(1, parseInt(e.cuotas,10)||1);
-    var campoCuotas = (e.tarjeta && !editing) ? ''+
+    var textoAyudaCuotas;
+    if(cuotasNum<=1){
+      textoAyudaCuotas = 'La Fecha de arriba se toma como vencimiento del resumen en que se paga.';
+    } else if(editing){
+      textoAyudaCuotas = 'Este movimiento queda como la cuota 1/'+cuotasNum+'. Se van a crear '+(cuotasNum-1)+' movimiento(s) más para las cuotas siguientes, uno por mes a partir de la Fecha de arriba, con este mismo monto cada uno.';
+    } else {
+      textoAyudaCuotas = 'La Fecha de arriba se toma como vencimiento de la 1ª cuota. Se van a crear '+cuotasNum+' movimientos, uno por mes, con este mismo monto cada uno.';
+    }
+    var campoCuotas = e.tarjeta ? ''+
       '<div class="row" style="margin-top:10px">'+
         '<div class="field"><label>Fecha de consumo (opcional)</label><input type="date" id="f-mov-fecha-consumo" value="'+esc(e.fechaConsumo||'')+'"></div>'+
         '<div class="field"><label>Cantidad de cuotas</label><input type="number" min="1" step="1" id="f-mov-cuotas" value="'+cuotasNum+'" style="width:100px"></div>'+
-        '<div class="field" style="flex:2 1 260px;justify-content:flex-end"><div style="font-size:11px;color:var(--ink-soft);padding-bottom:8px">'+
-          (cuotasNum>1 ? 'La Fecha de arriba se toma como vencimiento de la 1ª cuota. Se van a crear '+cuotasNum+' movimientos, uno por mes, con este mismo monto cada uno.' : 'La Fecha de arriba se toma como vencimiento del resumen en que se paga.')+
-        '</div></div>'+
+        '<div class="field" style="flex:2 1 260px;justify-content:flex-end"><div style="font-size:11px;color:var(--ink-soft);padding-bottom:8px">'+textoAyudaCuotas+'</div></div>'+
       '</div>' : '';
     return ''+
       (STATE.movFormMsg ? '<div class="msg err">'+esc(STATE.movFormMsg)+'</div>' : '')+
@@ -2646,27 +2652,43 @@ async function handleAction(action, id){
     };
     // Compra en cuotas con tarjeta: la Fecha cargada es el vencimiento de la 1ª cuota;
     // las siguientes caen un mes después cada una, con el mismo monto (no se divide).
-    var cuotasTotal = (!id && v.tarjeta) ? Math.max(1, parseInt(v.cuotas,10)||1) : 1;
-    var fechasCuotas = [];
-    for(var ci=0; ci<cuotasTotal; ci++){ fechasCuotas.push(ci===0 ? v.fecha : sumarMeses(v.fecha, ci)); }
+    // Al editar un movimiento ya cargado también se puede sumar cuotas: el movimiento editado
+    // queda como la 1ª cuota y se crean nuevos movimientos para las cuotas restantes.
+    var cuotasTotal = v.tarjeta ? Math.max(1, parseInt(v.cuotas,10)||1) : 1;
+    var detalleBase = v.detalle||'';
+    function detalleConSufijo(numeroCuota){
+      if(cuotasTotal<=1) return detalleBase;
+      var sufijoConsumo = v.fechaConsumo ? ' · Consumo '+v.fechaConsumo : '';
+      return detalleBase + sufijoConsumo + ' ('+numeroCuota+'/'+cuotasTotal+')';
+    }
     try{
       if(id){
-        await dbUpdate('movimientos', id, toDbMovimiento(Object.assign({id:id}, mov)));
+        var movEditado = Object.assign({}, mov, { detalle: detalleConSufijo(1) });
+        await dbUpdate('movimientos', id, toDbMovimiento(Object.assign({id:id}, movEditado)));
         var idx = STATE.movimientos.findIndex(function(m){return m.id===id;});
-        if(idx>-1) STATE.movimientos[idx] = Object.assign({id:id}, mov);
+        if(idx>-1) STATE.movimientos[idx] = Object.assign({id:id}, movEditado);
+
+        if(cuotasTotal>1){
+          var loteRestante = [];
+          for(var cj=1; cj<cuotasTotal; cj++){
+            var fechaCuotaJ = sumarMeses(v.fecha, cj);
+            loteRestante.push(Object.assign({id:uid()}, mov, { fecha: fechaCuotaJ, detalle: detalleConSufijo(cj+1) }));
+          }
+          await dbInsert('movimientos', loteRestante.map(toDbMovimiento));
+          STATE.movimientos.push.apply(STATE.movimientos, loteRestante);
+        }
       } else {
-        var detalleBase = v.detalle||'';
+        var fechasCuotas = [];
+        for(var ci=0; ci<cuotasTotal; ci++){ fechasCuotas.push(ci===0 ? v.fecha : sumarMeses(v.fecha, ci)); }
         var nuevosLote = [];
         fechasCuotas.forEach(function(fechaCuota, i){
-          var extra = (v.fechaConsumo ? ' · Consumo '+v.fechaConsumo : '') + (cuotasTotal>1 ? ' ('+(i+1)+'/'+cuotasTotal+')' : '');
-          var detalleFinal = detalleBase + extra;
-          var base = Object.assign({}, mov, { fecha: fechaCuota, detalle: detalleFinal });
+          var base = Object.assign({}, mov, { fecha: fechaCuota, detalle: detalleConSufijo(i+1) });
           if(esTecMov){
             // crear el movimiento de origen + el espejo automático en el centro destino, con tipo contrario
             var nuevoM = Object.assign({id:uid()}, base);
             var espejo = {
               id: uid(), fecha: fechaCuota, centroId: centroDestino, categoriaId: v.categoriaId, subcategoriaId: v.subcategoriaId,
-              proveedor: v.proveedor, detalle: (detalleFinal ? detalleFinal+' ' : '')+'(transferencia automática)',
+              proveedor: v.proveedor, detalle: (base.detalle ? base.detalle+' ' : '')+'(transferencia automática)',
               ingreso: v.tipo==='ingreso' ? 0 : monto,
               egreso: v.tipo==='ingreso' ? monto : 0,
               tarjeta: !!v.tarjeta
