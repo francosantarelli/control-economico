@@ -111,6 +111,8 @@ td.num, th.num{ text-align:right; font-family:'IBM Plex Mono',monospace; }
 .egreso{ color:var(--danger); }
 tr.fila-incompleta{ background:var(--danger-soft); }
 tr.fila-incompleta:hover{ background:#F5D9D2; }
+tr.fila-pendiente{ opacity:.65; font-style:italic; }
+.badge-pendiente{ font-family:'Inter',sans-serif; font-style:normal; font-size:10px; font-weight:600; color:var(--ink-soft); background:var(--rule); border-radius:10px; padding:2px 7px; text-transform:uppercase; letter-spacing:.03em; white-space:nowrap; }
 tfoot td{ border-top:2px solid var(--accent); border-bottom:none; font-weight:600; font-family:'IBM Plex Mono',monospace; }
 
 .empty{ color:var(--ink-soft); font-style:italic; padding:16px 4px; font-size:13px; }
@@ -384,6 +386,9 @@ function fechaHoyISO(){
   var mm = String(d.getMonth()+1).padStart(2,'0');
   var dd = String(d.getDate()).padStart(2,'0');
   return yyyy+'-'+mm+'-'+dd;
+}
+function esMovimientoPendiente(m){
+  return !!(m.fecha) && m.fecha > fechaHoyISO();
 }
 
 // ===================== PARSERS PORTADOS DEL CONVERSOR =====================
@@ -1297,6 +1302,7 @@ function renderMovimientos(){
   var rows = lista.map(function(m){
     var faltan = camposFaltantes(m);
     var incompleto = faltan.length>0;
+    var pendiente = esMovimientoPendiente(m);
 
     var celdaCentro, celdaCategoria, celdaSubcategoria, celdaProveedor, celdaDetalle;
     if(f.soloIncompletos){
@@ -1319,8 +1325,10 @@ function renderMovimientos(){
       celdaDetalle = '<td data-label="Detalle">'+esc(m.detalle||'')+'</td>';
     }
 
-    return '<tr'+(incompleto?' class="fila-incompleta" title="Falta: '+esc(faltan.join(', '))+'"':'')+'>'+
-      '<td class="mono" data-label="Fecha">'+(incompleto?'⚠️ ':'')+esc(m.fecha||'')+'</td>'+
+    var claseFila = incompleto ? 'fila-incompleta' : (pendiente ? 'fila-pendiente' : '');
+    var tituloFila = incompleto ? ' title="Falta: '+esc(faltan.join(', '))+'"' : (pendiente ? ' title="Fecha futura: no se cuenta en los saldos todavía"' : '');
+    return '<tr'+(claseFila?' class="'+claseFila+'"':'')+tituloFila+'>'+
+      '<td class="mono" data-label="Fecha">'+(incompleto?'⚠️ ':'')+esc(m.fecha||'')+(pendiente?' <span class="badge-pendiente">Pendiente</span>':'')+'</td>'+
       celdaCentro + celdaCategoria + celdaSubcategoria + celdaProveedor + celdaDetalle +
       '<td class="num ingreso" data-label="Ingreso">'+(Number(m.ingreso)?fmtMonto(m.ingreso):'')+'</td>'+
       '<td class="num egreso" data-label="Egreso">'+(Number(m.egreso)?fmtMonto(m.egreso):'')+'</td>'+
@@ -1672,6 +1680,7 @@ function calcularSaldos(){
   var saldoSinCentro = 0;
 
   STATE.movimientos.forEach(function(m){
+    if(esMovimientoPendiente(m)) return; // los movimientos con fecha futura no se consideran para el saldo todavía
     var delta = (Number(m.ingreso)||0) - (Number(m.egreso)||0);
     if(m.centroId && saldoPorCentro.hasOwnProperty(m.centroId)){
       saldoPorCentro[m.centroId] += delta;
@@ -1726,7 +1735,7 @@ function renderSaldos(){
         '<button class="secondary" data-action="recalcular-saldos" style="font-size:12px;padding:6px 12px">↻ Recalcular</button>'+
       '</div>'+
     '</div>'+
-    '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Parte del saldo inicial cargado en la categoría "Saldo Inicial" (0 si no tiene) y suma/resta todos los ingresos y egresos, sin excluir TEC ni Obra, para reflejar el saldo real de cada cuenta. Se recalcula solo con cada movimiento nuevo; usá "Recalcular" para traer también cambios hechos desde otra sesión.</div>'+
+    '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Parte del saldo inicial cargado en la categoría "Saldo Inicial" (0 si no tiene) y suma/resta todos los ingresos y egresos, sin excluir TEC ni Obra, para reflejar el saldo real de cada cuenta. Se recalcula solo con cada movimiento nuevo; usá "Recalcular" para traer también cambios hechos desde otra sesión. Los movimientos con fecha posterior a hoy figuran como "Pendiente" en Movimientos y no se incluyen en este cálculo.</div>'+
     (filas.length ? '<table class="tabla-movil"><thead><tr><th>Código</th><th>Nombre</th><th>Titular</th><th class="num">Saldo</th></tr></thead><tbody>'+rows+filaSinCentro+'</tbody></table>' : '<div class="empty">Todavía no cargaste ningún Centro de Costo.</div>')+
   '</div>';
 
