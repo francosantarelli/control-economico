@@ -1252,7 +1252,7 @@ function camposFaltantes(m){
 }
 
 function renderMovimientos(){
-  var f = STATE.filtros || {centro:'', categoria:'', mes:'', texto:'', subcategoria:'', soloIncompletos:false};
+  var f = STATE.filtros || {centro:'', categoria:'', mes:'', texto:'', subcategoria:'', soloIncompletos:false, soloPendientes:false};
 
   var centroOptions = '<option value="">Todos</option>' + centrosOrdenados().map(function(c){ return '<option value="'+c.id+'" '+(f.centro===c.id?'selected':'')+'>'+esc(c.codigo)+'</option>'; }).join('');
   var categoriaOptions = '<option value="">Todas</option>' + categoriasOrdenadas().map(function(c){ return '<option value="'+c.id+'" '+(f.categoria===c.id?'selected':'')+'>'+esc(c.nombre)+'</option>'; }).join('');
@@ -1267,6 +1267,7 @@ function renderMovimientos(){
     }).join('');
 
   var cantidadIncompletos = STATE.movimientos.filter(function(m){ return camposFaltantes(m).length>0; }).length;
+  var cantidadPendientes = STATE.movimientos.filter(esMovimientoPendiente).length;
 
   // Control de integridad de TEC: debería dar 0 (cada transferencia es un ingreso en un centro y un egreso en otro, por el mismo monto)
   var movsTec = STATE.movimientos.filter(function(m){ return esTipoCategoria(m.categoriaId,'tec'); });
@@ -1289,6 +1290,7 @@ function renderMovimientos(){
       else if(camposFaltantes(m).length===0){ return false; }
     }
     if(f.soloTarjeta && !m.tarjeta) return false;
+    if(f.soloPendientes && !esMovimientoPendiente(m)) return false;
     if(f.texto){
       var t = f.texto.toLowerCase();
       if((m.proveedor||'').toLowerCase().indexOf(t)===-1 && (m.detalle||'').toLowerCase().indexOf(t)===-1) return false;
@@ -1432,6 +1434,9 @@ function renderMovimientos(){
       '</label></div>'+
       '<div class="field"><label>&nbsp;</label><label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:normal;white-space:nowrap;padding:7px 0">'+
         '<input type="checkbox" id="ff-solo-tarjeta" '+(f.soloTarjeta?'checked':'')+' style="width:auto"> 💳 Solo tarjeta'+
+      '</label></div>'+
+      '<div class="field"><label>&nbsp;</label><label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:normal;white-space:nowrap;padding:7px 0">'+
+        '<input type="checkbox" id="ff-solo-pendientes" '+(f.soloPendientes?'checked':'')+' style="width:auto"> Solo pendientes ('+cantidadPendientes+')'+
       '</label></div>'+
       (f.soloIncompletos ? '<div class="field"><label>&nbsp;</label><button class="secondary" data-action="refrescar-incompletos" style="font-size:12px;padding:6px 12px">🔄 Actualizar lista</button></div>' : '')+
     '</div>'+
@@ -2041,7 +2046,7 @@ function bindEvents(){
   }
 
   // Filtros de movimientos
-  ['ff-centro','ff-categoria','ff-mes','ff-subcategoria','ff-texto','ff-solo-incompletos','ff-solo-tarjeta'].forEach(function(id){
+  ['ff-centro','ff-categoria','ff-mes','ff-subcategoria','ff-texto','ff-solo-incompletos','ff-solo-tarjeta','ff-solo-pendientes'].forEach(function(id){
     var el = document.getElementById(id);
     if(!el) return;
     var evt = (id==='ff-texto') ? 'input' : 'change';
@@ -2061,7 +2066,8 @@ function bindEvents(){
         subcategoria: (id==='ff-categoria') ? '' : document.getElementById('ff-subcategoria').value,
         texto: document.getElementById('ff-texto').value,
         soloIncompletos: soloIncompletosChecked,
-        soloTarjeta: document.getElementById('ff-solo-tarjeta').checked
+        soloTarjeta: document.getElementById('ff-solo-tarjeta').checked,
+        soloPendientes: document.getElementById('ff-solo-pendientes').checked
       };
       render();
     });
