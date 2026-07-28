@@ -1999,14 +1999,31 @@ function mesesAnioActual(hoy){
   for(var i=0;i<12;i++) out.push(hoy.getFullYear()+'-'+pad2(i+1));
   return out;
 }
+function mesOffset(hoy, offset){
+  var d = new Date(hoy.getFullYear(), hoy.getMonth()+offset, 1);
+  return d.getFullYear()+'-'+pad2(d.getMonth()+1);
+}
+function mesesUltimos(hoy, n){ // últimos n meses terminando en el actual (lo incluye), sin importar si hay datos cargados
+  var out = [];
+  for(var i=n-1;i>=0;i--) out.push(mesOffset(hoy, -i));
+  return out;
+}
+function mesesProximos(hoy, n){ // próximos n meses, sin incluir el actual (para ver cuotas/vencimientos futuros)
+  var out = [];
+  for(var i=1;i<=n;i++) out.push(mesOffset(hoy, i));
+  return out;
+}
 function mesesParaRango(mesesDisponibles, rango){
   var hoy = new Date();
-  if(rango==='3m') return mesesDisponibles.slice(-3);
-  if(rango==='6m') return mesesDisponibles.slice(-6);
-  if(rango==='12m') return mesesDisponibles.slice(-12);
+  if(rango==='3m') return mesesUltimos(hoy, 3);
+  if(rango==='6m') return mesesUltimos(hoy, 6);
+  if(rango==='12m') return mesesUltimos(hoy, 12);
   if(rango==='trimestre') return mesesTrimestreActual(hoy);
   if(rango==='semestre') return mesesSemestreActual(hoy);
   if(rango==='anio') return mesesAnioActual(hoy);
+  if(rango==='prox1m') return mesesProximos(hoy, 1);
+  if(rango==='prox3m') return mesesProximos(hoy, 3);
+  if(rango==='prox6m') return mesesProximos(hoy, 6);
   return mesesDisponibles; // 'todo'
 }
 
@@ -2174,6 +2191,9 @@ function renderResumen(){
         '<option value="3m" '+(STATE.grillaRango==='3m'?'selected':'')+'>Últimos 3 meses</option>'+
         '<option value="6m" '+(STATE.grillaRango==='6m'?'selected':'')+'>Últimos 6 meses</option>'+
         '<option value="12m" '+(STATE.grillaRango==='12m'?'selected':'')+'>Últimos 12 meses</option>'+
+        '<option value="prox1m" '+(STATE.grillaRango==='prox1m'?'selected':'')+'>Próximo mes</option>'+
+        '<option value="prox3m" '+(STATE.grillaRango==='prox3m'?'selected':'')+'>Próximos 3 meses</option>'+
+        '<option value="prox6m" '+(STATE.grillaRango==='prox6m'?'selected':'')+'>Próximos 6 meses</option>'+
         '<option value="trimestre" '+(STATE.grillaRango==='trimestre'?'selected':'')+'>Este trimestre</option>'+
         '<option value="semestre" '+(STATE.grillaRango==='semestre'?'selected':'')+'>Este semestre</option>'+
         '<option value="anio" '+(STATE.grillaRango==='anio'?'selected':'')+'>Este año</option>'+
