@@ -113,8 +113,6 @@ tr.fila-incompleta{ background:var(--danger-soft); }
 tr.fila-incompleta:hover{ background:#F5D9D2; }
 tr.fila-duplicada{ background:var(--danger-soft); }
 tr.fila-duplicada:hover{ background:#F5D9D2; }
-tr.fila-pendiente{ opacity:.65; font-style:italic; }
-.badge-pendiente{ font-family:'Inter',sans-serif; font-style:normal; font-size:10px; font-weight:600; color:var(--ink-soft); background:var(--rule); border-radius:10px; padding:2px 7px; text-transform:uppercase; letter-spacing:.03em; white-space:nowrap; }
 tfoot td{ border-top:2px solid var(--accent); border-bottom:none; font-weight:600; font-family:'IBM Plex Mono',monospace; }
 
 .empty{ color:var(--ink-soft); font-style:italic; padding:16px 4px; font-size:13px; }
@@ -1003,11 +1001,17 @@ function render(){
 
   contentHtml += '<div class="panel active">';
   if(STATE.activeTab==='movimientos') contentHtml += renderMovimientos();
-  else if(STATE.activeTab==='importar') contentHtml += renderImportar();
-  else if(STATE.activeTab==='vencimientos') contentHtml += renderVencimientos();
-  else if(STATE.activeTab==='saldos') contentHtml += renderSaldos();
-  else if(STATE.activeTab==='resumen') contentHtml += renderResumen();
-  else if(STATE.activeTab==='abm') contentHtml += renderABM();
+  else {
+    // Los movimientos pendientes (fecha futura) se editan/borran desde la pestaña Vencimientos;
+    // el modal de edición vive dentro de renderMovimientos(), así que hay que construirlo igual
+    // aunque no se muestre el listado completo de esa pestaña.
+    if(STATE.editing && STATE.editing.type==='mov') renderMovimientos();
+    if(STATE.activeTab==='importar') contentHtml += renderImportar();
+    else if(STATE.activeTab==='vencimientos') contentHtml += renderVencimientos();
+    else if(STATE.activeTab==='saldos') contentHtml += renderSaldos();
+    else if(STATE.activeTab==='resumen') contentHtml += renderResumen();
+    else if(STATE.activeTab==='abm') contentHtml += renderABM();
+  }
   contentHtml += '</div>';
 
   contentHtml += '<footer class="small">Los datos se guardan en la base de datos compartida: vos y quien tenga usuario ven y editan la misma información.</footer>';
@@ -1304,7 +1308,7 @@ function camposFaltantes(m){
 }
 
 function renderMovimientos(){
-  var f = STATE.filtros || {centro:'', categoria:'', mes:'', texto:'', subcategoria:'', soloIncompletos:false, soloPendientes:false};
+  var f = STATE.filtros || {centro:'', categoria:'', mes:'', texto:'', subcategoria:'', soloIncompletos:false};
 
   var centroOptions = '<option value="">Todos</option>' + centrosOrdenados().map(function(c){ return '<option value="'+c.id+'" '+(f.centro===c.id?'selected':'')+'>'+esc(c.codigo)+'</option>'; }).join('');
   var categoriaOptions = '<option value="">Todas</option>' + categoriasOrdenadas().map(function(c){ return '<option value="'+c.id+'" '+(f.categoria===c.id?'selected':'')+'>'+esc(c.nombre)+'</option>'; }).join('');
@@ -1319,7 +1323,6 @@ function renderMovimientos(){
     }).join('');
 
   var cantidadIncompletos = STATE.movimientos.filter(function(m){ return camposFaltantes(m).length>0; }).length;
-  var cantidadPendientes = STATE.movimientos.filter(esMovimientoPendiente).length;
 
   // Control de integridad de TEC: debería dar 0 (cada transferencia es un ingreso en un centro y un egreso en otro, por el mismo monto)
   var movsTec = STATE.movimientos.filter(function(m){ return esTipoCategoria(m.categoriaId,'tec'); });
@@ -1331,6 +1334,7 @@ function renderMovimientos(){
   });
 
   var lista = STATE.movimientos.filter(function(m){
+    if(esMovimientoPendiente(m)) return false; // los movimientos con fecha futura se muestran en Vencimientos, no acá
     if(f.centro && m.centroId !== f.centro) return false;
     if(f.categoria && m.categoriaId !== f.categoria) return false;
     if(f.mes && (m.fecha||'').slice(0,7) !== f.mes) return false;
@@ -1342,7 +1346,6 @@ function renderMovimientos(){
       else if(camposFaltantes(m).length===0){ return false; }
     }
     if(f.soloTarjeta && !m.tarjeta) return false;
-    if(f.soloPendientes && !esMovimientoPendiente(m)) return false;
     if(f.texto){
       var t = f.texto.toLowerCase();
       if((m.proveedor||'').toLowerCase().indexOf(t)===-1 && (m.detalle||'').toLowerCase().indexOf(t)===-1) return false;
@@ -1356,7 +1359,6 @@ function renderMovimientos(){
   var rows = lista.map(function(m){
     var faltan = camposFaltantes(m);
     var incompleto = faltan.length>0;
-    var pendiente = esMovimientoPendiente(m);
 
     var celdaCentro, celdaCategoria, celdaSubcategoria, celdaProveedor, celdaDetalle;
     if(f.soloIncompletos){
@@ -1379,10 +1381,10 @@ function renderMovimientos(){
       celdaDetalle = '<td data-label="Detalle">'+esc(m.detalle||'')+'</td>';
     }
 
-    var claseFila = incompleto ? 'fila-incompleta' : (pendiente ? 'fila-pendiente' : '');
-    var tituloFila = incompleto ? ' title="Falta: '+esc(faltan.join(', '))+'"' : (pendiente ? ' title="Fecha futura: no se cuenta en los saldos todavía"' : '');
+    var claseFila = incompleto ? 'fila-incompleta' : '';
+    var tituloFila = incompleto ? ' title="Falta: '+esc(faltan.join(', '))+'"' : '';
     return '<tr'+(claseFila?' class="'+claseFila+'"':'')+tituloFila+'>'+
-      '<td class="mono" data-label="Fecha">'+(incompleto?'⚠️ ':'')+esc(m.fecha||'')+(pendiente?' <span class="badge-pendiente">Pendiente</span>':'')+'</td>'+
+      '<td class="mono" data-label="Fecha">'+(incompleto?'⚠️ ':'')+esc(m.fecha||'')+'</td>'+
       celdaCentro + celdaCategoria + celdaSubcategoria + celdaProveedor + celdaDetalle +
       '<td class="num ingreso" data-label="Ingreso">'+(Number(m.ingreso)?fmtMonto(m.ingreso):'')+'</td>'+
       '<td class="num egreso" data-label="Egreso">'+(Number(m.egreso)?fmtMonto(m.egreso):'')+'</td>'+
@@ -1502,9 +1504,6 @@ function renderMovimientos(){
       '</label></div>'+
       '<div class="field"><label>&nbsp;</label><label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:normal;white-space:nowrap;padding:7px 0">'+
         '<input type="checkbox" id="ff-solo-tarjeta" '+(f.soloTarjeta?'checked':'')+' style="width:auto"> 💳 Solo tarjeta'+
-      '</label></div>'+
-      '<div class="field"><label>&nbsp;</label><label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:normal;white-space:nowrap;padding:7px 0">'+
-        '<input type="checkbox" id="ff-solo-pendientes" '+(f.soloPendientes?'checked':'')+' style="width:auto"> Solo pendientes ('+cantidadPendientes+')'+
       '</label></div>'+
       (f.soloIncompletos ? '<div class="field"><label>&nbsp;</label><button class="secondary" data-action="refrescar-incompletos" style="font-size:12px;padding:6px 12px">🔄 Actualizar lista</button></div>' : '')+
     '</div>'+
@@ -1754,7 +1753,31 @@ function renderVencimientos(){
     (lista.length ? '<table class="tabla-movil"><thead><tr><th>Concepto</th><th>Fecha</th><th>Estado</th><th>Centro</th><th class="num">Monto</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>' : '<div class="empty">Todavía no cargaste ningún vencimiento.</div>')+
   '</div>';
 
-  return formHtml + tableHtml;
+  // Movimientos ya cargados con fecha futura (p. ej. cuotas de tarjeta): no aparecen en Movimientos
+  // hasta que llega su fecha, pero se pueden revisar/editar/borrar acá mientras tanto.
+  var pendientesMov = STATE.movimientos.filter(esMovimientoPendiente).sort(function(a,b){ return (a.fecha||'').localeCompare(b.fecha||''); });
+  var rowsPendientes = pendientesMov.map(function(m){
+    var dias = diasHasta(m.fecha);
+    var diasTxt = dias===null ? '' : (dias===0 ? 'Vence hoy' : 'en '+dias+' día(s)');
+    return '<tr>'+
+      '<td class="mono" data-label="Fecha">'+esc(m.fecha||'')+'</td>'+
+      '<td class="mono" data-label="Vence">'+diasTxt+'</td>'+
+      '<td class="mono" data-label="Centro">'+esc(nombreCentro(m.centroId)).split(' · ')[0]+'</td>'+
+      '<td data-label="Categoría">'+esc(nombreCategoria(m.categoriaId))+'</td>'+
+      '<td data-label="Proveedor">'+(m.tarjeta?'<span title="Pagado con tarjeta de crédito">💳</span> ':'')+esc(m.proveedor||'')+'</td>'+
+      '<td data-label="Detalle">'+esc(m.detalle||'')+'</td>'+
+      '<td class="num ingreso" data-label="Ingreso">'+(Number(m.ingreso)?fmtMonto(m.ingreso):'')+'</td>'+
+      '<td class="num egreso" data-label="Egreso">'+(Number(m.egreso)?fmtMonto(m.egreso):'')+'</td>'+
+      '<td class="actions-cell"><button class="link" data-action="edit-mov" data-id="'+m.id+'">editar</button>'+
+      '<button class="link" data-action="del-mov" data-id="'+m.id+'">borrar</button></td>'+
+    '</tr>';
+  }).join('');
+  var tablePendientesMovHtml = '<div class="card"><h3>Movimientos con fecha futura ('+pendientesMov.length+')</h3>'+
+    '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Movimientos ya cargados (por ejemplo, cuotas de tarjeta) con fecha posterior a hoy. No se cuentan en Saldos todavía; al llegar su fecha van a pasar a verse en Movimientos automáticamente.</div>'+
+    (pendientesMov.length ? '<table class="tabla-movil"><thead><tr><th>Fecha</th><th>Vence</th><th>Centro</th><th>Categoría</th><th>Proveedor</th><th>Detalle</th><th class="num">Ingreso</th><th class="num">Egreso</th><th></th></tr></thead><tbody>'+rowsPendientes+'</tbody></table>' : '<div class="empty">No hay movimientos con fecha futura.</div>')+
+  '</div>';
+
+  return formHtml + tablePendientesMovHtml + tableHtml;
 }
 
 // ===================== SALDOS =====================
@@ -1825,7 +1848,7 @@ function renderSaldos(){
         '<button class="secondary" data-action="recalcular-saldos" style="font-size:12px;padding:6px 12px">↻ Recalcular</button>'+
       '</div>'+
     '</div>'+
-    '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Parte del saldo inicial cargado en la categoría "Saldo Inicial" (0 si no tiene) y suma/resta todos los ingresos y egresos, sin excluir TEC ni Obra, para reflejar el saldo real de cada cuenta. Se recalcula solo con cada movimiento nuevo; usá "Recalcular" para traer también cambios hechos desde otra sesión. Los movimientos con fecha posterior a hoy figuran como "Pendiente" en Movimientos y no se incluyen en este cálculo.</div>'+
+    '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Parte del saldo inicial cargado en la categoría "Saldo Inicial" (0 si no tiene) y suma/resta todos los ingresos y egresos, sin excluir TEC ni Obra, para reflejar el saldo real de cada cuenta. Se recalcula solo con cada movimiento nuevo; usá "Recalcular" para traer también cambios hechos desde otra sesión. Los movimientos con fecha posterior a hoy se ven en Vencimientos (no en Movimientos) y no se incluyen en este cálculo.</div>'+
     (filas.length ? '<table class="tabla-movil"><thead><tr><th>Código</th><th>Nombre</th><th>Titular</th><th class="num">Saldo</th></tr></thead><tbody>'+rows+filaSinCentro+'</tbody></table>' : '<div class="empty">Todavía no cargaste ningún Centro de Costo.</div>')+
   '</div>';
 
@@ -2131,7 +2154,7 @@ function bindEvents(){
   }
 
   // Filtros de movimientos
-  ['ff-centro','ff-categoria','ff-mes','ff-subcategoria','ff-texto','ff-solo-incompletos','ff-solo-tarjeta','ff-solo-pendientes'].forEach(function(id){
+  ['ff-centro','ff-categoria','ff-mes','ff-subcategoria','ff-texto','ff-solo-incompletos','ff-solo-tarjeta'].forEach(function(id){
     var el = document.getElementById(id);
     if(!el) return;
     var evt = (id==='ff-texto') ? 'input' : 'change';
@@ -2151,8 +2174,7 @@ function bindEvents(){
         subcategoria: (id==='ff-categoria') ? '' : document.getElementById('ff-subcategoria').value,
         texto: document.getElementById('ff-texto').value,
         soloIncompletos: soloIncompletosChecked,
-        soloTarjeta: document.getElementById('ff-solo-tarjeta').checked,
-        soloPendientes: document.getElementById('ff-solo-pendientes').checked
+        soloTarjeta: document.getElementById('ff-solo-tarjeta').checked
       };
       render();
     });
