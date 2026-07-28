@@ -1495,7 +1495,7 @@ function renderMovimientos(){
       (STATE.movFormMsg ? '<div class="msg err">'+esc(STATE.movFormMsg)+'</div>' : '')+
       '<div class="row">'+
         '<div class="field"><label>Fecha</label><input type="date" id="f-mov-fecha" value="'+esc(e.fecha)+'"></div>'+
-        '<div class="field"><label>Centro de Costo</label><select id="f-mov-centro"><option value="">Elegir...</option>'+
+        '<div class="field"><label>Centro de Costo'+((e.fecha && e.fecha>fechaHoyISO())?' (opcional, fecha futura)':'')+'</label><select id="f-mov-centro"><option value="">Elegir...</option>'+
           centrosOrdenados().map(function(c){ return '<option value="'+c.id+'" '+(e.centroId===c.id?'selected':'')+'>'+esc(c.codigo)+' · '+esc(c.nombre)+'</option>'; }).join('') +
         '</select></div>'+
         '<div class="field"><label>Categoría</label><select id="f-mov-categoria"><option value="">Elegir...</option>'+
@@ -2725,8 +2725,11 @@ async function handleAction(action, id){
   if(action==='save-mov'){
     var v = getMovFormValues();
     STATE.movDraft = v; // conservar lo tipeado si la validación falla más abajo
-    if(!v.fecha || !v.centroId || !v.categoriaId || !v.proveedor || !v.monto){
-      STATE.movFormMsg = 'Completá al menos: fecha, centro de costo, categoría, proveedor y monto.';
+    var esFechaFutura = !!v.fecha && v.fecha > fechaHoyISO();
+    if(!v.fecha || (!v.centroId && !esFechaFutura) || !v.categoriaId || !v.proveedor || !v.monto){
+      STATE.movFormMsg = esFechaFutura
+        ? 'Completá al menos: fecha, categoría, proveedor y monto.'
+        : 'Completá al menos: fecha, centro de costo, categoría, proveedor y monto.';
       render(); return;
     }
     var catElegida = STATE.categorias.find(function(c){return c.id===v.categoriaId;});
