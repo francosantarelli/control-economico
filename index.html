@@ -602,7 +602,7 @@ function parseTarjetaSantander(raw, vencimientoStr){
   return rows;
 }
 
-var TARJETA_CC = { 'nacion':'BNF', 'santander':'BSF', 'provincia':'BPF' };
+var TARJETA_CC = { 'nacion':'BNF', 'santander':'BSF', 'provincia':'BPF', 'mercadopago':'MPF' };
 
 function parseTarjeta(raw, vencimientoStr){
   var lines = raw.split('\n').map(function(l){ return l.replace(/\r$/,''); }).filter(function(l){ return l.trim().length>0; });
@@ -784,7 +784,7 @@ function parseNacion(raw){
   return rows;
 }
 
-var CC_MAP = { mp:'MPF', santander:'BSF', nacion:'BNF', provincia:'BPF', 'mp-tarjeta':'MPF' };
+var CC_MAP = { mp:'MPF', santander:'BSF', nacion:'BNF', provincia:'BPF' };
 
 function extraerProveedorSantander(tipo, detalle){
   var m = detalle.match(/^(De|A)\s+(.+)$/i);
@@ -990,10 +990,6 @@ function runParser(){
   var raw = STATE.importRaw || '';
   if(!raw.trim()) return { rows: [], error: 'Pegá el texto del resumen primero.' };
   if(entidad === 'mp') return { rows: procesarTexto(raw, STATE.importAnio||'26'), error: null };
-  if(entidad === 'mp-tarjeta'){
-    var resMp = parseTarjetaMercadoPago(raw, STATE.importAnio||'26');
-    return { rows: resMp.rows, error: null, omitidas: resMp.omitidas };
-  }
   if(entidad === 'santander') return { rows: parseSantander(raw), error: null };
   if(entidad === 'nacion') return { rows: parseNacion(raw), error: null };
   if(entidad === 'provincia') return { rows: parseProvincia(raw), error: null };
@@ -1001,6 +997,13 @@ function runParser(){
     var venc = STATE.importVencimiento || '';
     if(!venc.trim()) return { rows: [], error: 'Ingresá la fecha de vencimiento del resumen.' };
     var banco = STATE.importBanco || 'nacion';
+    if(banco === 'mercadopago'){
+      // el resumen de MP trae fecha propia por fila (dd/mmm, sin año); se usa el año del campo Vencimiento
+      var vf = venc.trim().match(/^(\d{2})\/(\d{2})\/(\d{2,4})$/);
+      var anioMp = vf ? (vf[3].length===4 ? vf[3].slice(2) : vf[3]) : '26';
+      var resMp = parseTarjetaMercadoPago(raw, anioMp);
+      return { rows: resMp.rows, error: null, omitidas: resMp.omitidas };
+    }
     var rows = (banco === 'santander') ? parseTarjetaSantander(raw, venc) : parseTarjeta(raw, venc);
     return { rows: rows, error: null };
   }
@@ -1584,7 +1587,7 @@ function renderImportar(){
   var msgHtml = STATE.importMsg ? '<div class="msg '+(STATE.importMsg.type==='ok'?'ok':'err')+'">'+esc(STATE.importMsg.text)+'</div>' : '';
 
   var subFieldsHtml = '';
-  if(e === 'mp' || e === 'mp-tarjeta'){
+  if(e === 'mp'){
     subFieldsHtml = '<div class="field"><label>Año</label><input type="text" id="imp-anio" value="'+esc(STATE.importAnio||'26')+'" style="width:60px"></div>';
   } else if(e === 'tarjeta'){
     subFieldsHtml = ''+
@@ -1592,6 +1595,7 @@ function renderImportar(){
         '<option value="nacion" '+(STATE.importBanco==='nacion'?'selected':'')+'>Nación</option>'+
         '<option value="santander" '+(STATE.importBanco==='santander'?'selected':'')+'>Santander</option>'+
         '<option value="provincia" '+(STATE.importBanco==='provincia'?'selected':'')+'>Provincia</option>'+
+        '<option value="mercadopago" '+(STATE.importBanco==='mercadopago'?'selected':'')+'>Mercado Pago</option>'+
       '</select></div>'+
       '<div class="field"><label>Vencimiento</label><input type="text" id="imp-vencimiento" placeholder="dd/mm/aa" value="'+esc(STATE.importVencimiento||'')+'" style="width:90px"></div>';
   }
@@ -1609,7 +1613,6 @@ function renderImportar(){
         '<option value="nacion" '+(e==='nacion'?'selected':'')+'>Banco Nación</option>'+
         '<option value="provincia" '+(e==='provincia'?'selected':'')+'>Banco Provincia</option>'+
         '<option value="tarjeta" '+(e==='tarjeta'?'selected':'')+'>Tarjeta de Crédito</option>'+
-        '<option value="mp-tarjeta" '+(e==='mp-tarjeta'?'selected':'')+'>Mercado Pago - Tarjeta de Crédito</option>'+
         '<option value="excel" '+(e==='excel'?'selected':'')+'>Excel histórico (ya categorizado)</option>'+
       '</select></div>'+
       subFieldsHtml+
@@ -3006,7 +3009,7 @@ async function handleAction(action, id){
     if(!seleccionadas.length){ STATE.importMsg = {type:'err', text:'No hay movimientos seleccionados para importar.'}; render(); return; }
     var faltaCentro = seleccionadas.some(function(r){return !r.centroId;});
     if(faltaCentro){ STATE.importMsg = {type:'err', text:'Hay movimientos sin Centro de Costo asignado. Asignalo antes de importar.'}; render(); return; }
-    var esTarjeta = STATE.importEntidad === 'tarjeta' || STATE.importEntidad === 'mp-tarjeta';
+    var esTarjeta = STATE.importEntidad === 'tarjeta';
     var nuevosMov = seleccionadas.map(function(r){
       return {
         id: uid(), fecha: r.fecha, centroId: r.centroId, categoriaId: r.categoriaId, subcategoriaId: r.subcategoriaId,
