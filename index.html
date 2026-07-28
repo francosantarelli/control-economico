@@ -57,7 +57,9 @@ h1,h2,h3{ font-family:'Source Serif 4',serif; font-weight:600; margin:0; }
 .tab{
   padding:9px 12px; cursor:pointer; font-size:13px; color:var(--ink-soft);
   border-left:3px solid transparent; user-select:none; font-weight:500; border-radius:0 6px 6px 0;
+  display:flex; align-items:center; gap:9px;
 }
+.tab-icon{ font-size:15px; line-height:1; }
 .tab:hover{ color:var(--ink); background:var(--accent-soft); }
 .tab.active{ color:var(--accent); border-left-color:var(--accent); background:var(--accent-soft); font-weight:600; }
 
@@ -1027,12 +1029,12 @@ function render(){
   MODAL_HTML = '';
 
   var tabs = [
-    {id:'movimientos', label:'Movimientos'},
-    {id:'importar', label:'Importar'},
-    {id:'vencimientos', label:'Vencimientos'},
-    {id:'saldos', label:'Saldos'},
-    {id:'resumen', label:'Resumen'},
-    {id:'abm', label:'ABM'}
+    {id:'movimientos', label:'Movimientos', icono:'🧾'},
+    {id:'importar', label:'Importar', icono:'📥'},
+    {id:'vencimientos', label:'Vencimientos', icono:'⏰'},
+    {id:'saldos', label:'Saldos', icono:'🏦'},
+    {id:'resumen', label:'Resumen', icono:'📊'},
+    {id:'abm', label:'ABM', icono:'⚙️'}
   ];
 
   var sidebarHtml = '<div class="sidebar'+(STATE.menuMovilAbierto?' abierto':'')+'">'+
@@ -1040,7 +1042,7 @@ function render(){
     '<button data-action="abrir-efectivo" style="width:100%;margin-bottom:16px;background:var(--danger);border-color:var(--danger);font-size:14px;padding:12px">💵 Efectivo</button>'+
     '<div class="tabs">';
   tabs.forEach(function(t){
-    sidebarHtml += '<div class="tab '+(STATE.activeTab===t.id?'active':'')+'" data-tab="'+t.id+'">'+t.label+'</div>';
+    sidebarHtml += '<div class="tab '+(STATE.activeTab===t.id?'active':'')+'" data-tab="'+t.id+'"><span class="tab-icon">'+t.icono+'</span>'+t.label+'</div>';
   });
   sidebarHtml += '</div>'+
     '<div style="margin-top:20px"><button class="secondary" id="btnLogout" style="width:100%;font-size:12px">Cerrar sesión</button></div>'+
