@@ -31,7 +31,7 @@ body{
   -webkit-text-size-adjust:100%;
 }
 h1,h2,h3{ font-family:'Source Serif 4',serif; font-weight:600; margin:0; }
-.mono{ font-family:'IBM Plex Mono',monospace; }
+.mono{ font-family:'IBM Plex Mono',monospace; white-space:nowrap; }
 .app{ padding:0; }
 
 .layout{ display:flex; align-items:flex-start; min-height:100vh; }
@@ -242,11 +242,59 @@ var SUPABASE_URL = 'https://krgwoiufhvhoqucqjpff.supabase.co';
 var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtyZ3dvaXVmaHZob3F1Y3FqcGZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0MDA2MTIsImV4cCI6MjA5OTk3NjYxMn0.HxA7P1_LUEkZq75kMPKmiCLixeJQ2sROXcmW37gnQOE';
 var sb = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
+// ===================== REGLAS DE CATEGORIZACIÓN AL IMPORTAR (localStorage) =====================
+// Coincidencia parcial (substring, sin distinguir mayúsc/minúsc) del proveedor de la fila importada
+// contra el texto de cada regla. Se guardan en el navegador, no en la base de datos compartida.
+var REGLAS_STORAGE_KEY = 'controlEconomico_reglasCategorizacion';
+var REGLAS_DEFAULT = [
+  {proveedor:'Barrientos', categoria:'Casa', subcategoria:'Limpieza'},
+  {proveedor:'Zuvilivia', categoria:'Comida', subcategoria:'Carnicería'},
+  {proveedor:'Melina', categoria:'Comida', subcategoria:'Verdulería'},
+  {proveedor:'Rocio Jaqueline Oderda', categoria:'Comida', subcategoria:'Panadería'},
+  {proveedor:'Kiosco las flores', categoria:'Salida', subcategoria:'Kiosco'},
+  {proveedor:'Rendimientos', categoria:'Intereses', subcategoria:'Rendimientos'},
+  {proveedor:'Nahir Aldana Kastelan', categoria:'Emma y Juli', subcategoria:'Librería'},
+  {proveedor:'Carina Ines', categoria:'Emma y Juli', subcategoria:'Pañalera'},
+  {proveedor:'Macarena', categoria:'Emma y Juli', subcategoria:'Niñera'},
+  {proveedor:'Boqon', categoria:'Salida', subcategoria:''},
+  {proveedor:'Casa oriental', categoria:'Casa', subcategoria:''},
+  {proveedor:'Claudio Gabriel Valerio', categoria:'Super', subcategoria:''},
+  {proveedor:'Luis Alberto Aguero', categoria:'Obra', subcategoria:'Albañil'},
+  {proveedor:'Francisco Mira', categoria:'Comida', subcategoria:'Dietética'},
+  {proveedor:'Mariano Del Valle', categoria:'Comida', subcategoria:'Pollería'},
+  {proveedor:'Gustavo Canale', categoria:'Obra', subcategoria:''},
+  {proveedor:'PEMASYS S. A.', categoria:'Sueldo', subcategoria:'Maslow'},
+  {proveedor:'Rendimiento', categoria:'Intereses', subcategoria:''},
+  {proveedor:'LA ANóNIMA SUC 100', categoria:'Super', subcategoria:''},
+  {proveedor:'APPYPF 03008 COMBUST', categoria:'Auto', subcategoria:''},
+  {proveedor:'Spotify', categoria:'Servicios', subcategoria:'Spotify'},
+  {proveedor:'IMPUESTO DE SELLOS', categoria:'Servicios', subcategoria:'Gastos Bancarios'},
+  {proveedor:'IIBB PERCEP-BSAS 2,00%( 5499,00)', categoria:'Servicios', subcategoria:'Gastos Bancarios'},
+  {proveedor:'IVA RG 4240 21%( 5499,00)', categoria:'Servicios', subcategoria:'Gastos Bancarios'},
+  {proveedor:'DB.RG 5617 30% ( 5499,00 )', categoria:'Servicios', subcategoria:'Gastos Bancarios'}
+];
+function guardarReglas(lista){
+  try{ window.localStorage.setItem(REGLAS_STORAGE_KEY, JSON.stringify(lista)); }catch(e){}
+}
+function cargarReglas(){
+  try{
+    var raw = window.localStorage.getItem(REGLAS_STORAGE_KEY);
+    if(raw){
+      var parsed = JSON.parse(raw);
+      if(Array.isArray(parsed)) return parsed;
+    }
+  }catch(e){}
+  var seed = REGLAS_DEFAULT.map(function(r){ return Object.assign({id:uid()}, r); });
+  guardarReglas(seed);
+  return seed;
+}
+
 var STATE = { centros: [], categorias: [], subcategorias: [], movimientos: [], vencimientos: [], activeTab: 'movimientos', editing: null, ready:false,
   importEntidad:'mp', importAnio:'26', importBanco:'nacion', importVencimiento:'', importRaw:'', importPreview:null, importPreviewExcel:null, importMsg:null,
   bulkCatMsg:null, confirmState:null, subDeleteState:null, movFormMsg:null, resumenFiltros:{centro:'', categoria:'', mes:'', vista:'categoria'}, abmSubTab:'categorias', grillaRango:'todo',
   bulkVencMsg:null, vencFormMsg:null, dbError:null, saldosCache:null, saldosDirty:true,
-  usuarioEmail:null, efectivoAbierto:false, efectivoMsg:null, backupMsg:null, backupPendiente:null, menuMovilAbierto:false, incompletosSnapshotIds:null };
+  usuarioEmail:null, efectivoAbierto:false, efectivoMsg:null, efectivoCategoriaId:'', backupMsg:null, backupPendiente:null, menuMovilAbierto:false, incompletosSnapshotIds:null,
+  reglas: cargarReglas(), reglaFormMsg:null };
 
 function uid(){
   if(window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID();
@@ -866,6 +914,44 @@ function findDefaultCentroId(){
   return c ? c.id : '';
 }
 
+function buscarReglaParaProveedor(proveedor){
+  var texto = (proveedor||'').toLowerCase();
+  if(!texto) return null;
+  var candidatas = (STATE.reglas||[]).filter(function(r){
+    return r.proveedor && texto.indexOf(r.proveedor.toLowerCase()) !== -1;
+  });
+  if(!candidatas.length) return null;
+  candidatas.sort(function(a,b){ return b.proveedor.length - a.proveedor.length; }); // preferir el match más específico (texto más largo)
+  return candidatas[0];
+}
+function resolverCategoriaSubcategoriaPorNombre(categoriaNombre, subcategoriaNombre){
+  var cat = STATE.categorias.find(function(c){ return (c.nombre||'').toLowerCase() === (categoriaNombre||'').toLowerCase(); });
+  if(!cat) return { categoriaId:'', subcategoriaId:'' };
+  var subId = '';
+  if(subcategoriaNombre){
+    var sub = STATE.subcategorias.find(function(s){ return s.categoriaId===cat.id && (s.nombre||'').toLowerCase()===subcategoriaNombre.toLowerCase(); });
+    if(sub) subId = sub.id;
+  }
+  return { categoriaId: cat.id, subcategoriaId: subId };
+}
+function aplicarReglaAFila(proveedor){
+  var regla = buscarReglaParaProveedor(proveedor);
+  if(!regla) return { categoriaId:'', subcategoriaId:'' };
+  return resolverCategoriaSubcategoriaPorNombre(regla.categoria, regla.subcategoria);
+}
+function agregarOActualizarRegla(proveedorTexto, categoriaNombre, subcategoriaNombre){
+  var texto = (proveedorTexto||'').trim();
+  if(!texto || !categoriaNombre) return;
+  var existente = STATE.reglas.find(function(r){ return r.proveedor.toLowerCase() === texto.toLowerCase(); });
+  if(existente){
+    existente.categoria = categoriaNombre;
+    existente.subcategoria = subcategoriaNombre||'';
+  } else {
+    STATE.reglas.push({ id: uid(), proveedor: texto, categoria: categoriaNombre, subcategoria: subcategoriaNombre||'' });
+  }
+  guardarReglas(STATE.reglas);
+}
+
 // ===================== DETECCIÓN DE DUPLICADOS EN IMPORTACIÓN =====================
 // Un movimiento se considera "el mismo" si coincide Centro de Costo, día y proveedor,
 // y el monto (con signo: ingreso positivo, egreso negativo) es igual.
@@ -1131,7 +1217,15 @@ function render(){
         '<div class="field"><label>Proveedor (opcional)</label><input type="text" id="ef-proveedor" placeholder="Ej: Kiosco"></div>'+
         '<div class="field"><label>Detalle (opcional)</label><input type="text" id="ef-detalle"></div>'+
       '</div>'+
-      '<div style="font-size:11px;color:var(--ink-soft);margin-top:10px">Se carga sin Categoría ni Subcategoría — las completás después desde Movimientos.</div>'+
+      '<div class="row" style="margin-top:10px">'+
+        '<div class="field"><label>Categoría (opcional)</label><select id="ef-categoria"><option value="">Elegir...</option>'+
+          categoriasOrdenadas().map(function(c){ return '<option value="'+c.id+'" '+(STATE.efectivoCategoriaId===c.id?'selected':'')+'>'+esc(c.nombre)+'</option>'; }).join('')+
+        '</select></div>'+
+        '<div class="field"><label>Subcategoría (opcional)</label><select id="ef-subcategoria"><option value="">Elegir...</option>'+
+          subcategoriasOrdenadas(STATE.subcategorias.filter(function(s){return s.categoriaId===STATE.efectivoCategoriaId;})).map(function(s){ return '<option value="'+s.id+'">'+esc(s.nombre)+'</option>'; }).join('')+
+        '</select></div>'+
+      '</div>'+
+      '<div style="font-size:11px;color:var(--ink-soft);margin-top:10px">Podés completar Categoría y Subcategoría ahora, o dejarlas para después desde Movimientos.</div>'+
       '<div class="row" style="margin-top:14px">'+
         '<button data-action="guardar-efectivo">Guardar</button>'+
         '<button class="secondary" data-action="cerrar-efectivo">Cancelar</button>'+
@@ -1445,7 +1539,7 @@ function renderMovimientos(){
     var claseFila = incompleto ? 'fila-incompleta' : '';
     var tituloFila = incompleto ? ' title="Falta: '+esc(faltan.join(', '))+'"' : '';
     return '<tr'+(claseFila?' class="'+claseFila+'"':'')+tituloFila+'>'+
-      '<td class="mono" data-label="Fecha">'+(incompleto?'⚠️ ':'')+esc(m.fecha||'')+'</td>'+
+      '<td class="mono" data-label="Fecha">'+(incompleto?'⚠️ ':'')+esc(fechaISOaDDMMAAAA(m.fecha)||m.fecha||'')+'</td>'+
       celdaCentro + celdaCategoria + celdaSubcategoria + celdaProveedor + celdaDetalle +
       '<td class="num ingreso" data-label="Ingreso">'+(Number(m.ingreso)?fmtMonto(m.ingreso):'')+'</td>'+
       '<td class="num egreso" data-label="Egreso">'+(Number(m.egreso)?fmtMonto(m.egreso):'')+'</td>'+
@@ -1471,10 +1565,10 @@ function renderMovimientos(){
     var esTec = catSel && catSel.tipo === 'tec';
     var campoDestino = (!editing && esTec) ? ''+
       '<div class="row" style="margin-top:10px">'+
-        '<div class="field" style="flex:1 1 240px"><label>Centro de Costo Destino (transferencia)</label><select id="f-mov-centro-destino"><option value="">Elegir...</option>'+
+        '<div class="field" style="flex:1 1 240px"><label>Centro de Costo Destino (transferencia, opcional)</label><select id="f-mov-centro-destino"><option value="">Elegir...</option>'+
           STATE.centros.filter(function(c){return c.id!==e.centroId;}).map(function(c){ return '<option value="'+c.id+'">'+esc(c.codigo)+' · '+esc(c.nombre)+'</option>'; }).join('')+
         '</select></div>'+
-        '<div class="field" style="flex:2 1 260px;justify-content:flex-end"><div style="font-size:11px;color:var(--ink-soft);padding-bottom:8px">Se va a crear automáticamente el movimiento espejo en ese centro: misma fecha y categoría, mismo monto, tipo contrario.</div></div>'+
+        '<div class="field" style="flex:2 1 260px;justify-content:flex-end"><div style="font-size:11px;color:var(--ink-soft);padding-bottom:8px">Si lo completás, se va a crear automáticamente el movimiento espejo en ese centro (misma fecha y categoría, mismo monto, tipo contrario). Si lo dejás vacío, se carga solo este movimiento.</div></div>'+
       '</div>' : '';
     var cuotasNum = Math.max(1, parseInt(e.cuotas,10)||1);
     var textoAyudaCuotas;
@@ -1644,16 +1738,19 @@ function renderImportar(){
         .map(function(s){ return '<option value="'+s.id+'" '+(r.subcategoriaId===s.id?'selected':'')+'>'+esc(s.nombre)+'</option>'; }).join('');
       var subSel = '<select data-rowid="'+r.id+'" data-field="subcategoriaId"><option value="">—</option>'+subOpts+'</select>';
       var dupTag = esDup ? ' <span title="Posible duplicado: mismo Centro, fecha, proveedor y monto que otro movimiento. Revisá antes de importar." style="color:var(--danger)">⚠️</span>' : '';
+      var provInput = '<input type="text" id="imp-prov-'+r.id+'" data-rowid="'+r.id+'" data-field="proveedor" value="'+esc(r.proveedor)+'" style="width:100%;min-width:110px;box-sizing:border-box">';
+      var detInput = '<input type="text" id="imp-det-'+r.id+'" data-rowid="'+r.id+'" data-field="detalle" value="'+esc(r.detalle)+'" style="width:100%;min-width:110px;box-sizing:border-box">';
       return '<tr'+(esDup?' class="fila-duplicada"':'')+'>'+
         '<td><input type="checkbox" data-rowid="'+r.id+'" data-field="incluir" '+(r.incluir?'checked':'')+'></td>'+
-        '<td class="mono">'+esc(r.fecha)+dupTag+'</td>'+
+        '<td class="mono">'+esc(fechaISOaDDMMAAAA(r.fecha)||r.fecha)+dupTag+'</td>'+
         '<td>'+centroSel+'</td>'+
         '<td>'+catSel+'</td>'+
         '<td>'+subSel+'</td>'+
-        '<td>'+esc(r.proveedor)+'</td>'+
-        '<td>'+esc(r.detalle)+'</td>'+
+        '<td>'+provInput+'</td>'+
+        '<td>'+detInput+'</td>'+
         '<td class="num ingreso">'+(r.monto>0?fmtMonto(r.monto):'')+'</td>'+
         '<td class="num egreso">'+(r.monto<0?fmtMonto(-r.monto):'')+'</td>'+
+        '<td style="text-align:center"><input type="checkbox" data-rowid="'+r.id+'" data-field="guardarRegla" '+(r.guardarRegla?'checked':'')+' title="Guardar esta relación proveedor → categoría como regla para futuras importaciones"></td>'+
       '</tr>';
     }).join('');
 
@@ -1672,7 +1769,7 @@ function renderImportar(){
     '<div class="card">'+
       '<h3>Previsualización ('+STATE.importPreview.length+' movimiento(s), '+incluidos+' seleccionado(s))</h3>'+
       (duplicados>0 ? '<div class="msg err">⚠️ '+duplicados+' fila(s) marcada(s) como posible duplicado (mismo Centro, fecha, proveedor y monto que otro movimiento). Revisalas antes de confirmar.</div>' : '')+
-      '<table id="import-preview-table"><thead><tr><th></th><th>Fecha</th><th>Centro</th><th>Categoría</th><th>Subcategoría</th><th>Proveedor</th><th>Detalle</th><th class="num">Ingreso</th><th class="num">Egreso</th></tr></thead>'+
+      '<table id="import-preview-table"><thead><tr><th></th><th>Fecha</th><th>Centro</th><th>Categoría</th><th>Subcategoría</th><th>Proveedor</th><th>Detalle</th><th class="num">Ingreso</th><th class="num">Egreso</th><th title="Guardar la relación proveedor → categoría como regla para futuras importaciones">Regla</th></tr></thead>'+
       '<tbody>'+rows+'</tbody></table>'+
       '<div class="row" style="margin-top:14px">'+
         '<button data-action="confirm-import">Importar '+incluidos+' movimiento(s)</button>'+
@@ -1696,7 +1793,7 @@ function renderImportar(){
       var dupTag = esDup ? ' <span title="Posible duplicado: mismo Centro, fecha, proveedor y monto que otro movimiento. Revisá antes de importar." style="color:var(--danger)">⚠️</span>' : '';
       return '<tr'+(esDup?' class="fila-duplicada"':'')+'>'+
         '<td><input type="checkbox" data-rowid="'+r.id+'" data-field="incluir" '+(r.incluir?'checked':'')+'></td>'+
-        '<td class="mono">'+esc(r.fecha)+dupTag+'</td>'+
+        '<td class="mono">'+esc(fechaISOaDDMMAAAA(r.fecha)||r.fecha)+dupTag+'</td>'+
         '<td class="mono">'+esc(r.ccText)+tagCC+'</td>'+
         '<td>'+esc(r.categoriaText)+tagCat+'</td>'+
         '<td>'+esc(r.subcategoriaText)+tagSub+'</td>'+
@@ -1725,7 +1822,31 @@ function renderImportar(){
     '</div>';
   }
 
-  return formHtml + previewHtml + previewExcelHtml;
+  var reglasOrdenadas = (STATE.reglas||[]).slice().sort(function(a,b){ return (a.proveedor||'').localeCompare(b.proveedor||'', 'es', {sensitivity:'base'}); });
+  var filasReglas = reglasOrdenadas.map(function(r){
+    return '<tr><td>'+esc(r.proveedor)+'</td><td>'+esc(r.categoria)+'</td><td>'+esc(r.subcategoria||'—')+'</td>'+
+      '<td><button class="secondary" data-action="borrar-regla" data-id="'+r.id+'" title="Borrar regla" style="padding:2px 8px">✕</button></td></tr>';
+  }).join('');
+  var categoriaOptsRegla = categoriasOrdenadas().map(function(c){ return '<option value="'+c.id+'">'+esc(c.nombre)+'</option>'; }).join('');
+
+  var reglasHtml = ''+
+  '<div class="card">'+
+    '<h3>Reglas de categorización</h3>'+
+    '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Al previsualizar una importación, si el proveedor de una fila coincide (parcialmente, sin importar mayúsculas) con el texto de una regla, se precargan su Categoría y Subcategoría. Se guardan en este navegador, no en la base de datos compartida.</div>'+
+    (STATE.reglaFormMsg ? '<div class="msg err">'+esc(STATE.reglaFormMsg)+'</div>' : '')+
+    '<div class="row" style="margin-bottom:10px">'+
+      '<div class="field"><label>Proveedor (texto parcial)</label><input type="text" id="regla-proveedor" placeholder="Ej: Barrientos"></div>'+
+      '<div class="field"><label>Categoría</label><select id="regla-categoria"><option value="">Elegir...</option>'+categoriaOptsRegla+'</select></div>'+
+      '<div class="field"><label>Subcategoría (opcional)</label><input type="text" id="regla-subcategoria" placeholder="Ej: Limpieza"></div>'+
+      '<div class="field" style="justify-content:flex-end"><button data-action="agregar-regla">Agregar regla</button></div>'+
+    '</div>'+
+    (reglasOrdenadas.length ? ''+
+      '<div style="overflow-x:auto"><table><thead><tr><th>Proveedor</th><th>Categoría</th><th>Subcategoría</th><th></th></tr></thead>'+
+      '<tbody>'+filasReglas+'</tbody></table></div>'
+      : '<div class="empty">Todavía no hay reglas guardadas.</div>')+
+  '</div>';
+
+  return formHtml + previewHtml + previewExcelHtml + reglasHtml;
 }
 
 // ===================== VENCIMIENTOS =====================
@@ -1822,7 +1943,7 @@ function renderVencimientos(){
     var dias = diasHasta(m.fecha);
     var diasTxt = dias===null ? '' : (dias===0 ? 'Vence hoy' : 'en '+dias+' día(s)');
     return '<tr>'+
-      '<td class="mono" data-label="Fecha">'+esc(m.fecha||'')+'</td>'+
+      '<td class="mono" data-label="Fecha">'+esc(fechaISOaDDMMAAAA(m.fecha)||m.fecha||'')+'</td>'+
       '<td class="mono" data-label="Vence">'+diasTxt+'</td>'+
       '<td class="mono" data-label="Centro">'+esc(nombreCentro(m.centroId)).split(' · ')[0]+'</td>'+
       '<td data-label="Categoría">'+esc(nombreCategoria(m.categoriaId))+'</td>'+
@@ -2297,6 +2418,15 @@ function bindEvents(){
     });
   }
 
+  // Refrescar subcategorías disponibles al cambiar la categoría en el modal de Efectivo
+  var efCategoriaSel = document.getElementById('ef-categoria');
+  if(efCategoriaSel){
+    efCategoriaSel.addEventListener('change', function(){
+      STATE.efectivoCategoriaId = efCategoriaSel.value;
+      render();
+    });
+  }
+
   // Mostrar/ocultar los campos de cuotas al tildar "Pagado con tarjeta de crédito",
   // y refrescar la ayuda ("se van a crear N movimientos...") al cambiar la cantidad de cuotas.
   var movTarjetaChk = document.getElementById('f-mov-tarjeta');
@@ -2339,9 +2469,20 @@ function bindEvents(){
       if(!rowId || !field) return;
       var row = STATE.importPreview.find(function(r){return r.id===rowId;});
       if(!row) return;
-      if(field==='incluir') row.incluir = t.checked;
+      if(field==='incluir' || field==='guardarRegla') row[field] = t.checked;
       else if(field==='categoriaId'){ row.categoriaId = t.value; row.subcategoriaId=''; }
       else row[field] = t.value;
+      render();
+    });
+    previewTable.addEventListener('input', function(ev){
+      var t = ev.target;
+      if(t.tagName !== 'INPUT' || t.type !== 'text') return;
+      var rowId = t.getAttribute('data-rowid');
+      var field = t.getAttribute('data-field');
+      if(!rowId || !field) return;
+      var row = STATE.importPreview.find(function(r){return r.id===rowId;});
+      if(!row) return;
+      row[field] = t.value;
       render();
     });
   }
@@ -2615,12 +2756,14 @@ async function handleAction(action, id){
   if(action==='abrir-efectivo'){
     STATE.efectivoMsg = null;
     STATE.efectivoAbierto = true;
+    STATE.efectivoCategoriaId = '';
     STATE.menuMovilAbierto = false;
     render(); return;
   }
   if(action==='cerrar-efectivo'){
     STATE.efectivoAbierto = false;
     STATE.efectivoMsg = null;
+    STATE.efectivoCategoriaId = '';
     render(); return;
   }
   if(action==='guardar-efectivo'){
@@ -2630,6 +2773,8 @@ async function handleAction(action, id){
     var efMonto = Math.abs(parseFloat(document.getElementById('ef-monto').value))||0;
     var efProveedor = document.getElementById('ef-proveedor').value.trim();
     var efDetalle = document.getElementById('ef-detalle').value.trim();
+    var efCategoria = document.getElementById('ef-categoria').value;
+    var efSubcategoria = document.getElementById('ef-subcategoria').value;
 
     if(!efFecha || !efMonto){
       STATE.efectivoMsg = 'Completá al menos la fecha y el monto.';
@@ -2637,7 +2782,7 @@ async function handleAction(action, id){
     }
     STATE.efectivoMsg = null; STATE.dbError = null;
     var nuevoEf = {
-      id: uid(), fecha: efFecha, centroId: efCentro, categoriaId: '', subcategoriaId: '',
+      id: uid(), fecha: efFecha, centroId: efCentro, categoriaId: efCategoria, subcategoriaId: efSubcategoria,
       proveedor: efProveedor, detalle: efDetalle,
       ingreso: efTipo==='ingreso' ? efMonto : 0,
       egreso: efTipo==='egreso' ? efMonto : 0
@@ -2647,6 +2792,7 @@ async function handleAction(action, id){
       STATE.movimientos.push(nuevoEf);
       STATE.saldosDirty = true;
       STATE.efectivoAbierto = false;
+      STATE.efectivoCategoriaId = '';
     }catch(e){ STATE.dbError = 'No se pudo guardar el movimiento: '+(e.message||e); }
     render(); return;
   }
@@ -2737,15 +2883,9 @@ async function handleAction(action, id){
     var centroDestinoEl = document.getElementById('f-mov-centro-destino');
     var centroDestino = centroDestinoEl ? centroDestinoEl.value : '';
 
-    if(!id && esTecMov){
-      if(!centroDestino){
-        STATE.movFormMsg = 'Esta categoría es de tipo TEC: elegí el Centro de Costo Destino de la transferencia.';
-        render(); return;
-      }
-      if(centroDestino === v.centroId){
-        STATE.movFormMsg = 'El Centro de Costo Destino tiene que ser distinto al de origen.';
-        render(); return;
-      }
+    if(!id && esTecMov && centroDestino && centroDestino === v.centroId){
+      STATE.movFormMsg = 'El Centro de Costo Destino tiene que ser distinto al de origen.';
+      render(); return;
     }
 
     STATE.movFormMsg = null; STATE.dbError = null;
@@ -2765,7 +2905,7 @@ async function handleAction(action, id){
     var detalleBase = v.detalle||'';
     function detalleConSufijo(numeroCuota){
       if(cuotasTotal<=1) return detalleBase;
-      var sufijoConsumo = v.fechaConsumo ? ' · Consumo '+v.fechaConsumo : '';
+      var sufijoConsumo = v.fechaConsumo ? ' · Consumo '+fechaISOaDDMMAAAA(v.fechaConsumo) : '';
       return detalleBase + sufijoConsumo + ' ('+numeroCuota+'/'+cuotasTotal+')';
     }
     try{
@@ -2790,7 +2930,7 @@ async function handleAction(action, id){
         var nuevosLote = [];
         fechasCuotas.forEach(function(fechaCuota, i){
           var base = Object.assign({}, mov, { fecha: fechaCuota, detalle: detalleConSufijo(i+1) });
-          if(esTecMov){
+          if(esTecMov && centroDestino){
             // crear el movimiento de origen + el espejo automático en el centro destino, con tipo contrario
             var nuevoM = Object.assign({id:uid()}, base);
             var espejo = {
@@ -2943,8 +3083,9 @@ async function handleAction(action, id){
     }
     var defaultCentroId = findDefaultCentroId();
     STATE.importPreview = res.rows.map(function(r){
+      var sugerido = aplicarReglaAFila(r.proveedor);
       return { id:uid(), fecha: fechaCortaAISO(r.fecha), proveedor: r.proveedor||'', detalle: r.tipo||'', monto: r.monto,
-        centroId: defaultCentroId||'', categoriaId:'', subcategoriaId:'', incluir:true };
+        centroId: defaultCentroId||'', categoriaId: sugerido.categoriaId, subcategoriaId: sugerido.subcategoriaId, incluir:true, guardarRegla:false };
     });
     STATE.importMsg = defaultCentroId ? null : {type:'err', text:'No encontré un Centro de Costo con el código esperado para esta entidad. Asigná uno por fila abajo, o cargalo primero en ABM → Centros de Costo.'};
     if(res.omitidas){
@@ -3048,9 +3189,36 @@ async function handleAction(action, id){
       await dbInsert('movimientos', nuevosMov.map(toDbMovimiento));
       STATE.movimientos = STATE.movimientos.concat(nuevosMov);
       STATE.saldosDirty = true;
-      STATE.importPreview = null; STATE.importRaw = ''; STATE.importMsg = {type:'ok', text: seleccionadas.length+' movimiento(s) importado(s) correctamente.'};
+      var nuevasReglas = 0;
+      seleccionadas.forEach(function(r){
+        if(r.guardarRegla && r.categoriaId){
+          agregarOActualizarRegla(r.proveedor, nombreCategoria(r.categoriaId), r.subcategoriaId ? nombreSubcategoria(r.subcategoriaId) : '');
+          nuevasReglas++;
+        }
+      });
+      STATE.importPreview = null; STATE.importRaw = '';
+      STATE.importMsg = {type:'ok', text: seleccionadas.length+' movimiento(s) importado(s) correctamente.'+(nuevasReglas ? ' Se guardaron '+nuevasReglas+' regla(s) de categorización nueva(s).' : '')};
       STATE.activeTab = 'movimientos'; STATE.editing = null;
     }catch(e){ STATE.dbError = 'No se pudo completar la importación: '+(e.message||e); }
+    render(); return;
+  }
+
+  // ---- REGLAS DE CATEGORIZACIÓN (localStorage) ----
+  if(action==='agregar-regla'){
+    var rProv = document.getElementById('regla-proveedor').value.trim();
+    var rCatId = document.getElementById('regla-categoria').value;
+    var rSub = document.getElementById('regla-subcategoria').value.trim();
+    if(!rProv || !rCatId){
+      STATE.reglaFormMsg = 'Completá al menos el proveedor y la categoría.';
+      render(); return;
+    }
+    agregarOActualizarRegla(rProv, nombreCategoria(rCatId), rSub);
+    STATE.reglaFormMsg = null;
+    render(); return;
+  }
+  if(action==='borrar-regla'){
+    STATE.reglas = STATE.reglas.filter(function(r){ return r.id !== id; });
+    guardarReglas(STATE.reglas);
     render(); return;
   }
 }
