@@ -950,7 +950,7 @@ function render(){
 
   var sidebarHtml = '<div class="sidebar'+(STATE.menuMovilAbierto?' abierto':'')+'">'+
     '<div class="masthead"><h1>Control</h1><div class="tagline">Control económico<br>datos compartidos</div></div>'+
-    '<button data-action="abrir-efectivo" style="width:100%;margin-bottom:16px;background:var(--danger);border-color:var(--danger);font-size:14px;padding:12px">💵 Efectivo</button>'+
+    '<button data-action="abrir-efectivo" style="width:100%;margin-bottom:16px;background:transparent;border:1.5px solid var(--accent);color:var(--accent);font-size:14px;padding:12px">💵 Efectivo</button>'+
     '<div class="tabs">';
   tabs.forEach(function(t){
     sidebarHtml += '<div class="tab '+(STATE.activeTab===t.id?'active':'')+'" data-tab="'+t.id+'"><span class="tab-icon">'+t.icono+'</span>'+t.label+'</div>';
@@ -1212,7 +1212,7 @@ function renderCategorias(){
     '<h3>Carga masiva</h3>'+
     bulkMsgHtml+
     '<div class="field"><label>Pegá "Nombre" + tab + "Tipo" (Ingreso/Egreso/Ahorro/TEC) por línea — también podés pegar solo el nombre, una por línea, sin tipo. Si la categoría ya existe, se actualiza el tipo; si no existe, se crea.</label>'+
-    '<textarea id="bulk-categorias" rows="8" style="width:100%;font-family:\'IBM Plex Mono\',monospace;font-size:12px" placeholder="Aguinaldo\tIngreso\nAlq. Campo\tEgreso\n..."></textarea></div>'+
+    '<textarea id="bulk-categorias" rows="8" style="width:100%;font-family:\'Geist Mono\',ui-monospace,Consolas,monospace;font-size:12px" placeholder="Aguinaldo\tIngreso\nAlq. Campo\tEgreso\n..."></textarea></div>'+
     '<div class="row" style="margin-top:10px"><button data-action="bulk-add-categorias">Cargar / actualizar todas</button></div>'+
   '</div>'+
   '<div class="card">'+
@@ -1359,22 +1359,25 @@ function renderMovimientos(){
       celdaProveedor = '<td data-label="Proveedor">'+(m.tarjeta?'<span title="Pagado con tarjeta de crédito">💳</span> ':'')+'<input type="text" data-mov-id="'+m.id+'" data-field="proveedor" value="'+esc(m.proveedor||'')+'" style="width:100%;box-sizing:border-box"></td>';
       celdaDetalle = '<td data-label="Detalle"><input type="text" data-mov-id="'+m.id+'" data-field="detalle" value="'+esc(m.detalle||'')+'" style="width:100%;box-sizing:border-box"></td>';
     } else {
-      celdaCentro = '<td class="mono" data-label="Centro">'+esc(nombreCentro(m.centroId)).split(' · ')[0]+'</td>';
-      celdaCategoria = '<td data-label="Categoría">'+esc(nombreCategoria(m.categoriaId))+'</td>';
-      celdaSubcategoria = '<td data-label="Subcategoría">'+esc(nombreSubcategoria(m.subcategoriaId))+'</td>';
-      celdaProveedor = '<td data-label="Proveedor">'+(m.tarjeta?'<span title="Pagado con tarjeta de crédito">💳</span> ':'')+esc(m.proveedor||'')+'</td>';
+      var mesFila = (m.fecha||'').slice(0,7);
+      var subValorFiltro = m.subcategoriaId || '__vacio__';
+      celdaCentro = '<td class="mono'+(m.centroId?' celda-filtrable':'')+'" data-label="Centro"'+(m.centroId?' data-filter-field="centro" data-filter-value="'+esc(m.centroId)+'" title="Filtrar por este Centro de Costo"':'')+'>'+esc(nombreCentro(m.centroId)).split(' · ')[0]+'</td>';
+      celdaCategoria = '<td'+(m.categoriaId?' class="celda-filtrable" data-filter-field="categoria" data-filter-value="'+esc(m.categoriaId)+'" title="Filtrar por esta Categoría"':'')+' data-label="Categoría">'+esc(nombreCategoria(m.categoriaId))+'</td>';
+      celdaSubcategoria = '<td class="celda-filtrable" data-filter-field="subcategoria" data-filter-value="'+esc(subValorFiltro)+'" title="Filtrar por esta Subcategoría" data-label="Subcategoría">'+esc(nombreSubcategoria(m.subcategoriaId))+'</td>';
+      celdaProveedor = '<td'+(m.proveedor?' class="celda-filtrable" data-filter-field="texto" data-filter-value="'+esc(m.proveedor)+'" title="Filtrar por este Proveedor"':'')+' data-label="Proveedor">'+(m.tarjeta?'<span title="Pagado con tarjeta de crédito">💳</span> ':'')+esc(m.proveedor||'')+'</td>';
       celdaDetalle = '<td data-label="Detalle">'+esc(m.detalle||'')+'</td>';
     }
 
     var claseFila = incompleto ? 'fila-incompleta' : '';
     var tituloFila = incompleto ? ' title="Falta: '+esc(faltan.join(', '))+'"' : '';
+    var fechaFiltrable = !f.soloIncompletos && (m.fecha||'').slice(0,7);
     return '<tr'+(claseFila?' class="'+claseFila+'"':'')+tituloFila+'>'+
-      '<td class="mono" data-label="Fecha">'+(incompleto?'⚠️ ':'')+esc(fechaISOaDDMMAAAA(m.fecha)||m.fecha||'')+'</td>'+
+      '<td class="mono'+(fechaFiltrable?' celda-filtrable':'')+'" data-label="Fecha"'+(fechaFiltrable?' data-filter-field="mes" data-filter-value="'+esc(fechaFiltrable)+'" title="Filtrar por este Mes"':'')+'>'+(incompleto?'⚠️ ':'')+esc(fechaISOaDDMMAAAA(m.fecha)||m.fecha||'')+'</td>'+
       celdaCentro + celdaCategoria + celdaSubcategoria + celdaProveedor + celdaDetalle +
       '<td class="num ingreso" data-label="Ingreso">'+(Number(m.ingreso)?fmtMonto(m.ingreso):'')+'</td>'+
       '<td class="num egreso" data-label="Egreso">'+(Number(m.egreso)?fmtMonto(m.egreso):'')+'</td>'+
-      '<td class="actions-cell"><button class="link" data-action="edit-mov" data-id="'+m.id+'">editar</button>'+
-      '<button class="link" data-action="del-mov" data-id="'+m.id+'">borrar</button></td>'+
+      '<td class="actions-cell"><button class="icon-btn" data-action="edit-mov" data-id="'+m.id+'" title="Editar" aria-label="Editar">✏️</button>'+
+      '<button class="icon-btn icon-btn-danger" data-action="del-mov" data-id="'+m.id+'" title="Borrar" aria-label="Borrar">🗑️</button></td>'+
     '</tr>';
   }).join('');
 
@@ -1475,9 +1478,13 @@ function renderMovimientos(){
       : '')+
   '</div>' : '';
 
+  var hayFiltrosActivosMov = f.centro.length || f.categoria.length || f.subcategoria.length || f.mes.length || f.texto || f.soloIncompletos || f.soloTarjeta;
   var filtersHtml = ''+
   '<div class="card card-filtros">'+
-    '<h3>Filtros</h3>'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:10px">'+
+      '<h3 style="margin-bottom:0">Filtros</h3>'+
+      (hayFiltrosActivosMov ? '<button class="secondary" data-action="limpiar-filtros-mov" style="font-size:12px;padding:6px 12px">✕ Limpiar filtros</button>' : '')+
+    '</div>'+
     '<div class="filters">'+
       '<div class="field"><label>Centro de Costo</label>'+renderMultiSelect('ff-centro', centroOptions, f.centro)+'</div>'+
       '<div class="field"><label>Categoría</label>'+renderMultiSelect('ff-categoria', categoriaOptions, f.categoria)+'</div>'+
@@ -1500,7 +1507,7 @@ function renderMovimientos(){
     (lista.length ? ''+
     '<table id="tabla-movimientos" class="tabla-movil"><thead><tr><th>Fecha</th><th>CC</th><th>Categoría</th><th>Subcategoría</th><th>Proveedor</th><th>Detalle</th><th class="num">Ingreso</th><th class="num">Egreso</th><th></th></tr></thead>'+
     '<tbody>'+rows+'</tbody>'+
-    '<tfoot><tr><td colspan="6" data-label="">Totales (sin TEC)</td><td class="num ingreso" data-label="Total Ingreso">'+fmtMonto(totalIngreso)+'</td><td class="num egreso" data-label="Total Egreso">'+fmtMonto(totalEgreso)+'</td><td class="actions-cell"></td></tr></tfoot>'+
+    '<tfoot><tr><td colspan="6" data-label="">Totales (sin TEC)</td><td class="num ingreso" data-label="Total Ingreso">'+fmtMonto(totalIngreso)+'</td><td class="num egreso" data-label="Total Egreso">'+fmtMonto(totalEgreso)+'</td><td class="num '+(totalIngreso-totalEgreso>=0?'ingreso':'egreso')+'" data-label="Ingresos - Egresos">'+fmtMonto(totalIngreso-totalEgreso)+'</td></tr></tfoot>'+
     '</table>' : '<div class="empty">No hay movimientos que coincidan con los filtros.</div>')+
   '</div>';
 
@@ -1545,7 +1552,7 @@ function renderImportar(){
     '</div>'+
     excelHint+
     '<div class="field" style="margin-top:10px"><label>Texto del resumen</label>'+
-    '<textarea id="imp-raw" rows="8" style="width:100%;font-family:\'IBM Plex Mono\',monospace;font-size:12px" placeholder="Pegá acá el texto copiado del resumen...">'+esc(STATE.importRaw||'')+'</textarea></div>'+
+    '<textarea id="imp-raw" rows="8" style="width:100%;font-family:\'Geist Mono\',ui-monospace,Consolas,monospace;font-size:12px" placeholder="Pegá acá el texto copiado del resumen...">'+esc(STATE.importRaw||'')+'</textarea></div>'+
     '<div class="row" style="margin-top:10px"><button data-action="preview-import">Previsualizar</button></div>'+
   '</div>';
 
@@ -1738,7 +1745,7 @@ function renderVencimientos(){
     '<h3>Carga masiva</h3>'+
     bulkMsgHtml+
     '<div class="field"><label>Pegá "Concepto" + tab + "Fecha (dd/mm/aaaa)" + tab + "Monto" por línea. Opcional: un cuarto valor con el código de Centro de Costo.</label>'+
-    '<textarea id="bulk-vencimientos" rows="5" style="width:100%;font-family:\'IBM Plex Mono\',monospace;font-size:12px" placeholder="Tarjeta Visa Santander\t13/07/2026\t216759.02\tBSF"></textarea></div>'+
+    '<textarea id="bulk-vencimientos" rows="5" style="width:100%;font-family:\'Geist Mono\',ui-monospace,Consolas,monospace;font-size:12px" placeholder="Tarjeta Visa Santander\t13/07/2026\t216759.02\tBSF"></textarea></div>'+
     '<div class="row" style="margin-top:10px"><button data-action="bulk-add-vencimientos">Cargar todos</button></div>'+
   '</div>';
 
@@ -2345,6 +2352,18 @@ function bindEvents(){
       }catch(e){ STATE.dbError = 'No se pudo guardar el cambio: '+(e.message||e); }
       render();
     });
+
+    // Clic sobre Fecha/Centro/Categoría/Subcategoría/Proveedor -> filtra la tabla por ese valor
+    tablaMovimientos.addEventListener('click', function(ev){
+      var celda = ev.target.closest('[data-filter-field]');
+      if(!celda) return;
+      var campoFiltro = celda.getAttribute('data-filter-field');
+      var valorFiltro = celda.getAttribute('data-filter-value');
+      if(!valorFiltro) return;
+      if(campoFiltro === 'texto') STATE.filtros.texto = valorFiltro;
+      else STATE.filtros[campoFiltro] = [valorFiltro];
+      render();
+    });
   }
 
   var previewExcelTable = document.getElementById('import-preview-excel-table');
@@ -2574,6 +2593,11 @@ async function handleAction(action, id){
 
   if(action==='refrescar-incompletos'){
     STATE.incompletosSnapshotIds = STATE.movimientos.filter(function(m){ return camposFaltantes(m).length>0; }).map(function(m){ return m.id; });
+    render(); return;
+  }
+  if(action==='limpiar-filtros-mov'){
+    STATE.filtros = {centro:[], categoria:[], subcategoria:[], mes:[], texto:'', soloIncompletos:false, soloTarjeta:false};
+    STATE.incompletosSnapshotIds = null;
     render(); return;
   }
 
