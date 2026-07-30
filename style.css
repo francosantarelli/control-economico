@@ -70,6 +70,9 @@ h1,h2,h3{ font-family:'Source Serif 4',serif; font-weight:600; margin:0; }
   background:var(--paper); border:1px solid var(--rule); border-radius:10px;
   padding:18px; margin-bottom:18px; overflow-x:auto; -webkit-overflow-scrolling:touch;
 }
+/* Las tarjetas de Filtros no tienen tablas anchas que necesiten scroll horizontal, y ese overflow
+   recortaba (y le agregaba scroll propio) al panel desplegable de los filtros multiselect. */
+.card-filtros{ overflow:visible; }
 .card h2{ font-size:15px; margin-bottom:14px; }
 .card h3{ font-size:13px; color:var(--ink-soft); font-weight:600; margin-bottom:10px; text-transform:uppercase; letter-spacing:.04em; }
 
@@ -81,6 +84,34 @@ input[type=text], input[type=date], input[type=number], select, textarea{
   border-radius:6px; background:#fff; color:var(--ink); min-width:120px;
 }
 input:focus, select:focus, textarea:focus{ outline:2px solid var(--accent); outline-offset:1px; border-color:var(--accent); }
+
+/* Filtros de selección múltiple (Centro/Categoría/Subcategoría/Mes en Movimientos y Resumen) */
+.multiselect{ position:relative; display:inline-block; min-width:150px; }
+.multiselect-toggle{
+  font-family:inherit; font-size:13px; padding:7px 9px; border:1px solid var(--rule);
+  border-radius:6px; background:#fff; color:var(--ink); min-width:150px; width:100%; text-align:left;
+  cursor:pointer; display:flex; align-items:center; justify-content:space-between; gap:8px;
+}
+.multiselect-toggle:hover{ border-color:var(--accent); }
+.multiselect.abierto .multiselect-toggle{ outline:2px solid var(--accent); outline-offset:1px; border-color:var(--accent); }
+.multiselect-caret{ font-size:10px; color:var(--ink-soft); flex-shrink:0; }
+.multiselect-panel{
+  position:absolute; top:calc(100% + 4px); left:0; z-index:30; min-width:220px; max-width:320px;
+  background:var(--paper); border:1px solid var(--rule); border-radius:8px; box-shadow:0 6px 20px rgba(0,0,0,.15);
+  padding:8px;
+}
+.multiselect-search{
+  width:100%; box-sizing:border-box; margin-bottom:6px; min-width:0;
+  font-family:inherit; font-size:13px; padding:6px 8px; border:1px solid var(--rule); border-radius:6px;
+}
+.multiselect-panel-actions{ display:flex; justify-content:flex-end; margin-bottom:4px; }
+.multiselect-list{ max-height:220px; overflow-y:auto; }
+.multiselect-item{
+  display:flex; align-items:center; gap:8px; padding:5px 6px; font-size:13px; font-weight:normal;
+  cursor:pointer; border-radius:4px; white-space:nowrap;
+}
+.multiselect-item:hover{ background:var(--accent-soft); }
+.multiselect-item input{ width:auto; min-width:0; flex-shrink:0; }
 
 button{
   font-family:'Inter',sans-serif; font-size:13px; font-weight:500; padding:8px 14px;
@@ -180,6 +211,10 @@ footer.small{ margin-top:28px; font-size:11px; color:var(--ink-soft); text-align
   .field{ flex:1 1 100%; min-width:0; }
   .field input, .field select, .field textarea{ width:100% !important; box-sizing:border-box; }
   input[type=text], input[type=date], input[type=number], select, textarea{ font-size:16px; padding:10px; } /* 16px evita el zoom automático de iOS al enfocar */
+  .multiselect{ width:100%; }
+  .multiselect-toggle{ font-size:16px; padding:10px; } /* 16px evita el zoom automático de iOS al enfocar */
+  .multiselect-search{ font-size:16px; padding:9px 8px; }
+  .multiselect-panel{ left:0; right:0; max-width:none; }
   button{ padding:11px 16px; min-height:44px; }
   button.link{ padding:8px 6px; min-height:auto; font-size:13px; display:inline-block; }
   .actions-cell{ white-space:normal; }

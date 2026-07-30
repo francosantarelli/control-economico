@@ -52,10 +52,74 @@ function cargarReglas(){
 
 var STATE = { centros: [], categorias: [], subcategorias: [], movimientos: [], vencimientos: [], activeTab: 'movimientos', editing: null, ready:false,
   importEntidad:'mp', importAnio:'26', importBanco:'nacion', importVencimiento:'', importRaw:'', importPreview:null, importPreviewExcel:null, importMsg:null,
-  bulkCatMsg:null, confirmState:null, subDeleteState:null, movFormMsg:null, resumenFiltros:{centro:'', categoria:'', mes:'', vista:'categoria'}, abmSubTab:'categorias', grillaRango:'todo',
+  bulkCatMsg:null, confirmState:null, subDeleteState:null, movFormMsg:null,
+  filtros:{centro:[], categoria:[], subcategoria:[], mes:[], texto:'', soloIncompletos:false, soloTarjeta:false},
+  resumenFiltros:{centro:[], categoria:[], mes:[], vista:'categoria'}, multiSelectAbierto:null, multiSelectBusqueda:'', abmSubTab:'categorias', grillaRango:'todo',
   bulkVencMsg:null, vencFormMsg:null, dbError:null, saldosCache:null, saldosDirty:true,
   usuarioEmail:null, efectivoAbierto:false, efectivoMsg:null, efectivoCategoriaId:'', backupMsg:null, backupPendiente:null, menuMovilAbierto:false, incompletosSnapshotIds:null,
   reglas: cargarReglas(), reglaFormMsg:null };
+
+// ===================== FILTROS MÚLTIPLES (selects convertidos a checkboxes) =====================
+var MULTISELECT_MAP = {
+  'ff-centro': {store:'filtros', field:'centro'},
+  'ff-categoria': {store:'filtros', field:'categoria'},
+  'ff-subcategoria': {store:'filtros', field:'subcategoria'},
+  'ff-mes': {store:'filtros', field:'mes'},
+  'rf-centro': {store:'resumenFiltros', field:'centro'},
+  'rf-categoria': {store:'resumenFiltros', field:'categoria'},
+  'rf-mes': {store:'resumenFiltros', field:'mes'}
+};
+function arrayFiltro(msId){
+  var map = MULTISELECT_MAP[msId];
+  if(!map) return [];
+  var obj = STATE[map.store];
+  if(!obj[map.field]) obj[map.field] = [];
+  return obj[map.field];
+}
+function toggleMultiSelectValor(msId, valor, marcado){
+  var arr = arrayFiltro(msId);
+  var idx = arr.indexOf(valor);
+  if(marcado && idx===-1) arr.push(valor);
+  else if(!marcado && idx!==-1) arr.splice(idx,1);
+  if(msId==='ff-categoria' && STATE.filtros.categoria.length){
+    // podar de la selección de Subcategoría las que ya no pertenecen a ninguna categoría elegida
+    var catArr = STATE.filtros.categoria;
+    STATE.filtros.subcategoria = (STATE.filtros.subcategoria||[]).filter(function(v){
+      if(v==='__vacio__') return true;
+      var s = STATE.subcategorias.find(function(x){return x.id===v;});
+      return s && catArr.indexOf(s.categoriaId)!==-1;
+    });
+  }
+}
+function renderMultiSelect(id, options, seleccion){
+  var abierto = STATE.multiSelectAbierto === id;
+  var resumen;
+  if(!seleccion.length) resumen = 'Todos';
+  else if(seleccion.length===1){
+    var opt = options.find(function(o){ return o.value===seleccion[0]; });
+    resumen = opt ? opt.label : '1 seleccionado';
+  } else resumen = seleccion.length+' seleccionados';
+
+  var panelHtml = '';
+  if(abierto){
+    var q = (STATE.multiSelectBusqueda||'').trim().toLowerCase();
+    var visibles = q ? options.filter(function(o){ return o.label.toLowerCase().indexOf(q)!==-1; }) : options;
+    var itemsHtml = visibles.map(function(o){
+      var checked = seleccion.indexOf(o.value)!==-1;
+      return '<label class="multiselect-item"><input type="checkbox" data-multiselect="'+id+'" value="'+esc(o.value)+'" '+(checked?'checked':'')+'>'+esc(o.label)+'</label>';
+    }).join('');
+    panelHtml = ''+
+      '<div class="multiselect-panel">'+
+        (options.length ? '<input type="text" id="ms-buscar-'+id+'" class="multiselect-search" placeholder="Buscar..." value="'+esc(STATE.multiSelectBusqueda||'')+'" autocomplete="off">' : '')+
+        (options.length ? '<div class="multiselect-panel-actions"><button type="button" class="link" data-action="multiselect-limpiar" data-id="'+id+'">Limpiar</button></div>' : '')+
+        '<div class="multiselect-list">'+(itemsHtml || '<div class="empty" style="padding:6px 4px">'+(q?'Sin resultados.':'Sin opciones.')+'</div>')+'</div>'+
+      '</div>';
+  }
+  return '<div class="multiselect'+(abierto?' abierto':'')+'" data-multiselect-wrap="'+id+'">'+
+    '<button type="button" class="multiselect-toggle" data-action="toggle-multiselect" data-id="'+id+'">'+esc(resumen)+' <span class="multiselect-caret">▾</span></button>'+
+    panelHtml+
+  '</div>';
+}
 
 function uid(){
   if(window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID();
@@ -1164,7 +1228,12 @@ function campoSubcategoria(catOptions, nombre){
 }
 function renderSubcategorias(){
   var catOptions = categoriasOrdenadas().map(function(c){ return '<option value="'+c.id+'">'+esc(c.nombre)+'</option>'; }).join('');
-  var rows = STATE.subcategorias.map(function(s){
+  var subsOrdenadasPorCategoria = STATE.subcategorias.slice().sort(function(a,b){
+    var cmpCat = nombreCategoria(a.categoriaId).localeCompare(nombreCategoria(b.categoriaId), 'es', {sensitivity:'base'});
+    if(cmpCat !== 0) return cmpCat;
+    return (a.nombre||'').localeCompare(b.nombre||'', 'es', {sensitivity:'base'});
+  });
+  var rows = subsOrdenadasPorCategoria.map(function(s){
     return '<tr><td data-label="Categoría">'+esc(nombreCategoria(s.categoriaId))+'</td><td data-label="Subcategoría">'+esc(s.nombre)+'</td>'+
       '<td class="actions-cell"><button class="link" data-action="edit-subcategoria" data-id="'+s.id+'">editar</button>'+
       '<button class="link" data-action="del-subcategoria" data-id="'+s.id+'">borrar</button></td></tr>';
@@ -1224,19 +1293,17 @@ function camposFaltantes(m){
 }
 
 function renderMovimientos(){
-  var f = STATE.filtros || {centro:'', categoria:'', mes:'', texto:'', subcategoria:'', soloIncompletos:false};
+  var f = STATE.filtros || {centro:[], categoria:[], mes:[], texto:'', subcategoria:[], soloIncompletos:false};
 
-  var centroOptions = '<option value="">Todos</option>' + centrosOrdenados().map(function(c){ return '<option value="'+c.id+'" '+(f.centro===c.id?'selected':'')+'>'+esc(c.codigo)+'</option>'; }).join('');
-  var categoriaOptions = '<option value="">Todas</option>' + categoriasOrdenadas().map(function(c){ return '<option value="'+c.id+'" '+(f.categoria===c.id?'selected':'')+'>'+esc(c.nombre)+'</option>'; }).join('');
+  var centroOptions = centrosOrdenados().map(function(c){ return {value:c.id, label:c.codigo}; });
+  var categoriaOptions = categoriasOrdenadas().map(function(c){ return {value:c.id, label:c.nombre}; });
   var meses = getMeses();
-  var mesOptions = '<option value="">Todos</option>' + meses.map(function(m){ return '<option value="'+m+'" '+(f.mes===m?'selected':'')+'>'+m+'</option>'; }).join('');
-  var subsParaFiltro = subcategoriasOrdenadas(f.categoria ? STATE.subcategorias.filter(function(s){ return s.categoriaId === f.categoria; }) : STATE.subcategorias);
-  var subcategoriaOptions = '<option value="">Todas</option>' +
-    '<option value="__vacio__" '+(f.subcategoria==='__vacio__'?'selected':'')+'>(Sin subcategoría)</option>' +
-    subsParaFiltro.map(function(s){
-      var etiqueta = f.categoria ? esc(s.nombre) : esc(nombreCategoria(s.categoriaId))+' → '+esc(s.nombre);
-      return '<option value="'+s.id+'" '+(f.subcategoria===s.id?'selected':'')+'>'+etiqueta+'</option>';
-    }).join('');
+  var mesOptions = meses.map(function(m){ return {value:m, label:m}; });
+  var subsParaFiltro = subcategoriasOrdenadas(f.categoria.length ? STATE.subcategorias.filter(function(s){ return f.categoria.indexOf(s.categoriaId)!==-1; }) : STATE.subcategorias);
+  var subcategoriaOptions = [{value:'__vacio__', label:'(Sin subcategoría)'}].concat(subsParaFiltro.map(function(s){
+    var etiqueta = f.categoria.length ? s.nombre : nombreCategoria(s.categoriaId)+' → '+s.nombre;
+    return {value:s.id, label:etiqueta};
+  }));
 
   var cantidadIncompletos = STATE.movimientos.filter(function(m){ return camposFaltantes(m).length>0; }).length;
 
@@ -1251,11 +1318,13 @@ function renderMovimientos(){
 
   var lista = STATE.movimientos.filter(function(m){
     if(esMovimientoPendiente(m)) return false; // los movimientos con fecha futura se muestran en Vencimientos, no acá
-    if(f.centro && m.centroId !== f.centro) return false;
-    if(f.categoria && m.categoriaId !== f.categoria) return false;
-    if(f.mes && (m.fecha||'').slice(0,7) !== f.mes) return false;
-    if(f.subcategoria === '__vacio__'){ if(m.subcategoriaId) return false; }
-    else if(f.subcategoria){ if(m.subcategoriaId !== f.subcategoria) return false; }
+    if(f.centro.length && f.centro.indexOf(m.centroId)===-1) return false;
+    if(f.categoria.length && f.categoria.indexOf(m.categoriaId)===-1) return false;
+    if(f.mes.length && f.mes.indexOf((m.fecha||'').slice(0,7))===-1) return false;
+    if(f.subcategoria.length){
+      var valorSub = m.subcategoriaId || '__vacio__';
+      if(f.subcategoria.indexOf(valorSub)===-1) return false;
+    }
     if(f.soloIncompletos){
       var idsCongelados = STATE.incompletosSnapshotIds;
       if(idsCongelados){ if(idsCongelados.indexOf(m.id)===-1) return false; }
@@ -1407,13 +1476,13 @@ function renderMovimientos(){
   '</div>' : '';
 
   var filtersHtml = ''+
-  '<div class="card">'+
+  '<div class="card card-filtros">'+
     '<h3>Filtros</h3>'+
     '<div class="filters">'+
-      '<div class="field"><label>Centro de Costo</label><select id="ff-centro">'+centroOptions+'</select></div>'+
-      '<div class="field"><label>Categoría</label><select id="ff-categoria">'+categoriaOptions+'</select></div>'+
-      '<div class="field"><label>Mes</label><select id="ff-mes">'+mesOptions+'</select></div>'+
-      '<div class="field"><label>Subcategoría</label><select id="ff-subcategoria">'+subcategoriaOptions+'</select></div>'+
+      '<div class="field"><label>Centro de Costo</label>'+renderMultiSelect('ff-centro', centroOptions, f.centro)+'</div>'+
+      '<div class="field"><label>Categoría</label>'+renderMultiSelect('ff-categoria', categoriaOptions, f.categoria)+'</div>'+
+      '<div class="field"><label>Mes</label>'+renderMultiSelect('ff-mes', mesOptions, f.mes)+'</div>'+
+      '<div class="field"><label>Subcategoría</label>'+renderMultiSelect('ff-subcategoria', subcategoriaOptions, f.subcategoria)+'</div>'+
       '<div class="field"><label>Buscar</label><input type="text" id="ff-texto" placeholder="proveedor o detalle" value="'+esc(f.texto)+'" style="width:180px"></div>'+
       '<div class="field"><label>&nbsp;</label><label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:normal;white-space:nowrap;padding:7px 0">'+
         '<input type="checkbox" id="ff-solo-incompletos" '+(f.soloIncompletos?'checked':'')+' style="width:auto"> Solo incompletos ('+cantidadIncompletos+')'+
@@ -1965,21 +2034,21 @@ function renderGrillaMensual(movs, rango){
 }
 
 function renderResumen(){
-  var f = STATE.resumenFiltros || {centro:'', categoria:'', mes:'', vista:'categoria'};
+  var f = STATE.resumenFiltros || {centro:[], categoria:[], mes:[], vista:'categoria'};
 
-  var centroOptions = '<option value="">Todos</option>' + centrosOrdenados().map(function(c){ return '<option value="'+c.id+'" '+(f.centro===c.id?'selected':'')+'>'+esc(c.codigo)+'</option>'; }).join('');
-  var categoriaOptions = '<option value="">Todas</option>' + categoriasOrdenadas().map(function(c){ return '<option value="'+c.id+'" '+(f.categoria===c.id?'selected':'')+'>'+esc(c.nombre)+'</option>'; }).join('');
+  var centroOptions = centrosOrdenados().map(function(c){ return {value:c.id, label:c.codigo}; });
+  var categoriaOptions = categoriasOrdenadas().map(function(c){ return {value:c.id, label:c.nombre}; });
   var meses = getMeses();
-  var mesOptions = '<option value="">Todos</option>' + meses.map(function(m){ return '<option value="'+m+'" '+(f.mes===m?'selected':'')+'>'+esc(mesLabelCorto(m))+'</option>'; }).join('');
+  var mesOptions = meses.map(function(m){ return {value:m, label:mesLabelCorto(m)}; });
 
   var filtrados = STATE.movimientos.filter(function(m){
-    if(f.centro && m.centroId !== f.centro) return false;
-    if(f.categoria && m.categoriaId !== f.categoria) return false;
-    if(f.mes && (m.fecha||'').slice(0,7) !== f.mes) return false;
+    if(f.centro.length && f.centro.indexOf(m.centroId)===-1) return false;
+    if(f.categoria.length && f.categoria.indexOf(m.categoriaId)===-1) return false;
+    if(f.mes.length && f.mes.indexOf((m.fecha||'').slice(0,7))===-1) return false;
     return true;
   });
 
-  var movsCentro = STATE.movimientos.filter(function(m){ return !f.centro || m.centroId === f.centro; });
+  var movsCentro = STATE.movimientos.filter(function(m){ return !f.centro.length || f.centro.indexOf(m.centroId)!==-1; });
 
   var movsReales = filtrados.filter(function(m){ return !esTipoCategoria(m.categoriaId, 'tec'); });
   var movsObra = movsReales.filter(function(m){ return esCategoriaObra(m.categoriaId); });
@@ -2034,12 +2103,12 @@ function renderResumen(){
   var trendSvg = trendChart(mesesTrend, dataPorMes, 640, 220);
 
   return ''+
-  '<div class="card">'+
+  '<div class="card card-filtros">'+
     '<h3>Filtros</h3>'+
     '<div class="filters">'+
-      '<div class="field"><label>Centro de Costo</label><select id="rf-centro">'+centroOptions+'</select></div>'+
-      '<div class="field"><label>Categoría</label><select id="rf-categoria">'+categoriaOptions+'</select></div>'+
-      '<div class="field"><label>Mes</label><select id="rf-mes">'+mesOptions+'</select></div>'+
+      '<div class="field"><label>Centro de Costo</label>'+renderMultiSelect('rf-centro', centroOptions, f.centro)+'</div>'+
+      '<div class="field"><label>Categoría</label>'+renderMultiSelect('rf-categoria', categoriaOptions, f.categoria)+'</div>'+
+      '<div class="field"><label>Mes</label>'+renderMultiSelect('rf-mes', mesOptions, f.mes)+'</div>'+
       '<div class="field"><label>Desglose por</label><select id="rf-vista">'+
         '<option value="categoria" '+(f.vista==='categoria'?'selected':'')+'>Categoría</option>'+
         '<option value="centro" '+(f.vista==='centro'?'selected':'')+'>Centro de Costo</option>'+
@@ -2083,7 +2152,7 @@ function renderResumen(){
         '<option value="anio" '+(STATE.grillaRango==='anio'?'selected':'')+'>Este año</option>'+
       '</select></div>'+
     '</div>'+
-    '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Egresos por categoría, mes a mes'+(f.centro?' (Centro de Costo: '+esc(nombreCentro(f.centro).split(' · ')[0])+')':'')+'. No incluye TEC. Ignora el filtro de Mes/Categoría de arriba (usa el selector de rango de acá al lado).</div>'+
+    '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Egresos por categoría, mes a mes'+(f.centro.length?' (Centro de Costo: '+f.centro.map(function(cid){ return esc(nombreCentro(cid).split(' · ')[0]); }).join(', ')+')':'')+'. No incluye TEC. Ignora el filtro de Mes/Categoría de arriba (usa el selector de rango de acá al lado).</div>'+
     renderGrillaMensual(movsCentro, STATE.grillaRango)+
   '</div>';
 }
@@ -2103,7 +2172,7 @@ function bindEvents(){
   });
 
   document.querySelectorAll('.tab').forEach(function(t){
-    t.addEventListener('click', function(){ STATE.activeTab = t.getAttribute('data-tab'); STATE.editing = null; STATE.movDraft = null; STATE.menuMovilAbierto = false; render(); });
+    t.addEventListener('click', function(){ STATE.activeTab = t.getAttribute('data-tab'); STATE.editing = null; STATE.movDraft = null; STATE.menuMovilAbierto = false; STATE.multiSelectAbierto = null; render(); });
   });
 
   document.querySelectorAll('.subtab').forEach(function(t){
@@ -2117,47 +2186,46 @@ function bindEvents(){
     if(s && sel) sel.value = s.categoriaId;
   }
 
-  // Filtros de movimientos
-  ['ff-centro','ff-categoria','ff-mes','ff-subcategoria','ff-texto','ff-solo-incompletos','ff-solo-tarjeta'].forEach(function(id){
-    var el = document.getElementById(id);
-    if(!el) return;
-    var evt = (id==='ff-texto') ? 'input' : 'change';
-    el.addEventListener(evt, function(){
-      var soloIncompletosChecked = document.getElementById('ff-solo-incompletos').checked;
-      if(id==='ff-solo-incompletos'){
-        if(soloIncompletosChecked){
-          STATE.incompletosSnapshotIds = STATE.movimientos.filter(function(m){ return camposFaltantes(m).length>0; }).map(function(m){ return m.id; });
-        } else {
-          STATE.incompletosSnapshotIds = null;
-        }
+  // Filtros de movimientos (Centro/Categoría/Subcategoría/Mes son multiselect, ver checkboxes más abajo)
+  var ffTexto = document.getElementById('ff-texto');
+  if(ffTexto){ ffTexto.addEventListener('input', function(){ STATE.filtros.texto = ffTexto.value; render(); }); }
+  var ffSoloIncompletos = document.getElementById('ff-solo-incompletos');
+  if(ffSoloIncompletos){
+    ffSoloIncompletos.addEventListener('change', function(){
+      STATE.filtros.soloIncompletos = ffSoloIncompletos.checked;
+      if(ffSoloIncompletos.checked){
+        STATE.incompletosSnapshotIds = STATE.movimientos.filter(function(m){ return camposFaltantes(m).length>0; }).map(function(m){ return m.id; });
+      } else {
+        STATE.incompletosSnapshotIds = null;
       }
-      STATE.filtros = {
-        centro: document.getElementById('ff-centro').value,
-        categoria: document.getElementById('ff-categoria').value,
-        mes: document.getElementById('ff-mes').value,
-        subcategoria: (id==='ff-categoria') ? '' : document.getElementById('ff-subcategoria').value,
-        texto: document.getElementById('ff-texto').value,
-        soloIncompletos: soloIncompletosChecked,
-        soloTarjeta: document.getElementById('ff-solo-tarjeta').checked
-      };
+      render();
+    });
+  }
+  var ffSoloTarjeta = document.getElementById('ff-solo-tarjeta');
+  if(ffSoloTarjeta){ ffSoloTarjeta.addEventListener('change', function(){ STATE.filtros.soloTarjeta = ffSoloTarjeta.checked; render(); }); }
+
+  // Filtros del Resumen (Centro/Categoría/Mes son multiselect, ver checkboxes más abajo)
+  var rfVista = document.getElementById('rf-vista');
+  if(rfVista){ rfVista.addEventListener('change', function(){ STATE.resumenFiltros.vista = rfVista.value; render(); }); }
+
+  // Checkboxes de los filtros multiselect (Centro/Categoría/Subcategoría/Mes en Movimientos y Resumen)
+  document.querySelectorAll('[data-multiselect]').forEach(function(cb){
+    cb.addEventListener('change', function(){
+      toggleMultiSelectValor(cb.getAttribute('data-multiselect'), cb.value, cb.checked);
       render();
     });
   });
 
-  // Filtros del Resumen
-  ['rf-centro','rf-categoria','rf-mes','rf-vista'].forEach(function(id){
-    var el = document.getElementById(id);
-    if(!el) return;
-    el.addEventListener('change', function(){
-      STATE.resumenFiltros = {
-        centro: document.getElementById('rf-centro').value,
-        categoria: document.getElementById('rf-categoria').value,
-        mes: document.getElementById('rf-mes').value,
-        vista: document.getElementById('rf-vista').value
-      };
-      render();
-    });
-  });
+  // Buscador dentro del panel del filtro multiselect abierto
+  if(STATE.multiSelectAbierto){
+    var msBuscar = document.getElementById('ms-buscar-'+STATE.multiSelectAbierto);
+    if(msBuscar){
+      msBuscar.addEventListener('input', function(){
+        STATE.multiSelectBusqueda = msBuscar.value;
+        render();
+      });
+    }
+  }
 
   var rfGrillaRango = document.getElementById('rf-grilla-rango');
   if(rfGrillaRango){
@@ -2512,6 +2580,20 @@ async function handleAction(action, id){
   // ---- MENÚ MÓVIL ----
   if(action==='toggle-menu-movil'){ STATE.menuMovilAbierto = !STATE.menuMovilAbierto; render(); return; }
   if(action==='cerrar-menu-movil'){ STATE.menuMovilAbierto = false; render(); return; }
+
+  // ---- FILTROS MULTISELECT ----
+  if(action==='toggle-multiselect'){
+    var abriendo = STATE.multiSelectAbierto !== id;
+    STATE.multiSelectAbierto = abriendo ? id : null;
+    STATE.multiSelectBusqueda = '';
+    render();
+    if(abriendo){
+      var msInput = document.getElementById('ms-buscar-'+id);
+      if(msInput) msInput.focus();
+    }
+    return;
+  }
+  if(action==='multiselect-limpiar'){ arrayFiltro(id).length = 0; render(); return; }
 
   // ---- EFECTIVO (carga rápida) ----
   if(action==='abrir-efectivo'){
@@ -2987,3 +3069,14 @@ async function handleAction(action, id){
 document.getElementById('btnLogin').addEventListener('click', intentarLogin);
 document.getElementById('login-password').addEventListener('keydown', function(ev){ if(ev.key==='Enter') intentarLogin(); });
 initAuth();
+
+// Cerrar cualquier filtro multiselect abierto al hacer clic fuera de él (listener único, no se repite en cada render).
+// No filtra por el id puntual abierto: alcanza con que el clic haya sido dentro de CUALQUIER multiselect
+// (el propio toggle, un checkbox o "Limpiar" ya actualizan STATE.multiSelectAbierto en su propio handler).
+document.addEventListener('click', function(ev){
+  if(!STATE.multiSelectAbierto) return;
+  if(ev.target.closest && ev.target.closest('[data-multiselect-wrap]')) return;
+  STATE.multiSelectAbierto = null;
+  STATE.multiSelectBusqueda = '';
+  render();
+});
