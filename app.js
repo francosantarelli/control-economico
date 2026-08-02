@@ -57,7 +57,8 @@ var STATE = { centros: [], categorias: [], subcategorias: [], movimientos: [], v
   resumenFiltros:{centro:[], categoria:[], mes:[], vista:'categoria'}, multiSelectAbierto:null, multiSelectBusqueda:'', abmSubTab:'categorias', grillaRango:'todo',
   bulkVencMsg:null, vencFormMsg:null, dbError:null, saldosCache:null, saldosDirty:true,
   usuarioEmail:null, efectivoAbierto:false, efectivoMsg:null, efectivoCategoriaId:'', backupMsg:null, backupPendiente:null, menuMovilAbierto:false, incompletosSnapshotIds:null,
-  reglas: cargarReglas(), reglaFormMsg:null };
+  reglas: cargarReglas(), reglaFormMsg:null,
+  nuevoMovAbierto:false, movDraftCentroDestinoId:'', comboAbierto:null, comboBusqueda:'', comboHighlight:0 };
 
 // ===================== FILTROS MÚLTIPLES (selects convertidos a checkboxes) =====================
 var MULTISELECT_MAP = {
@@ -119,6 +120,92 @@ function renderMultiSelect(id, options, seleccion){
     '<button type="button" class="multiselect-toggle" data-action="toggle-multiselect" data-id="'+id+'">'+esc(resumen)+' <span class="multiselect-caret">▾</span></button>'+
     panelHtml+
   '</div>';
+}
+
+// ===================== COMBOBOX (select con buscador y autocompletado) =====================
+// Se usa en el formulario de Movimiento (Centro/Categoría/Subcategoría/Centro Destino). Mantiene
+// un <input type="hidden"> con el value real (para no tocar el código que ya lee esos ids) y un
+// <input type="text"> visible que al escribir filtra las opciones. Con la lista filtrada abierta,
+// Enter o Tab confirman la opción resaltada (por defecto la primera) y Tab sigue al próximo campo.
+// Etiqueta vacía a propósito: si no hay selección, el input debe verse vacío (con el placeholder
+// gris nativo), no mostrar literalmente el texto "Elegir..." como si fuera lo tipeado.
+function comboOpcionVacia(){ return {value:'', label:''}; }
+function filtrarOpcionesCombo(options, query){
+  var q = (query||'').trim().toLowerCase();
+  if(!q) return options;
+  return options.filter(function(o){ return o.label.toLowerCase().indexOf(q)!==-1; });
+}
+function renderCombo(comboId, hiddenId, options, valorSeleccionado, placeholder){
+  var abierto = STATE.comboAbierto === comboId;
+  var seleccionado = options.find(function(o){ return o.value===(valorSeleccionado||''); });
+  var etiquetaActual = seleccionado ? seleccionado.label : '';
+  var query = abierto ? (STATE.comboBusqueda||'') : '';
+  var valorVisible = abierto ? query : etiquetaActual;
+  var panelHtml = '';
+  if(abierto){
+    var visibles = filtrarOpcionesCombo(options, query);
+    var itemsHtml = visibles.map(function(o, i){
+      return '<div class="combo-item'+(i===STATE.comboHighlight?' resaltado':'')+'" data-value="'+esc(o.value)+'">'+(o.label?esc(o.label):'<span style="color:var(--ink-soft)">(vacío)</span>')+'</div>';
+    }).join('');
+    panelHtml = '<div class="combo-panel"><div class="combo-list">'+(itemsHtml || '<div class="empty" style="padding:6px 4px">Sin resultados.</div>')+'</div></div>';
+  }
+  return '<div class="combo'+(abierto?' abierto':'')+'" data-combo-wrap="'+comboId+'">'+
+    '<input type="hidden" id="'+hiddenId+'" value="'+esc(valorSeleccionado||'')+'">'+
+    '<input type="text" class="combo-input" id="'+comboId+'-input" data-combo-id="'+comboId+'" autocomplete="off" placeholder="'+esc(placeholder||'Elegir...')+'" value="'+esc(valorVisible)+'">'+
+    panelHtml+
+  '</div>';
+}
+// Aplica la opción elegida en un combo del formulario de Movimiento al draft correspondiente.
+function aplicarSeleccionCombo(comboId, valor){
+  // Siempre se sincroniza todo el draft del formulario (no solo el campo que cambia): Fecha,
+  // Proveedor, Detalle, Monto, etc. no tienen listener propio, así que si no los capturamos acá
+  // antes de re-renderizar, un re-render disparado por el combo los pisaría con el valor en blanco.
+  var draft = getMovFormValues();
+  if(comboId==='mov-centro-destino'){ STATE.movDraftCentroDestinoId = valor; STATE.movDraft = draft; return; }
+  if(comboId==='mov-centro') draft.centroId = valor;
+  else if(comboId==='mov-categoria'){ draft.categoriaId = valor; draft.subcategoriaId = ''; }
+  else if(comboId==='mov-subcategoria') draft.subcategoriaId = valor;
+  STATE.movDraft = draft;
+}
+// Lee del DOM ya renderizado cuál es la opción resaltada (o la primera visible) del combo abierto.
+function comboValorResaltadoDOM(comboId){
+  var wrap = document.querySelector('[data-combo-wrap="'+comboId+'"]');
+  if(!wrap) return null;
+  var item = wrap.querySelector('.combo-item.resaltado') || wrap.querySelector('.combo-item');
+  return item ? item.getAttribute('data-value') : null;
+}
+function moverResaltadoCombo(comboId, delta){
+  var wrap = document.querySelector('[data-combo-wrap="'+comboId+'"]');
+  var total = wrap ? wrap.querySelectorAll('.combo-item').length : 0;
+  if(!total) return;
+  STATE.movDraft = getMovFormValues(); // ver el porqué en aplicarSeleccionCombo
+  STATE.comboHighlight = ((STATE.comboHighlight + delta) % total + total) % total;
+  render();
+}
+// Id del próximo campo tabulable dentro del mismo modal/tarjeta, calculado ANTES de re-renderizar
+// (se usa para reenfocar "a mano" tras un Tab en un combo, ver el porqué en el keydown de abajo).
+function idSiguienteFocuseable(elementoActual){
+  var contenedor = elementoActual.closest('.modal-card') || elementoActual.closest('.card') || document;
+  var lista = Array.prototype.slice.call(contenedor.querySelectorAll('input, select, textarea, button')).filter(function(x){
+    return x.type !== 'hidden' && !x.disabled;
+  });
+  var idx = lista.indexOf(elementoActual);
+  var siguiente = idx > -1 ? lista[idx+1] : null;
+  return siguiente && siguiente.id ? siguiente.id : null;
+}
+// Cierra el combo abierto. Si forzar es true (Enter, click en una opción) confirma siempre la
+// opción resaltada; si no (blur / Tab), solo confirma cuando el usuario efectivamente tipeó algo
+// para filtrar — así tabular por el campo sin tocarlo no pisa el valor que ya tenía cargado.
+function finalizarCombo(comboId, forzar){
+  if(STATE.comboAbierto !== comboId) return;
+  if(forzar || STATE.comboBusqueda){
+    var valor = comboValorResaltadoDOM(comboId);
+    if(valor !== null) aplicarSeleccionCombo(comboId, valor);
+  } else {
+    STATE.movDraft = getMovFormValues(); // cerrar sin confirmar nada igual dispara un render: ver aplicarSeleccionCombo
+  }
+  STATE.comboAbierto = null; STATE.comboBusqueda = ''; STATE.comboHighlight = 0;
+  render();
 }
 
 function uid(){
@@ -925,7 +1012,23 @@ function runParser(){
 }
 
 // ===================== RENDER PRINCIPAL =====================
+// Reemplazar app.innerHTML mientras un input tiene el foco dispara blur/focus síncronos sobre ese
+// nodo; como algunos de esos handlers (combobox) a su vez llaman a render(), sin esta guarda se
+// entra en una recursión infinita (reemplazar el DOM dispara blur/focus, que llama a render(), que
+// vuelve a reemplazar el DOM...). Si ya hay un render en curso, los mutan STATE igual pero el
+// re-render efectivo queda para la próxima llamada real (siempre llega enseguida: el próximo
+// tipeo, o el blur final al salir del campo).
+var RENDER_EN_CURSO = false;
 function render(){
+  if(RENDER_EN_CURSO) return;
+  RENDER_EN_CURSO = true;
+  try{
+    renderInterno();
+  } finally {
+    RENDER_EN_CURSO = false;
+  }
+}
+function renderInterno(){
   var app = document.getElementById('app');
   if(!STATE.ready){ app.innerHTML = '<div class="loading">Cargando datos...</div>'; return; }
 
@@ -950,7 +1053,8 @@ function render(){
 
   var sidebarHtml = '<div class="sidebar'+(STATE.menuMovilAbierto?' abierto':'')+'">'+
     '<div class="masthead"><h1>Control</h1><div class="tagline">Control económico<br>datos compartidos</div></div>'+
-    '<button data-action="abrir-efectivo" style="width:100%;margin-bottom:16px;background:transparent;border:1.5px solid var(--accent);color:var(--accent);font-size:14px;padding:12px">💵 Efectivo</button>'+
+    '<button data-action="abrir-nuevo-mov" style="width:100%;margin-bottom:10px;font-size:14px;padding:12px">+ Movimiento</button>'+
+    '<button data-action="abrir-efectivo" class="solo-mobile" style="width:100%;margin-bottom:16px;background:transparent;border:1.5px solid var(--accent);color:var(--accent);font-size:14px;padding:12px">💵 Efectivo</button>'+
     '<div class="tabs">';
   tabs.forEach(function(t){
     sidebarHtml += '<div class="tab '+(STATE.activeTab===t.id?'active':'')+'" data-tab="'+t.id+'"><span class="tab-icon">'+t.icono+'</span>'+t.label+'</div>';
@@ -974,10 +1078,11 @@ function render(){
   contentHtml += '<div class="panel active">';
   if(STATE.activeTab==='movimientos') contentHtml += renderMovimientos();
   else {
-    // Los movimientos pendientes (fecha futura) se editan/borran desde la pestaña Vencimientos;
-    // el modal de edición vive dentro de renderMovimientos(), así que hay que construirlo igual
-    // aunque no se muestre el listado completo de esa pestaña.
-    if(STATE.editing && STATE.editing.type==='mov') renderMovimientos();
+    // Los movimientos pendientes (fecha futura) se editan/borran desde la pestaña Vencimientos, y el
+    // botón "+ Movimiento" del sidebar abre el alta desde cualquier pestaña. El modal (edición o alta)
+    // vive dentro de renderMovimientos(), así que hay que construirlo igual aunque no se muestre el
+    // listado completo de esa pestaña.
+    if((STATE.editing && STATE.editing.type==='mov') || STATE.nuevoMovAbierto) renderMovimientos();
     if(STATE.activeTab==='importar') contentHtml += renderImportar();
     else if(STATE.activeTab==='vencimientos') contentHtml += renderVencimientos();
     else if(STATE.activeTab==='saldos') contentHtml += renderSaldos();
@@ -1390,17 +1495,16 @@ function renderMovimientos(){
     tarjeta: !!editing.tarjeta, fechaConsumo:'', cuotas:1
   } : null;
   var e = STATE.movDraft || editingNormalizado || {fecha:'', centroId:'', categoriaId:'', subcategoriaId:'', proveedor:'', detalle:'', tipo:'egreso', monto:'', tarjeta:false, fechaConsumo:'', cuotas:1};
-  var subOptions = subcategoriasOrdenadas(STATE.subcategorias.filter(function(s){ return s.categoriaId === e.categoriaId; }))
-    .map(function(s){ return '<option value="'+s.id+'" '+(e.subcategoriaId===s.id?'selected':'')+'>'+esc(s.nombre)+'</option>'; }).join('');
+  var subOptionsArr = subcategoriasOrdenadas(STATE.subcategorias.filter(function(s){ return s.categoriaId === e.categoriaId; }))
+    .map(function(s){ return {value:s.id, label:s.nombre}; });
 
-  function camposMov(e, subOptions){
+  function camposMov(e, subOptionsArr){
     var catSel = STATE.categorias.find(function(c){return c.id===e.categoriaId;});
     var esTec = catSel && catSel.tipo === 'tec';
+    var destinoOpts = [comboOpcionVacia()].concat(STATE.centros.filter(function(c){return c.id!==e.centroId;}).map(function(c){ return {value:c.id, label:c.codigo+' · '+c.nombre}; }));
     var campoDestino = (!editing && esTec) ? ''+
       '<div class="row" style="margin-top:10px">'+
-        '<div class="field" style="flex:1 1 240px"><label>Centro de Costo Destino (transferencia, opcional)</label><select id="f-mov-centro-destino"><option value="">Elegir...</option>'+
-          STATE.centros.filter(function(c){return c.id!==e.centroId;}).map(function(c){ return '<option value="'+c.id+'">'+esc(c.codigo)+' · '+esc(c.nombre)+'</option>'; }).join('')+
-        '</select></div>'+
+        '<div class="field" style="flex:1 1 240px"><label>Centro de Costo Destino (transferencia, opcional)</label>'+renderCombo('mov-centro-destino', 'f-mov-centro-destino', destinoOpts, STATE.movDraftCentroDestinoId, 'Elegir...')+'</div>'+
         '<div class="field" style="flex:2 1 260px;justify-content:flex-end"><div style="font-size:11px;color:var(--ink-soft);padding-bottom:8px">Si lo completás, se va a crear automáticamente el movimiento espejo en ese centro (misma fecha y categoría, mismo monto, tipo contrario). Si lo dejás vacío, se carga solo este movimiento.</div></div>'+
       '</div>' : '';
     var cuotasNum = Math.max(1, parseInt(e.cuotas,10)||1);
@@ -1422,13 +1526,15 @@ function renderMovimientos(){
       (STATE.movFormMsg ? '<div class="msg err">'+esc(STATE.movFormMsg)+'</div>' : '')+
       '<div class="row">'+
         '<div class="field"><label>Fecha</label><input type="date" id="f-mov-fecha" value="'+esc(e.fecha)+'"></div>'+
-        '<div class="field"><label>Centro de Costo'+((e.fecha && e.fecha>fechaHoyISO())?' (opcional, fecha futura)':'')+'</label><select id="f-mov-centro"><option value="">Elegir...</option>'+
-          centrosOrdenados().map(function(c){ return '<option value="'+c.id+'" '+(e.centroId===c.id?'selected':'')+'>'+esc(c.codigo)+' · '+esc(c.nombre)+'</option>'; }).join('') +
-        '</select></div>'+
-        '<div class="field"><label>Categoría</label><select id="f-mov-categoria"><option value="">Elegir...</option>'+
-          categoriasOrdenadas().map(function(c){ return '<option value="'+c.id+'" '+(e.categoriaId===c.id?'selected':'')+'>'+esc(c.nombre)+'</option>'; }).join('') +
-        '</select></div>'+
-        '<div class="field"><label>Subcategoría</label><select id="f-mov-subcategoria"><option value="">Elegir...</option>'+subOptions+'</select></div>'+
+        '<div class="field"><label>Centro de Costo'+((e.fecha && e.fecha>fechaHoyISO())?' (opcional, fecha futura)':'')+'</label>'+
+          renderCombo('mov-centro', 'f-mov-centro', [comboOpcionVacia()].concat(centrosOrdenados().map(function(c){ return {value:c.id, label:c.codigo+' · '+c.nombre}; })), e.centroId, 'Elegir...')+
+        '</div>'+
+        '<div class="field"><label>Categoría</label>'+
+          renderCombo('mov-categoria', 'f-mov-categoria', [comboOpcionVacia()].concat(categoriasOrdenadas().map(function(c){ return {value:c.id, label:c.nombre}; })), e.categoriaId, 'Elegir...')+
+        '</div>'+
+        '<div class="field"><label>Subcategoría</label>'+
+          renderCombo('mov-subcategoria', 'f-mov-subcategoria', [comboOpcionVacia()].concat(subOptionsArr), e.subcategoriaId, 'Elegir...')+
+        '</div>'+
       '</div>'+
       campoDestino+
       '<div class="row" style="margin-top:10px">'+
@@ -1445,23 +1551,14 @@ function renderMovimientos(){
       campoCuotas;
   }
 
-  var formHtml = '';
-  if(editing){
+  if(editing || STATE.nuevoMovAbierto){
     MODAL_HTML = '<div class="modal-overlay" data-modal-backdrop="edit"><div class="modal-card">'+
-      '<h2>Editar movimiento</h2>'+
-      camposMov(e, subOptions)+
-        '<button data-action="save-mov" data-id="'+editing.id+'">Guardar cambios</button>'+
+      '<h2>'+(editing?'Editar movimiento':'Nuevo movimiento')+'</h2>'+
+      camposMov(e, subOptionsArr)+
+        '<button data-action="save-mov" data-id="'+(editing?editing.id:'')+'">'+(editing?'Guardar cambios':'Agregar')+'</button>'+
         '<button class="secondary" data-action="cancel-edit">Cancelar</button>'+
       '</div>'+
     '</div></div>';
-  } else {
-    formHtml = ''+
-    '<div class="card">'+
-      '<h2>Nuevo movimiento</h2>'+
-      camposMov(e, subOptions)+
-        '<button data-action="save-mov" data-id="">Agregar</button>'+
-      '</div>'+
-    '</div>';
   }
 
   var controlTecHtml = (Math.abs(difTec) > 0.005 || categoriasSospechosas.length > 0) ? ''+
@@ -1511,7 +1608,7 @@ function renderMovimientos(){
     '</table>' : '<div class="empty">No hay movimientos que coincidan con los filtros.</div>')+
   '</div>';
 
-  return controlTecHtml + formHtml + filtersHtml + tableHtml;
+  return controlTecHtml + filtersHtml + tableHtml;
 }
 
 // ===================== IMPORTAR =====================
@@ -1996,47 +2093,58 @@ function renderGrillaMensual(movs, rango){
   var mesesSet = {};
   meses.forEach(function(m){ mesesSet[m] = true; });
 
-  var datos = {}, totalesPorMes = {}, totalesPorCategoria = {}, granTotal = 0;
+  var datos = {}, totalesPorMes = {}, totalesPorMesSinObra = {}, totalesPorCategoria = {}, granTotal = 0, granTotalSinObra = 0;
 
   movs.forEach(function(m){
     if(esTipoCategoria(m.categoriaId,'tec')) return;
-    var egreso = Number(m.egreso)||0;
-    if(egreso<=0) return;
+    if(esCategoriaSueldo(m.categoriaId)) return;
+    var neto = (Number(m.ingreso)||0) - (Number(m.egreso)||0);
+    if(neto===0) return;
     var mes = (m.fecha||'').slice(0,7);
     if(!mes || !mesesSet[mes]) return;
     var cid = m.categoriaId || '';
     if(!datos[cid]) datos[cid] = {};
-    datos[cid][mes] = (datos[cid][mes]||0) + egreso;
-    totalesPorMes[mes] = (totalesPorMes[mes]||0) + egreso;
-    totalesPorCategoria[cid] = (totalesPorCategoria[cid]||0) + egreso;
-    granTotal += egreso;
+    datos[cid][mes] = (datos[cid][mes]||0) + neto;
+    totalesPorMes[mes] = (totalesPorMes[mes]||0) + neto;
+    totalesPorCategoria[cid] = (totalesPorCategoria[cid]||0) + neto;
+    granTotal += neto;
+    if(!esCategoriaObra(cid)){
+      totalesPorMesSinObra[mes] = (totalesPorMesSinObra[mes]||0) + neto;
+      granTotalSinObra += neto;
+    }
   });
 
-  var categoriaIds = Object.keys(datos).sort(function(a,b){ return (totalesPorCategoria[b]||0) - (totalesPorCategoria[a]||0); });
-  if(!categoriaIds.length) return '<div class="empty">No hay egresos en el rango seleccionado.</div>';
+  var categoriaIds = Object.keys(datos).sort(function(a,b){ return Math.abs(totalesPorCategoria[b]||0) - Math.abs(totalesPorCategoria[a]||0); });
+  if(!categoriaIds.length) return '<div class="empty">No hay movimientos en el rango seleccionado.</div>';
 
   var maxCelda = 0;
-  categoriaIds.forEach(function(cid){ meses.forEach(function(m){ maxCelda = Math.max(maxCelda, datos[cid][m]||0); }); });
+  categoriaIds.forEach(function(cid){ meses.forEach(function(m){ maxCelda = Math.max(maxCelda, Math.abs(datos[cid][m]||0)); }); });
 
   var headerCols = meses.map(function(m){ return '<th class="num">'+esc(mesLabelCorto(m))+'</th>'; }).join('');
   var rows = categoriaIds.map(function(cid){
     var celdas = meses.map(function(m){
       var v = datos[cid][m]||0;
-      var intensidad = maxCelda ? (v/maxCelda) : 0;
-      var estilo = v>0 ? ' style="background:rgba(217,123,108,'+(0.08+intensidad*0.32).toFixed(2)+')"' : '';
-      return '<td class="num mono"'+estilo+'>'+(v>0?fmtMonto(v):'—')+'</td>';
+      var intensidad = maxCelda ? (Math.abs(v)/maxCelda) : 0;
+      var colorRgb = v<0 ? '217,123,108' : '78,157,119';
+      var estilo = v!==0 ? ' style="background:rgba('+colorRgb+','+(0.08+intensidad*0.32).toFixed(2)+')"' : '';
+      return '<td class="num mono"'+estilo+'>'+(v!==0?fmtMonto(v):'—')+'</td>';
     }).join('');
-    return '<tr><td>'+esc(cid ? nombreCategoria(cid) : 'Sin categoría')+'</td>'+celdas+'<td class="num mono" style="font-weight:600">'+fmtMonto(totalesPorCategoria[cid])+'</td></tr>';
+    var totalCat = totalesPorCategoria[cid]||0;
+    return '<tr><td>'+esc(cid ? nombreCategoria(cid) : 'Sin categoría')+'</td>'+celdas+'<td class="num mono '+(totalCat>=0?'ingreso':'egreso')+'" style="font-weight:600">'+fmtMonto(totalCat)+'</td></tr>';
   }).join('');
 
+  var filaTotalSinObra = '<tr style="font-weight:600"><td>Total (sin Obra)</td>'+
+    meses.map(function(m){ var v=totalesPorMesSinObra[m]||0; return '<td class="num mono '+(v>=0?'ingreso':'egreso')+'">'+fmtMonto(v)+'</td>'; }).join('')+
+    '<td class="num mono '+(granTotalSinObra>=0?'ingreso':'egreso')+'">'+fmtMonto(granTotalSinObra)+'</td></tr>';
+
   var filaTotales = '<tr style="font-weight:600"><td>Total</td>'+
-    meses.map(function(m){ return '<td class="num mono">'+fmtMonto(totalesPorMes[m]||0)+'</td>'; }).join('')+
-    '<td class="num mono">'+fmtMonto(granTotal)+'</td></tr>';
+    meses.map(function(m){ var v=totalesPorMes[m]||0; return '<td class="num mono '+(v>=0?'ingreso':'egreso')+'">'+fmtMonto(v)+'</td>'; }).join('')+
+    '<td class="num mono '+(granTotal>=0?'ingreso':'egreso')+'">'+fmtMonto(granTotal)+'</td></tr>';
 
   return '<div style="overflow-x:auto">'+
     '<table><thead><tr><th>Categoría</th>'+headerCols+'<th class="num">Total</th></tr></thead>'+
     '<tbody>'+rows+'</tbody>'+
-    '<tfoot>'+filaTotales+'</tfoot>'+
+    '<tfoot>'+filaTotalSinObra+filaTotales+'</tfoot>'+
     '</table></div>';
 }
 
@@ -2085,6 +2193,13 @@ function renderResumen(){
       '<div class="bar-track"><div class="bar-fill '+claseColor+'-fill" style="width:'+pct+'%"></div></div>'+
       '<div class="amt '+claseColor+'">'+fmtMonto(x.monto)+'</div></div>';
   }).join('');
+  var totalLista = lista.reduce(function(s,x){ return s+x.monto; },0);
+  var claseColorTotalLista = totalLista >= 0 ? 'ingreso' : 'egreso';
+  var totalListaHtml = lista.length ? ''+
+    '<div class="bar-row" style="border-top:2px solid var(--accent);border-bottom:none;margin-top:4px;padding-top:10px;font-weight:600">'+
+      '<div class="name">Total</div><div class="bar-track"></div>'+
+      '<div class="amt '+claseColorTotalLista+'">'+fmtMonto(totalLista)+'</div>'+
+    '</div>' : '';
 
   // Donut: top 8 + "Otros" (no incluye Obra, que ya tiene su propia tarjeta aparte). Usa el valor absoluto para el tamaño de cada porción (una torta no puede tener porciones negativas), pero muestra el monto real (con signo) en la leyenda.
   var segmentos = lista.slice(0,8).map(function(x,i){ return {label:x.nombre, value:Math.abs(x.monto), montoReal:x.monto, color:PALETA_DONUT[i%PALETA_DONUT.length]}; });
@@ -2141,7 +2256,7 @@ function renderResumen(){
   '<div class="card">'+
     '<h3>Total por '+(f.vista==='centro'?'Centro de Costo':'Categoría')+'</h3>'+
     '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Ingresos menos egresos de cada '+(f.vista==='centro'?'centro':'categoría')+'. Verde = neto a favor (ingreso), coral = neto en contra (egreso). No incluye TEC (transferencias entre cuentas), Obra ni Sueldo (quedan afuera de esta comparación).</div>'+
-    (lista.length ? bars : '<div class="empty">Todavía no hay movimientos cargados.</div>')+
+    (lista.length ? bars+totalListaHtml : '<div class="empty">Todavía no hay movimientos cargados.</div>')+
   '</div>'+
   '<div class="card">'+
     '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:4px">'+
@@ -2159,7 +2274,7 @@ function renderResumen(){
         '<option value="anio" '+(STATE.grillaRango==='anio'?'selected':'')+'>Este año</option>'+
       '</select></div>'+
     '</div>'+
-    '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Egresos por categoría, mes a mes'+(f.centro.length?' (Centro de Costo: '+f.centro.map(function(cid){ return esc(nombreCentro(cid).split(' · ')[0]); }).join(', ')+')':'')+'. No incluye TEC. Ignora el filtro de Mes/Categoría de arriba (usa el selector de rango de acá al lado).</div>'+
+    '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Ingresos menos egresos por categoría, mes a mes'+(f.centro.length?' (Centro de Costo: '+f.centro.map(function(cid){ return esc(nombreCentro(cid).split(' · ')[0]); }).join(', ')+')':'')+'. Verde = neto a favor, coral = neto en contra. No incluye TEC ni Sueldo. "Total (sin Obra)" excluye la categoría Obra del total; "Total" la incluye. Ignora el filtro de Mes/Categoría de arriba (usa el selector de rango de acá al lado).</div>'+
     renderGrillaMensual(movsCentro, STATE.grillaRango)+
   '</div>';
 }
@@ -2179,7 +2294,7 @@ function bindEvents(){
   });
 
   document.querySelectorAll('.tab').forEach(function(t){
-    t.addEventListener('click', function(){ STATE.activeTab = t.getAttribute('data-tab'); STATE.editing = null; STATE.movDraft = null; STATE.menuMovilAbierto = false; STATE.multiSelectAbierto = null; render(); });
+    t.addEventListener('click', function(){ STATE.activeTab = t.getAttribute('data-tab'); STATE.editing = null; STATE.movDraft = null; STATE.nuevoMovAbierto = false; STATE.menuMovilAbierto = false; STATE.multiSelectAbierto = null; render(); });
   });
 
   document.querySelectorAll('.subtab').forEach(function(t){
@@ -2242,17 +2357,73 @@ function bindEvents(){
     });
   }
 
-  // Cambiar subcategorías disponibles al cambiar categoría en el form de movimiento
-  var movCategoriaSel = document.getElementById('f-mov-categoria');
-  if(movCategoriaSel){
-    movCategoriaSel.addEventListener('change', function(){
+  // Combobox del formulario de Movimiento (Centro/Categoría/Subcategoría/Centro Destino):
+  // tipear filtra la lista; Enter o Tab confirman la opción resaltada (la primera por defecto).
+  document.querySelectorAll('.combo-input').forEach(function(inp){
+    var comboId = inp.getAttribute('data-combo-id');
+    inp.addEventListener('focus', function(){
+      // Ignorar el focus "sintético" que dispara el propio render() al restaurar el foco después
+      // de reemplazar el DOM (ver comentario en RENDER_EN_CURSO) — si no, pisa STATE.comboBusqueda
+      // justo después de haberlo tipeado, aunque ya no cause una recursión infinita.
+      if(RENDER_EN_CURSO) return;
+      if(STATE.comboAbierto !== comboId){
+        // getMovFormValues() ANTES de tocar nada: Fecha/Proveedor/Detalle/Monto no tienen listener
+        // propio, así que sin este snapshot el render de abajo los dejaría en blanco (ver aplicarSeleccionCombo).
+        STATE.movDraft = getMovFormValues();
+        STATE.comboAbierto = comboId; STATE.comboBusqueda = ''; STATE.comboHighlight = 0;
+        render();
+      }
+    });
+    inp.addEventListener('input', function(){
       var draft = getMovFormValues();
-      draft.categoriaId = movCategoriaSel.value;
-      draft.subcategoriaId = '';
       STATE.movDraft = draft;
+      STATE.comboAbierto = comboId; STATE.comboBusqueda = inp.value; STATE.comboHighlight = 0;
       render();
     });
-  }
+    inp.addEventListener('keydown', function(ev){
+      if(STATE.comboAbierto !== comboId) return;
+      if(ev.key==='ArrowDown'){ ev.preventDefault(); moverResaltadoCombo(comboId, 1); }
+      else if(ev.key==='ArrowUp'){ ev.preventDefault(); moverResaltadoCombo(comboId, -1); }
+      else if(ev.key==='Enter'){ ev.preventDefault(); finalizarCombo(comboId, true); }
+      else if(ev.key==='Escape'){ STATE.movDraft = getMovFormValues(); STATE.comboAbierto = null; STATE.comboBusqueda = ''; render(); }
+      else if(ev.key==='Tab'){
+        // Tomamos el control manualmente: el re-render que dispara finalizarCombo reemplaza todo
+        // el DOM, y si dejáramos que el navegador mueva el foco de forma nativa en el mismo tick,
+        // el elemento al que iba a enfocar puede quedar reemplazado y el foco termina perdiéndose.
+        // Por eso: prevenimos el Tab, resolvemos "cuál es el siguiente campo" ANTES de re-renderizar,
+        // confirmamos la selección, y enfocamos ese id nosotros mismos ya con el DOM nuevo.
+        ev.preventDefault();
+        var siguienteId = idSiguienteFocuseable(inp);
+        finalizarCombo(comboId, false);
+        if(siguienteId){
+          var el = document.getElementById(siguienteId);
+          if(el) el.focus();
+        }
+      }
+    });
+    inp.addEventListener('blur', function(){
+      // Idem el focus de arriba: el propio reemplazo del DOM dispara un blur sintético sobre el
+      // nodo que tenía el foco justo antes de removerlo — ignorarlo para no confirmar (o perder)
+      // la selección por un efecto colateral del render, no por una acción real del usuario.
+      if(RENDER_EN_CURSO) return;
+      // Diferido al próximo tick: si el blur es porque el usuario clickeó otro botón (p. ej.
+      // "Cancelar"), reemplazar el DOM ahora mismo (de forma síncrona, dentro del mismo mousedown)
+      // haría que ese click se pierda porque el botón que iba a recibirlo ya no sería el mismo nodo.
+      // Esperar un tick deja que el click termine de procesarse sobre el DOM actual antes de redibujar.
+      setTimeout(function(){ finalizarCombo(comboId, false); }, 0);
+    });
+  });
+  document.querySelectorAll('.combo-item').forEach(function(item){
+    // preventDefault en mousedown evita que el input pierda el foco antes de que llegue el click
+    item.addEventListener('mousedown', function(ev){ ev.preventDefault(); });
+    item.addEventListener('click', function(){
+      var comboId = item.closest('[data-combo-wrap]').getAttribute('data-combo-wrap');
+      aplicarSeleccionCombo(comboId, item.getAttribute('data-value'));
+      STATE.comboAbierto = null; STATE.comboBusqueda = ''; STATE.comboHighlight = 0;
+      render();
+    });
+  });
+
 
   // Refrescar subcategorías disponibles al cambiar la categoría en el modal de Efectivo
   var efCategoriaSel = document.getElementById('ef-categoria');
@@ -2404,7 +2575,16 @@ function getMovFormValues(){
 async function handleAction(action, id){
   STATE.movDraft = null;
 
-  if(action==='cancel-edit'){ STATE.editing = null; render(); return; }
+  if(action==='cancel-edit'){
+    STATE.editing = null; STATE.nuevoMovAbierto = false; STATE.movDraftCentroDestinoId = '';
+    STATE.comboAbierto = null; STATE.comboBusqueda = '';
+    render(); return;
+  }
+  if(action==='abrir-nuevo-mov'){
+    STATE.nuevoMovAbierto = true; STATE.movFormMsg = null; STATE.movDraftCentroDestinoId = '';
+    STATE.comboAbierto = null; STATE.comboBusqueda = ''; STATE.menuMovilAbierto = false;
+    render(); return;
+  }
 
   if(action==='confirm-yes'){
     var pending = STATE.confirmState; STATE.confirmState = null;
@@ -2818,6 +2998,8 @@ async function handleAction(action, id){
       STATE.saldosDirty = true;
       STATE.editing = null;
       STATE.movDraft = null;
+      STATE.nuevoMovAbierto = false;
+      STATE.movDraftCentroDestinoId = '';
     }catch(e){ STATE.dbError = 'No se pudo guardar el movimiento: '+(e.message||e); }
     render(); return;
   }
