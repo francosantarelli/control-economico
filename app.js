@@ -52,7 +52,7 @@ function cargarReglas(){
 
 var STATE = { centros: [], categorias: [], subcategorias: [], movimientos: [], vencimientos: [], activeTab: 'movimientos', editing: null, ready:false,
   importEntidad:'mp', importAnio:'26', importBanco:'nacion', importVencimiento:'', importRaw:'', importPreview:null, importPreviewExcel:null, importMsg:null,
-  bulkCatMsg:null, confirmState:null, subDeleteState:null, movFormMsg:null,
+  bulkCatMsg:null, bulkColorCatMsg:null, confirmState:null, subDeleteState:null, movFormMsg:null,
   filtros:{centro:[], categoria:[], subcategoria:[], mes:[], texto:'', soloIncompletos:false, soloTarjeta:false},
   resumenFiltros:{centro:[], categoria:[], mes:[], vista:'categoria'}, multiSelectAbierto:null, multiSelectBusqueda:'', abmSubTab:'categorias', grillaRango:'todo',
   bulkVencMsg:null, vencFormMsg:null, dbError:null, saldosCache:null, saldosDirty:true,
@@ -246,8 +246,8 @@ function uid(){
 }
 
 // ---- Mapeo entre el modelo JS (camelCase) y las columnas de Supabase (snake_case) ----
-function toDbCentro(c){ return {id:c.id, codigo:c.codigo, nombre:c.nombre, color:c.color||null}; }
-function fromDbCentro(r){ return {id:r.id, codigo:r.codigo, nombre:r.nombre, color:r.color||''}; }
+function toDbCentro(c){ return {id:c.id, codigo:c.codigo, nombre:c.nombre, color:c.color||null, color_texto:c.colorTexto||null}; }
+function fromDbCentro(r){ return {id:r.id, codigo:r.codigo, nombre:r.nombre, color:r.color||'', colorTexto:r.color_texto||''}; }
 function toDbCategoria(c){ return {id:c.id, nombre:c.nombre, tipo:c.tipo||null, color:c.color||null}; }
 function fromDbCategoria(r){ return {id:r.id, nombre:r.nombre, tipo:r.tipo||'', color:r.color||''}; }
 function toDbSubcategoria(s){ return {id:s.id, categoria_id:s.categoriaId||null, nombre:s.nombre}; }
@@ -1218,7 +1218,7 @@ function campoCentro(codigo, nombre, color){
 }
 function renderCentros(){
   var rows = STATE.centros.map(function(c){
-    return '<tr><td data-label="Código">'+renderChip(c.codigo, colorCentro(c.id))+'</td><td data-label="Nombre">'+esc(c.nombre)+'</td>'+
+    return '<tr><td data-label="Código">'+renderChip(c.codigo, colorCentro(c.id), colorTextoCentro(c.id))+'</td><td data-label="Nombre">'+esc(c.nombre)+'</td>'+
       '<td class="actions-cell"><button class="link" data-action="edit-centro" data-id="'+c.id+'">editar</button>'+
       '<button class="link" data-action="del-centro" data-id="'+c.id+'">borrar</button></td></tr>';
   }).join('');
@@ -1323,6 +1323,7 @@ function renderCategorias(){
   var editing = STATE.editing && STATE.editing.type==='categoria' ? STATE.categorias.find(function(x){return x.id===STATE.editing.id;}) : null;
 
   var bulkMsgHtml = STATE.bulkCatMsg ? '<div class="msg '+(STATE.bulkCatMsg.type==='ok'?'ok':'err')+'">'+esc(STATE.bulkCatMsg.text)+'</div>' : '';
+  var bulkColorMsgHtml = STATE.bulkColorCatMsg ? '<div class="msg '+(STATE.bulkColorCatMsg.type==='ok'?'ok':'err')+'">'+esc(STATE.bulkColorCatMsg.text)+'</div>' : '';
 
   if(editing){
     MODAL_HTML = '<div class="modal-overlay" data-modal-backdrop="edit"><div class="modal-card">'+
@@ -1350,6 +1351,13 @@ function renderCategorias(){
     '<div class="field"><label>Pegá "Nombre" + tab + "Tipo" (Ingreso/Egreso/Ahorro/TEC) por línea — también podés pegar solo el nombre, una por línea, sin tipo. Si la categoría ya existe, se actualiza el tipo; si no existe, se crea.</label>'+
     '<textarea id="bulk-categorias" rows="8" style="width:100%;font-family:\'Geist Mono\',ui-monospace,Consolas,monospace;font-size:12px" placeholder="Aguinaldo\tIngreso\nAlq. Campo\tEgreso\n..."></textarea></div>'+
     '<div class="row" style="margin-top:10px"><button data-action="bulk-add-categorias">Cargar / actualizar todas</button></div>'+
+  '</div>'+
+  '<div class="card">'+
+    '<h3>Actualizar colores en masa</h3>'+
+    bulkColorMsgHtml+
+    '<div class="field"><label>Pegá "Nombre" + tab + "Color" (hex, ej #FDE68A) por línea. También podés pegar directamente la fila "Categoría / Color sugerido / Hex" tal cual, usa la última columna. Solo actualiza categorías que ya existen (por nombre, sin importar mayúsculas); no crea categorías nuevas.</label>'+
+    '<textarea id="bulk-colores-categorias" rows="8" style="width:100%;font-family:\'Geist Mono\',ui-monospace,Consolas,monospace;font-size:12px" placeholder="Comida\tDurazno\t#FED7AA"></textarea></div>'+
+    '<div class="row" style="margin-top:10px"><button data-action="bulk-actualizar-colores-categorias">Actualizar colores</button></div>'+
   '</div>'+
   '<div class="card">'+
     '<h3>Categorías cargadas</h3>'+
@@ -1497,7 +1505,7 @@ function renderMovimientos(){
     } else {
       var mesFila = (m.fecha||'').slice(0,7);
       var subValorFiltro = m.subcategoriaId || '__vacio__';
-      celdaCentro = '<td'+(m.centroId?' class="celda-filtrable" data-filter-field="centro" data-filter-value="'+esc(m.centroId)+'" title="Filtrar por este Centro de Costo"':'')+' data-label="Centro">'+(m.centroId?renderChip(nombreCentro(m.centroId).split(' · ')[0], colorCentro(m.centroId)):'—')+'</td>';
+      celdaCentro = '<td'+(m.centroId?' class="celda-filtrable" data-filter-field="centro" data-filter-value="'+esc(m.centroId)+'" title="Filtrar por este Centro de Costo"':'')+' data-label="Centro">'+(m.centroId?renderChip(nombreCentro(m.centroId).split(' · ')[0], colorCentro(m.centroId), colorTextoCentro(m.centroId)):'—')+'</td>';
       celdaCategoria = '<td'+(m.categoriaId?' class="celda-filtrable" data-filter-field="categoria" data-filter-value="'+esc(m.categoriaId)+'" title="Filtrar por esta Categoría"':'')+' data-label="Categoría">'+(m.categoriaId?renderChip(nombreCategoria(m.categoriaId), colorCategoria(m.categoriaId)):'—')+'</td>';
       celdaSubcategoria = '<td class="celda-filtrable" data-filter-field="subcategoria" data-filter-value="'+esc(subValorFiltro)+'" title="Filtrar por esta Subcategoría" data-label="Subcategoría">'+esc(nombreSubcategoria(m.subcategoriaId))+'</td>';
       celdaProveedor = '<td'+(m.proveedor?' class="celda-filtrable" data-filter-field="texto" data-filter-value="'+esc(m.proveedor)+'" title="Filtrar por este Proveedor"':'')+' data-label="Proveedor">'+(m.tarjeta?'<span title="Pagado con tarjeta de crédito">💳</span> ':'')+esc(m.proveedor||'')+'</td>';
@@ -2034,6 +2042,12 @@ function colorCentro(centroId){
   var c = STATE.centros.find(function(x){ return x.id===centroId; });
   return (c && c.color) || colorAutoPorId(centroId||'');
 }
+// Color de texto explícito del centro (columna centros.color_texto), si se cargó a mano/por SQL.
+// Si no hay uno guardado, renderChip calcula el contraste automáticamente.
+function colorTextoCentro(centroId){
+  var c = STATE.centros.find(function(x){ return x.id===centroId; });
+  return (c && c.colorTexto) || '';
+}
 function colorCategoria(categoriaId){
   var c = STATE.categorias.find(function(x){ return x.id===categoriaId; });
   return (c && c.color) || colorAutoPorId(categoriaId||'');
@@ -2046,10 +2060,10 @@ function colorTextoParaFondo(hex){
   var luminancia = (0.299*r + 0.587*g + 0.114*b) / 255;
   return luminancia > 0.6 ? '#1A1A1A' : '#FFFFFF';
 }
-function renderChip(texto, color){
+function renderChip(texto, color, colorTexto){
   if(!texto) return '—';
   var bg = color || '#E3ECE6';
-  return '<span class="chip" style="background:'+esc(bg)+';color:'+colorTextoParaFondo(bg)+'">'+esc(texto)+'</span>';
+  return '<span class="chip" style="background:'+esc(bg)+';color:'+esc(colorTexto||colorTextoParaFondo(bg))+'">'+esc(texto)+'</span>';
 }
 
 var NOMBRES_MES_CORTO = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
@@ -2775,6 +2789,36 @@ async function handleAction(action, id){
       STATE.bulkCatMsg = { type:(agregadas>0||actualizadas>0)?'ok':'err',
         text: agregadas+' agregada(s), '+actualizadas+' actualizada(s) con nuevo tipo, '+sinCambios+' sin cambios.' };
     }catch(e){ STATE.dbError = 'No se pudo guardar la carga masiva: '+(e.message||e); }
+    render(); return;
+  }
+  if(action==='bulk-actualizar-colores-categorias'){
+    var rawColores = document.getElementById('bulk-colores-categorias').value;
+    var lineasColor = rawColores.split('\n').map(function(l){ return l.replace(/\r$/,''); }).filter(function(l){ return l.trim().length>0; });
+    var actualizadasColor = 0, noEncontradas = [], invalidas = [];
+    var paraUpsertColor = [];
+    var reHex = /^#?[0-9a-fA-F]{6}$/;
+    lineasColor.forEach(function(linea){
+      var partes = linea.split('\t').map(function(p){ return p.trim(); });
+      if(partes.length < 2) return;
+      var nombreLinea = partes[0];
+      var hexLinea = partes[partes.length-1]; // soporta pegar "Nombre / Color sugerido / Hex" tal cual: usa la última columna
+      if(/^categor[ií]a$/i.test(nombreLinea)) return; // fila de encabezado
+      if(!nombreLinea || !reHex.test(hexLinea)){ if(nombreLinea) invalidas.push(nombreLinea); return; }
+      var hexNormalizado = '#'+hexLinea.replace('#','').toUpperCase();
+      var existente = STATE.categorias.find(function(c){ return c.nombre.toLowerCase() === nombreLinea.toLowerCase(); });
+      if(!existente){ noEncontradas.push(nombreLinea); return; }
+      existente.color = hexNormalizado;
+      paraUpsertColor.push(toDbCategoria(existente));
+      actualizadasColor++;
+    });
+    try{
+      if(paraUpsertColor.length) await dbUpsert('categorias', paraUpsertColor);
+      var detalle = [];
+      if(noEncontradas.length) detalle.push(noEncontradas.length+' sin coincidencia: '+noEncontradas.join(', '));
+      if(invalidas.length) detalle.push(invalidas.length+' con color inválido: '+invalidas.join(', '));
+      STATE.bulkColorCatMsg = { type: actualizadasColor>0 ? 'ok' : 'err',
+        text: actualizadasColor+' categoría(s) actualizada(s).'+(detalle.length?' '+detalle.join('. ')+'.':'') };
+    }catch(e){ STATE.dbError = 'No se pudo actualizar los colores: '+(e.message||e); }
     render(); return;
   }
 

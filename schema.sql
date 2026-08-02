@@ -8,7 +8,8 @@ create table centros (
   id uuid primary key default gen_random_uuid(),
   codigo text not null,
   nombre text not null,
-  color text,  -- color del chip en Movimientos y ABM, ej: '#4E9D77'
+  color text,  -- color de fondo del chip en Movimientos y ABM, ej: '#4E9D77'
+  color_texto text,  -- color de texto del chip (opcional); si es null, se calcula el contraste automático
   created_at timestamptz default now()
 );
 
