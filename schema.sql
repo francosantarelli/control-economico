@@ -8,6 +8,7 @@ create table centros (
   id uuid primary key default gen_random_uuid(),
   codigo text not null,
   nombre text not null,
+  color text,  -- color del chip en Movimientos y ABM, ej: '#4E9D77'
   created_at timestamptz default now()
 );
 
@@ -16,6 +17,7 @@ create table categorias (
   id uuid primary key default gen_random_uuid(),
   nombre text not null,
   tipo text,  -- 'ingreso' | 'egreso' | 'ahorro' | 'tec'
+  color text,  -- color del chip en Movimientos y ABM, ej: '#D97B6C'
   created_at timestamptz default now()
 );
 

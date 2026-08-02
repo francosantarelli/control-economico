@@ -129,6 +129,8 @@ function renderMultiSelect(id, options, seleccion){
 // Enter o Tab confirman la opción resaltada (por defecto la primera) y Tab sigue al próximo campo.
 // Etiqueta vacía a propósito: si no hay selección, el input debe verse vacío (con el placeholder
 // gris nativo), no mostrar literalmente el texto "Elegir..." como si fuera lo tipeado.
+// Excepción para Subcategoría: si lo tipeado no matchea ninguna opción de la categoría elegida,
+// confirmar (Enter/Tab/blur) da de alta esa subcategoría al vuelo — ver obtenerOCrearSubcategoriaId.
 function comboOpcionVacia(){ return {value:'', label:''}; }
 function filtrarOpcionesCombo(options, query){
   var q = (query||'').trim().toLowerCase();
@@ -147,13 +149,37 @@ function renderCombo(comboId, hiddenId, options, valorSeleccionado, placeholder)
     var itemsHtml = visibles.map(function(o, i){
       return '<div class="combo-item'+(i===STATE.comboHighlight?' resaltado':'')+'" data-value="'+esc(o.value)+'">'+(o.label?esc(o.label):'<span style="color:var(--ink-soft)">(vacío)</span>')+'</div>';
     }).join('');
-    panelHtml = '<div class="combo-panel"><div class="combo-list">'+(itemsHtml || '<div class="empty" style="padding:6px 4px">Sin resultados.</div>')+'</div></div>';
+    var mensajeSinResultados = (comboId==='mov-subcategoria' && query.trim())
+      ? 'Sin resultados. Presioná Enter para crear "'+esc(query.trim())+'".'
+      : 'Sin resultados.';
+    panelHtml = '<div class="combo-panel"><div class="combo-list">'+(itemsHtml || '<div class="empty" style="padding:6px 4px">'+mensajeSinResultados+'</div>')+'</div></div>';
   }
   return '<div class="combo'+(abierto?' abierto':'')+'" data-combo-wrap="'+comboId+'">'+
     '<input type="hidden" id="'+hiddenId+'" value="'+esc(valorSeleccionado||'')+'">'+
     '<input type="text" class="combo-input" id="'+comboId+'-input" data-combo-id="'+comboId+'" autocomplete="off" placeholder="'+esc(placeholder||'Elegir...')+'" value="'+esc(valorVisible)+'">'+
     panelHtml+
   '</div>';
+}
+// Busca (o crea) la subcategoría de la categoría actualmente elegida en el formulario de
+// Movimiento a partir de un texto tipeado que no matcheó ninguna opción existente del combo.
+// Se usa cuando el usuario tipea un nombre nuevo y confirma (Enter/Tab/blur): en vez de perder
+// lo tipeado, se da de alta la subcategoría al vuelo, igual que ya pasa al importar movimientos.
+async function obtenerOCrearSubcategoriaId(nombreTexto){
+  var categoriaId = (document.getElementById('f-mov-categoria')||{}).value || '';
+  if(!categoriaId) return null;
+  var existente = STATE.subcategorias.find(function(s){
+    return s.categoriaId===categoriaId && s.nombre.toLowerCase()===nombreTexto.toLowerCase();
+  });
+  if(existente) return existente.id;
+  var nueva = {id:uid(), categoriaId:categoriaId, nombre:nombreTexto};
+  try{
+    await dbInsert('subcategorias', toDbSubcategoria(nueva));
+    STATE.subcategorias.push(nueva);
+    return nueva.id;
+  }catch(e){
+    STATE.dbError = 'No se pudo crear la subcategoría: '+(e.message||e);
+    return null;
+  }
 }
 // Aplica la opción elegida en un combo del formulario de Movimiento al draft correspondiente.
 function aplicarSeleccionCombo(comboId, valor){
@@ -196,10 +222,13 @@ function idSiguienteFocuseable(elementoActual){
 // Cierra el combo abierto. Si forzar es true (Enter, click en una opción) confirma siempre la
 // opción resaltada; si no (blur / Tab), solo confirma cuando el usuario efectivamente tipeó algo
 // para filtrar — así tabular por el campo sin tocarlo no pisa el valor que ya tenía cargado.
-function finalizarCombo(comboId, forzar){
+async function finalizarCombo(comboId, forzar){
   if(STATE.comboAbierto !== comboId) return;
   if(forzar || STATE.comboBusqueda){
     var valor = comboValorResaltadoDOM(comboId);
+    if(valor === null && comboId==='mov-subcategoria' && STATE.comboBusqueda.trim()){
+      valor = await obtenerOCrearSubcategoriaId(STATE.comboBusqueda.trim());
+    }
     if(valor !== null) aplicarSeleccionCombo(comboId, valor);
   } else {
     STATE.movDraft = getMovFormValues(); // cerrar sin confirmar nada igual dispara un render: ver aplicarSeleccionCombo
@@ -217,10 +246,10 @@ function uid(){
 }
 
 // ---- Mapeo entre el modelo JS (camelCase) y las columnas de Supabase (snake_case) ----
-function toDbCentro(c){ return {id:c.id, codigo:c.codigo, nombre:c.nombre}; }
-function fromDbCentro(r){ return {id:r.id, codigo:r.codigo, nombre:r.nombre}; }
-function toDbCategoria(c){ return {id:c.id, nombre:c.nombre, tipo:c.tipo||null}; }
-function fromDbCategoria(r){ return {id:r.id, nombre:r.nombre, tipo:r.tipo||''}; }
+function toDbCentro(c){ return {id:c.id, codigo:c.codigo, nombre:c.nombre, color:c.color||null}; }
+function fromDbCentro(r){ return {id:r.id, codigo:r.codigo, nombre:r.nombre, color:r.color||''}; }
+function toDbCategoria(c){ return {id:c.id, nombre:c.nombre, tipo:c.tipo||null, color:c.color||null}; }
+function fromDbCategoria(r){ return {id:r.id, nombre:r.nombre, tipo:r.tipo||'', color:r.color||''}; }
 function toDbSubcategoria(s){ return {id:s.id, categoria_id:s.categoriaId||null, nombre:s.nombre}; }
 function fromDbSubcategoria(r){ return {id:r.id, categoriaId:r.categoria_id||'', nombre:r.nombre}; }
 function toDbMovimiento(m){ return {id:m.id, fecha:m.fecha, centro_id:m.centroId||null, categoria_id:m.categoriaId||null, subcategoria_id:m.subcategoriaId||null, proveedor:m.proveedor||null, detalle:m.detalle||null, ingreso:Number(m.ingreso)||0, egreso:Number(m.egreso)||0, tarjeta:!!m.tarjeta}; }
@@ -1182,13 +1211,14 @@ function renderInterno(){
 var MODAL_HTML = '';
 
 // ===================== CENTROS DE COSTO =====================
-function campoCentro(codigo, nombre){
+function campoCentro(codigo, nombre, color){
   return '<div class="field"><label>Código (CC)</label><input type="text" id="f-centro-codigo" placeholder="Ej: MPF" value="'+esc(codigo)+'" style="width:100px;text-transform:uppercase"></div>'+
-    '<div class="field"><label>Nombre</label><input type="text" id="f-centro-nombre" placeholder="Ej: Mercado Pago" value="'+esc(nombre)+'" style="width:220px"></div>';
+    '<div class="field"><label>Nombre</label><input type="text" id="f-centro-nombre" placeholder="Ej: Mercado Pago" value="'+esc(nombre)+'" style="width:220px"></div>'+
+    '<div class="field"><label>Color</label><input type="color" id="f-centro-color" value="'+esc(color)+'"></div>';
 }
 function renderCentros(){
   var rows = STATE.centros.map(function(c){
-    return '<tr><td class="mono" data-label="Código">'+esc(c.codigo)+'</td><td data-label="Nombre">'+esc(c.nombre)+'</td>'+
+    return '<tr><td data-label="Código">'+renderChip(c.codigo, colorCentro(c.id))+'</td><td data-label="Nombre">'+esc(c.nombre)+'</td>'+
       '<td class="actions-cell"><button class="link" data-action="edit-centro" data-id="'+c.id+'">editar</button>'+
       '<button class="link" data-action="del-centro" data-id="'+c.id+'">borrar</button></td></tr>';
   }).join('');
@@ -1197,7 +1227,7 @@ function renderCentros(){
   if(editing){
     MODAL_HTML = '<div class="modal-overlay" data-modal-backdrop="edit"><div class="modal-card">'+
       '<h2>Editar centro de costo</h2>'+
-      '<div class="row">'+ campoCentro(editing.codigo, editing.nombre) +'</div>'+
+      '<div class="row">'+ campoCentro(editing.codigo, editing.nombre, colorCentro(editing.id)) +'</div>'+
       '<div class="row" style="margin-top:14px">'+
         '<button data-action="save-centro" data-id="'+editing.id+'">Guardar cambios</button>'+
         '<button class="secondary" data-action="cancel-edit">Cancelar</button>'+
@@ -1208,7 +1238,7 @@ function renderCentros(){
   var formNuevoCentro = editing ? '' : ''+
   '<div class="card">'+
     '<h2>Nuevo centro de costo</h2>'+
-    '<div class="row">'+ campoCentro('', '') +
+    '<div class="row">'+ campoCentro('', '', PALETA_DONUT[STATE.centros.length % PALETA_DONUT.length]) +
       '<button data-action="save-centro" data-id="">Agregar</button>'+
     '</div>'+
   '</div>';
@@ -1276,8 +1306,9 @@ function renderBackup(){
   '</div>';
 }
 
-function campoCategoria(nombre, tipo){
+function campoCategoria(nombre, tipo, color){
   return '<div class="field"><label>Nombre</label><input type="text" id="f-categoria-nombre" placeholder="Ej: Alimentos" value="'+esc(nombre)+'" style="width:220px"></div>'+
+    '<div class="field"><label>Color</label><input type="color" id="f-categoria-color" value="'+esc(color)+'"></div>'+
     '<div class="field"><label>&nbsp;</label><label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:normal;white-space:nowrap;padding:7px 0">'+
       '<input type="checkbox" id="f-categoria-es-tec" '+(tipo==='tec'?'checked':'')+' style="width:auto"> Es TEC (transferencia entre cuentas)'+
     '</label></div>';
@@ -1285,7 +1316,7 @@ function campoCategoria(nombre, tipo){
 function renderCategorias(){
   var rows = STATE.categorias.map(function(c){
     var subCount = STATE.subcategorias.filter(function(s){return s.categoriaId===c.id;}).length;
-    return '<tr><td data-label="Nombre">'+esc(c.nombre)+'</td><td class="mono" data-label="Tipo">'+tipoLabel(c.tipo)+'</td><td class="mono" data-label="Subcategorías">'+subCount+' subcategoría(s)</td>'+
+    return '<tr><td data-label="Nombre">'+renderChip(c.nombre, colorCategoria(c.id))+'</td><td class="mono" data-label="Tipo">'+tipoLabel(c.tipo)+'</td><td class="mono" data-label="Subcategorías">'+subCount+' subcategoría(s)</td>'+
       '<td class="actions-cell"><button class="link" data-action="edit-categoria" data-id="'+c.id+'">editar</button>'+
       '<button class="link" data-action="del-categoria" data-id="'+c.id+'">borrar</button></td></tr>';
   }).join('');
@@ -1296,7 +1327,7 @@ function renderCategorias(){
   if(editing){
     MODAL_HTML = '<div class="modal-overlay" data-modal-backdrop="edit"><div class="modal-card">'+
       '<h2>Editar categoría</h2>'+
-      '<div class="row">'+ campoCategoria(editing.nombre, editing.tipo||'') +'</div>'+
+      '<div class="row">'+ campoCategoria(editing.nombre, editing.tipo||'', colorCategoria(editing.id)) +'</div>'+
       '<div class="row" style="margin-top:14px">'+
         '<button data-action="save-categoria" data-id="'+editing.id+'">Guardar cambios</button>'+
         '<button class="secondary" data-action="cancel-edit">Cancelar</button>'+
@@ -1307,7 +1338,7 @@ function renderCategorias(){
   var formNuevaCategoria = editing ? '' : ''+
   '<div class="card">'+
     '<h2>Nueva categoría</h2>'+
-    '<div class="row">'+ campoCategoria('', '') +
+    '<div class="row">'+ campoCategoria('', '', PALETA_DONUT[STATE.categorias.length % PALETA_DONUT.length]) +
       '<button data-action="save-categoria" data-id="">Agregar</button>'+
     '</div>'+
   '</div>';
@@ -1466,8 +1497,8 @@ function renderMovimientos(){
     } else {
       var mesFila = (m.fecha||'').slice(0,7);
       var subValorFiltro = m.subcategoriaId || '__vacio__';
-      celdaCentro = '<td class="mono'+(m.centroId?' celda-filtrable':'')+'" data-label="Centro"'+(m.centroId?' data-filter-field="centro" data-filter-value="'+esc(m.centroId)+'" title="Filtrar por este Centro de Costo"':'')+'>'+esc(nombreCentro(m.centroId)).split(' · ')[0]+'</td>';
-      celdaCategoria = '<td'+(m.categoriaId?' class="celda-filtrable" data-filter-field="categoria" data-filter-value="'+esc(m.categoriaId)+'" title="Filtrar por esta Categoría"':'')+' data-label="Categoría">'+esc(nombreCategoria(m.categoriaId))+'</td>';
+      celdaCentro = '<td'+(m.centroId?' class="celda-filtrable" data-filter-field="centro" data-filter-value="'+esc(m.centroId)+'" title="Filtrar por este Centro de Costo"':'')+' data-label="Centro">'+(m.centroId?renderChip(nombreCentro(m.centroId).split(' · ')[0], colorCentro(m.centroId)):'—')+'</td>';
+      celdaCategoria = '<td'+(m.categoriaId?' class="celda-filtrable" data-filter-field="categoria" data-filter-value="'+esc(m.categoriaId)+'" title="Filtrar por esta Categoría"':'')+' data-label="Categoría">'+(m.categoriaId?renderChip(nombreCategoria(m.categoriaId), colorCategoria(m.categoriaId)):'—')+'</td>';
       celdaSubcategoria = '<td class="celda-filtrable" data-filter-field="subcategoria" data-filter-value="'+esc(subValorFiltro)+'" title="Filtrar por esta Subcategoría" data-label="Subcategoría">'+esc(nombreSubcategoria(m.subcategoriaId))+'</td>';
       celdaProveedor = '<td'+(m.proveedor?' class="celda-filtrable" data-filter-field="texto" data-filter-value="'+esc(m.proveedor)+'" title="Filtrar por este Proveedor"':'')+' data-label="Proveedor">'+(m.tarjeta?'<span title="Pagado con tarjeta de crédito">💳</span> ':'')+esc(m.proveedor||'')+'</td>';
       celdaDetalle = '<td data-label="Detalle">'+esc(m.detalle||'')+'</td>';
@@ -1533,7 +1564,7 @@ function renderMovimientos(){
           renderCombo('mov-categoria', 'f-mov-categoria', [comboOpcionVacia()].concat(categoriasOrdenadas().map(function(c){ return {value:c.id, label:c.nombre}; })), e.categoriaId, 'Elegir...')+
         '</div>'+
         '<div class="field"><label>Subcategoría</label>'+
-          renderCombo('mov-subcategoria', 'f-mov-subcategoria', [comboOpcionVacia()].concat(subOptionsArr), e.subcategoriaId, 'Elegir...')+
+          renderCombo('mov-subcategoria', 'f-mov-subcategoria', [comboOpcionVacia()].concat(subOptionsArr), e.subcategoriaId, 'Elegir o crear...')+
         '</div>'+
       '</div>'+
       campoDestino+
@@ -1987,6 +2018,40 @@ function esCategoriaSueldo(categoriaId){
 }
 
 var PALETA_DONUT = ['#4E9D77','#A8D8BE','#D97B6C','#F0C48A','#8FBFE0','#C3AEDB','#E3C08D','#7FC4B8','#F2A6A6','#B7D89A'];
+
+// ===================== CHIPS (Centro de Costo / Categoría) =====================
+// El color se elige a mano desde el ABM (campo "Color") y se guarda en centros.color /
+// categorias.color. Mientras alguno no tenga color asignado (o para los creados por carga
+// masiva/importación), se usa un color determinístico según su id como respaldo, para que
+// nunca se vea un chip gris/roto y siempre sea "fijo" para ese mismo registro.
+function colorAutoPorId(id){
+  var hash = 0;
+  var s = id || '';
+  for(var i=0;i<s.length;i++){ hash = (hash*31 + s.charCodeAt(i)) | 0; }
+  return PALETA_DONUT[Math.abs(hash) % PALETA_DONUT.length];
+}
+function colorCentro(centroId){
+  var c = STATE.centros.find(function(x){ return x.id===centroId; });
+  return (c && c.color) || colorAutoPorId(centroId||'');
+}
+function colorCategoria(categoriaId){
+  var c = STATE.categorias.find(function(x){ return x.id===categoriaId; });
+  return (c && c.color) || colorAutoPorId(categoriaId||'');
+}
+function colorTextoParaFondo(hex){
+  var c = (hex||'').replace('#','');
+  if(c.length===3) c = c.split('').map(function(ch){ return ch+ch; }).join('');
+  if(c.length!==6 || /[^0-9a-fA-F]/.test(c)) return '#1A1A1A';
+  var r=parseInt(c.substr(0,2),16), g=parseInt(c.substr(2,2),16), b=parseInt(c.substr(4,2),16);
+  var luminancia = (0.299*r + 0.587*g + 0.114*b) / 255;
+  return luminancia > 0.6 ? '#1A1A1A' : '#FFFFFF';
+}
+function renderChip(texto, color){
+  if(!texto) return '—';
+  var bg = color || '#E3ECE6';
+  return '<span class="chip" style="background:'+esc(bg)+';color:'+colorTextoParaFondo(bg)+'">'+esc(texto)+'</span>';
+}
+
 var NOMBRES_MES_CORTO = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 function mesLabelCorto(mesStr){
   var m = (mesStr||'').match(/^(\d{4})-(\d{2})$/);
@@ -2394,11 +2459,12 @@ function bindEvents(){
         // confirmamos la selección, y enfocamos ese id nosotros mismos ya con el DOM nuevo.
         ev.preventDefault();
         var siguienteId = idSiguienteFocuseable(inp);
-        finalizarCombo(comboId, false);
-        if(siguienteId){
-          var el = document.getElementById(siguienteId);
-          if(el) el.focus();
-        }
+        Promise.resolve(finalizarCombo(comboId, false)).then(function(){
+          if(siguienteId){
+            var el = document.getElementById(siguienteId);
+            if(el) el.focus();
+          }
+        });
       }
     });
     inp.addEventListener('blur', function(){
@@ -2610,15 +2676,16 @@ async function handleAction(action, id){
   if(action==='save-centro'){
     var codigo = document.getElementById('f-centro-codigo').value.trim().toUpperCase();
     var nombre = document.getElementById('f-centro-nombre').value.trim();
+    var colorCentroInput = document.getElementById('f-centro-color').value;
     if(!codigo || !nombre) return;
     STATE.dbError = null;
     try{
       if(id){
-        await dbUpdate('centros', id, {codigo:codigo, nombre:nombre});
+        await dbUpdate('centros', id, {codigo:codigo, nombre:nombre, color:colorCentroInput});
         var c = STATE.centros.find(function(x){return x.id===id;});
-        c.codigo = codigo; c.nombre = nombre;
+        c.codigo = codigo; c.nombre = nombre; c.color = colorCentroInput;
       } else {
-        var nuevoC = {id:uid(), codigo:codigo, nombre:nombre};
+        var nuevoC = {id:uid(), codigo:codigo, nombre:nombre, color:colorCentroInput};
         await dbInsert('centros', toDbCentro(nuevoC));
         STATE.centros.push(nuevoC);
       }
@@ -2645,15 +2712,16 @@ async function handleAction(action, id){
   if(action==='save-categoria'){
     var nombre = document.getElementById('f-categoria-nombre').value.trim();
     var tipo = document.getElementById('f-categoria-es-tec').checked ? 'tec' : '';
+    var colorCategoriaInput = document.getElementById('f-categoria-color').value;
     if(!nombre) return;
     STATE.dbError = null;
     try{
       if(id){
-        await dbUpdate('categorias', id, {nombre:nombre, tipo:tipo||null});
+        await dbUpdate('categorias', id, {nombre:nombre, tipo:tipo||null, color:colorCategoriaInput});
         var c = STATE.categorias.find(function(x){return x.id===id;});
-        c.nombre = nombre; c.tipo = tipo;
+        c.nombre = nombre; c.tipo = tipo; c.color = colorCategoriaInput;
       } else {
-        var nuevaC = {id:uid(), nombre:nombre, tipo:tipo};
+        var nuevaC = {id:uid(), nombre:nombre, tipo:tipo, color:colorCategoriaInput};
         await dbInsert('categorias', toDbCategoria(nuevaC));
         STATE.categorias.push(nuevaC);
       }

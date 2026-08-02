@@ -132,6 +132,16 @@ input:focus, select:focus, textarea:focus{ outline:2px solid var(--accent); outl
 /* Botón "Efectivo" del sidebar: atajo pensado solo para el celular, en desktop queda "+ Movimiento" */
 .solo-mobile{ display:none; }
 
+/* Chips de Centro de Costo / Categoría (color elegido en el ABM) */
+.chip{
+  display:inline-block; padding:2px 9px; border-radius:12px; font-size:12px; font-weight:600;
+  white-space:nowrap; line-height:1.7;
+}
+input[type=color]{
+  width:44px; min-width:0; padding:2px; border:1px solid var(--rule); border-radius:6px;
+  background:#fff; cursor:pointer;
+}
+
 button{
   font-family:'Geist',sans-serif; font-size:13px; font-weight:500; padding:8px 14px;
   border-radius:6px; border:1px solid var(--accent); background:var(--accent); color:#fff; cursor:pointer;
@@ -238,7 +248,7 @@ footer.small{ margin-top:28px; font-size:11px; color:var(--ink-soft); text-align
   .card{ padding:14px; border-radius:8px; }
   .row, .filters{ gap:12px; }
   .field{ flex:1 1 100%; min-width:0; }
-  .field input:not([type=checkbox]), .field select, .field textarea{ width:100% !important; box-sizing:border-box; }
+  .field input:not([type=checkbox]):not([type=color]), .field select, .field textarea{ width:100% !important; box-sizing:border-box; }
   input[type=text], input[type=date], input[type=number], select, textarea{ font-size:16px; padding:10px; } /* 16px evita el zoom automático de iOS al enfocar */
   .multiselect{ width:100%; }
   .multiselect-toggle{ font-size:16px; padding:10px; } /* 16px evita el zoom automático de iOS al enfocar */
