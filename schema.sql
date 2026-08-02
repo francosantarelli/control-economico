@@ -18,7 +18,8 @@ create table categorias (
   id uuid primary key default gen_random_uuid(),
   nombre text not null,
   tipo text,  -- 'ingreso' | 'egreso' | 'ahorro' | 'tec'
-  color text,  -- color del chip en Movimientos y ABM, ej: '#D97B6C'
+  color text,  -- color de fondo del chip en Movimientos y ABM, ej: '#D97B6C'
+  color_texto text,  -- color de texto del chip (opcional); si es null, se calcula el contraste automático
   created_at timestamptz default now()
 );
 

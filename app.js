@@ -248,8 +248,8 @@ function uid(){
 // ---- Mapeo entre el modelo JS (camelCase) y las columnas de Supabase (snake_case) ----
 function toDbCentro(c){ return {id:c.id, codigo:c.codigo, nombre:c.nombre, color:c.color||null, color_texto:c.colorTexto||null}; }
 function fromDbCentro(r){ return {id:r.id, codigo:r.codigo, nombre:r.nombre, color:r.color||'', colorTexto:r.color_texto||''}; }
-function toDbCategoria(c){ return {id:c.id, nombre:c.nombre, tipo:c.tipo||null, color:c.color||null}; }
-function fromDbCategoria(r){ return {id:r.id, nombre:r.nombre, tipo:r.tipo||'', color:r.color||''}; }
+function toDbCategoria(c){ return {id:c.id, nombre:c.nombre, tipo:c.tipo||null, color:c.color||null, color_texto:c.colorTexto||null}; }
+function fromDbCategoria(r){ return {id:r.id, nombre:r.nombre, tipo:r.tipo||'', color:r.color||'', colorTexto:r.color_texto||''}; }
 function toDbSubcategoria(s){ return {id:s.id, categoria_id:s.categoriaId||null, nombre:s.nombre}; }
 function fromDbSubcategoria(r){ return {id:r.id, categoriaId:r.categoria_id||'', nombre:r.nombre}; }
 function toDbMovimiento(m){ return {id:m.id, fecha:m.fecha, centro_id:m.centroId||null, categoria_id:m.categoriaId||null, subcategoria_id:m.subcategoriaId||null, proveedor:m.proveedor||null, detalle:m.detalle||null, ingreso:Number(m.ingreso)||0, egreso:Number(m.egreso)||0, tarjeta:!!m.tarjeta}; }
@@ -1316,7 +1316,7 @@ function campoCategoria(nombre, tipo, color){
 function renderCategorias(){
   var rows = STATE.categorias.map(function(c){
     var subCount = STATE.subcategorias.filter(function(s){return s.categoriaId===c.id;}).length;
-    return '<tr><td data-label="Nombre">'+renderChip(c.nombre, colorCategoria(c.id))+'</td><td class="mono" data-label="Tipo">'+tipoLabel(c.tipo)+'</td><td class="mono" data-label="Subcategorías">'+subCount+' subcategoría(s)</td>'+
+    return '<tr><td data-label="Nombre">'+renderChip(c.nombre, colorCategoria(c.id), colorTextoCategoria(c.id))+'</td><td class="mono" data-label="Tipo">'+tipoLabel(c.tipo)+'</td><td class="mono" data-label="Subcategorías">'+subCount+' subcategoría(s)</td>'+
       '<td class="actions-cell"><button class="link" data-action="edit-categoria" data-id="'+c.id+'">editar</button>'+
       '<button class="link" data-action="del-categoria" data-id="'+c.id+'">borrar</button></td></tr>';
   }).join('');
@@ -1506,7 +1506,7 @@ function renderMovimientos(){
       var mesFila = (m.fecha||'').slice(0,7);
       var subValorFiltro = m.subcategoriaId || '__vacio__';
       celdaCentro = '<td'+(m.centroId?' class="celda-filtrable" data-filter-field="centro" data-filter-value="'+esc(m.centroId)+'" title="Filtrar por este Centro de Costo"':'')+' data-label="Centro">'+(m.centroId?renderChip(nombreCentro(m.centroId).split(' · ')[0], colorCentro(m.centroId), colorTextoCentro(m.centroId)):'—')+'</td>';
-      celdaCategoria = '<td'+(m.categoriaId?' class="celda-filtrable" data-filter-field="categoria" data-filter-value="'+esc(m.categoriaId)+'" title="Filtrar por esta Categoría"':'')+' data-label="Categoría">'+(m.categoriaId?renderChip(nombreCategoria(m.categoriaId), colorCategoria(m.categoriaId)):'—')+'</td>';
+      celdaCategoria = '<td'+(m.categoriaId?' class="celda-filtrable" data-filter-field="categoria" data-filter-value="'+esc(m.categoriaId)+'" title="Filtrar por esta Categoría"':'')+' data-label="Categoría">'+(m.categoriaId?renderChip(nombreCategoria(m.categoriaId), colorCategoria(m.categoriaId), colorTextoCategoria(m.categoriaId)):'—')+'</td>';
       celdaSubcategoria = '<td class="celda-filtrable" data-filter-field="subcategoria" data-filter-value="'+esc(subValorFiltro)+'" title="Filtrar por esta Subcategoría" data-label="Subcategoría">'+esc(nombreSubcategoria(m.subcategoriaId))+'</td>';
       celdaProveedor = '<td'+(m.proveedor?' class="celda-filtrable" data-filter-field="texto" data-filter-value="'+esc(m.proveedor)+'" title="Filtrar por este Proveedor"':'')+' data-label="Proveedor">'+(m.tarjeta?'<span title="Pagado con tarjeta de crédito">💳</span> ':'')+esc(m.proveedor||'')+'</td>';
       celdaDetalle = '<td data-label="Detalle">'+esc(m.detalle||'')+'</td>';
@@ -2051,6 +2051,12 @@ function colorTextoCentro(centroId){
 function colorCategoria(categoriaId){
   var c = STATE.categorias.find(function(x){ return x.id===categoriaId; });
   return (c && c.color) || colorAutoPorId(categoriaId||'');
+}
+// Color de texto explícito de la categoría (columna categorias.color_texto), si se cargó a mano/por SQL.
+// Si no hay uno guardado, renderChip calcula el contraste automáticamente.
+function colorTextoCategoria(categoriaId){
+  var c = STATE.categorias.find(function(x){ return x.id===categoriaId; });
+  return (c && c.colorTexto) || '';
 }
 function colorTextoParaFondo(hex){
   var c = (hex||'').replace('#','');
