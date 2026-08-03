@@ -56,6 +56,15 @@ create table vencimientos (
   created_at timestamptz default now()
 );
 
+-- Gimnasio (bonus track: competencia de perseverancia Ana vs Franco)
+create table gimnasio_visitas (
+  id uuid primary key default gen_random_uuid(),
+  persona text not null check (persona in ('ana','franco')),
+  fecha date not null,
+  created_at timestamptz default now(),
+  unique (persona, fecha)
+);
+
 -- ============================================================
 -- SEGURIDAD: solo usuarios logueados (vos y tu pareja) pueden
 -- leer y escribir. Nadie sin cuenta puede ver ni tocar nada.
@@ -66,6 +75,7 @@ alter table categorias enable row level security;
 alter table subcategorias enable row level security;
 alter table movimientos enable row level security;
 alter table vencimientos enable row level security;
+alter table gimnasio_visitas enable row level security;
 
 create policy "logueados_todo_centros" on centros
   for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
@@ -80,6 +90,9 @@ create policy "logueados_todo_movimientos" on movimientos
   for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
 
 create policy "logueados_todo_vencimientos" on vencimientos
+  for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+
+create policy "logueados_todo_gimnasio_visitas" on gimnasio_visitas
   for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
 
 -- ============================================================

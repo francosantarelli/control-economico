@@ -50,12 +50,12 @@ function cargarReglas(){
   return seed;
 }
 
-var STATE = { centros: [], categorias: [], subcategorias: [], movimientos: [], vencimientos: [], activeTab: 'movimientos', editing: null, ready:false,
+var STATE = { centros: [], categorias: [], subcategorias: [], movimientos: [], vencimientos: [], gimnasioVisitas: [], activeTab: 'movimientos', editing: null, ready:false,
   importEntidad:'mp', importAnio:'26', importBanco:'nacion', importVencimiento:'', importRaw:'', importPreview:null, importPreviewExcel:null, importMsg:null,
   bulkCatMsg:null, bulkColorCatMsg:null, confirmState:null, subDeleteState:null, movFormMsg:null,
   filtros:{centro:[], categoria:[], subcategoria:[], mes:[], texto:'', soloIncompletos:false, soloTarjeta:false},
   resumenFiltros:{centro:[], categoria:[], mes:[], vista:'categoria'}, multiSelectAbierto:null, multiSelectBusqueda:'', abmSubTab:'categorias', grillaRango:'todo',
-  bulkVencMsg:null, vencFormMsg:null, dbError:null, saldosCache:null, saldosDirty:true,
+  bulkVencMsg:null, vencFormMsg:null, dbError:null, saldosCache:null, saldosDirty:true, gimnasioMsg:null,
   usuarioEmail:null, efectivoAbierto:false, efectivoMsg:null, efectivoCategoriaId:'', backupMsg:null, backupPendiente:null, menuMovilAbierto:false, incompletosSnapshotIds:null,
   reglas: cargarReglas(), reglaFormMsg:null,
   nuevoMovAbierto:false, movDraftCentroDestinoId:'', comboAbierto:null, comboBusqueda:'', comboHighlight:0 };
@@ -256,6 +256,7 @@ function toDbMovimiento(m){ return {id:m.id, fecha:m.fecha, centro_id:m.centroId
 function fromDbMovimiento(r){ return {id:r.id, fecha:r.fecha, centroId:r.centro_id||'', categoriaId:r.categoria_id||'', subcategoriaId:r.subcategoria_id||'', proveedor:r.proveedor||'', detalle:r.detalle||'', ingreso:Number(r.ingreso)||0, egreso:Number(r.egreso)||0, tarjeta:!!r.tarjeta}; }
 function toDbVencimiento(v){ return {id:v.id, concepto:v.concepto, fecha:v.fecha, monto:Number(v.monto)||0, centro_id:v.centroId||null, estado:v.estado||'pendiente'}; }
 function fromDbVencimiento(r){ return {id:r.id, concepto:r.concepto, fecha:r.fecha, monto:Number(r.monto)||0, centroId:r.centro_id||'', estado:r.estado||'pendiente'}; }
+function fromDbGimnasioVisita(r){ return {id:r.id, persona:r.persona, fecha:r.fecha}; }
 
 // ---- CRUD genérico contra Supabase ----
 async function dbFetchAll(table){
@@ -301,6 +302,12 @@ async function cargarTodo(){
   STATE.subcategorias = subcategorias.map(fromDbSubcategoria);
   STATE.movimientos = movimientos.map(fromDbMovimiento);
   STATE.vencimientos = vencimientos.map(fromDbVencimiento);
+  try{
+    // Try/catch aparte: si todavía no corriste migracion_gimnasio.sql en Supabase, que no
+    // reviente la carga de toda la app — el bonus track simplemente arranca vacío.
+    var gimnasioVisitas = await dbFetchAll('gimnasio_visitas');
+    STATE.gimnasioVisitas = gimnasioVisitas.map(fromDbGimnasioVisita);
+  }catch(e){ STATE.gimnasioVisitas = []; }
 }
 
 // ===================== AUTENTICACIÓN =====================
@@ -371,6 +378,13 @@ function codigoCentroPorUsuario(){
   if(email === 'anitacasadei@gmail.com') return 'EA';
   return '';
 }
+function personaPorUsuario(){
+  var email = (STATE.usuarioEmail||'').trim().toLowerCase();
+  if(email === 'fhsantarelli@gmail.com') return 'franco';
+  if(email === 'anitacasadei@gmail.com') return 'ana';
+  return '';
+}
+function nombrePersona(p){ return p==='ana' ? 'Ana' : (p==='franco' ? 'Franco' : '—'); }
 function fechaHoyISO(){
   var d = new Date();
   var yyyy = d.getFullYear();
@@ -1077,6 +1091,7 @@ function renderInterno(){
     {id:'vencimientos', label:'Vencimientos', icono:'⏰'},
     {id:'saldos', label:'Saldos', icono:'🏦'},
     {id:'resumen', label:'Resumen', icono:'📊'},
+    {id:'gimnasio', label:'Gimnasio', icono:'💪'},
     {id:'abm', label:'ABM', icono:'⚙️'}
   ];
 
@@ -1116,6 +1131,7 @@ function renderInterno(){
     else if(STATE.activeTab==='vencimientos') contentHtml += renderVencimientos();
     else if(STATE.activeTab==='saldos') contentHtml += renderSaldos();
     else if(STATE.activeTab==='resumen') contentHtml += renderResumen();
+    else if(STATE.activeTab==='gimnasio') contentHtml += renderGimnasio();
     else if(STATE.activeTab==='abm') contentHtml += renderABM();
   }
   contentHtml += '</div>';
@@ -2364,6 +2380,166 @@ function renderResumen(){
   '</div>';
 }
 
+// ===================== GIMNASIO (BONUS TRACK: ANA VS FRANCO) =====================
+var GYM_COLOR = { ana:'#D6336C', franco:'#2563EB' };
+var GYM_META_SEMANAL = 2;
+var GYM_TOPE_WOW = 3;
+var GYM_FRASES = [
+  'El sillón no cuenta como aparato de gimnasio, aunque tenga resortes. 🛋️',
+  'Recordá: Rocky no se hizo grande mirando la tele. 🥊',
+  '2 veces por semana no es una sugerencia, es un mandato del hogar. 📜',
+  'El "mañana arranco" ya cumplió años en este matrimonio. 🎂',
+  '¿Fuiste al gimnasio y no lo cargaste? Para las estadísticas, no fuiste. 📉',
+  'Un movimiento por semana, un peso menos... de excusa. 🏋️',
+  'Hoy no hay plan C. El plan es: gimnasio. ✅',
+  'Ojo: el que se relaja pierde el trono. 👑',
+  'Las pesas no se levantan solas, pero las excusas sí vuelan solas. 🪶',
+  '3 veces por semana = leyenda. 2 = prolijo/a. 1 = "lo voy a pensar". 🤔',
+  'El streak no se rompe ni por lluvia, ni por partido un domingo. ☔',
+  'Cargá el punto y sentí el poder. Es gratis y es tuyo. ⚡',
+  'En esta casa, el sofá se enfría un poco más si vas al gimnasio. ❄️',
+  'Perder esta semana no tiene revancha hasta la semana que viene. Aguantá. ⏳',
+  'El que no carga la visita, no la hizo. Así de simple. 🧾',
+  'Ir al gimnasio: la única discusión de pareja que termina en abdominales. 😏'
+];
+function fraseGimnasioDelDia(){
+  var hoy = fechaHoyISO();
+  var hash = 0;
+  for(var i=0;i<hoy.length;i++) hash = (hash*31 + hoy.charCodeAt(i)) >>> 0;
+  return GYM_FRASES[hash % GYM_FRASES.length];
+}
+function fraseGimnasioEstadoSemana(s){
+  var a = s.ana, f = s.franco;
+  if(a===0 && f===0) return 'Esta semana el gimnasio los extraña a los dos. Alguien tiene que romper el hielo. 🕸️';
+  if(a>=GYM_TOPE_WOW && f>=GYM_TOPE_WOW) return '¡Wow total! Los dos ya se ganaron el asado sin culpa esta semana. 🔥';
+  if(a>=GYM_TOPE_WOW && a>f) return 'Ana ya está en modo WOW ('+a+'). Franco, la bici fija te mira con desprecio. 🚴';
+  if(f>=GYM_TOPE_WOW && f>a) return 'Franco ya está en modo WOW ('+f+'). Ana, las zapatillas están juntando polvo. 👟';
+  if(a>f) return 'Ana va ganando esta semana '+a+' a '+f+'. Franco, se te escapa el trofeo. 🏆';
+  if(f>a) return 'Franco va ganando esta semana '+f+' a '+a+'. Ana, no dejes que se agrande. 💪';
+  if(a===f && a>0) return 'Empatados '+a+' a '+a+'. Esto se define en el próximo entrenamiento. ⚖️';
+  return '¡Arranquen la semana! El que va dos veces gana, el que va tres es leyenda.';
+}
+function gimnasioLunesDeSemana(iso){
+  var p = iso.split('-').map(Number);
+  var d = new Date(p[0], p[1]-1, p[2]);
+  var dow = d.getDay();
+  d.setDate(d.getDate() + (dow===0 ? -6 : 1-dow));
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function gimnasioDomingoDeSemana(lunesIso){
+  var p = lunesIso.split('-').map(Number);
+  var d = new Date(p[0], p[1]-1, p[2]);
+  d.setDate(d.getDate()+6);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function gimnasioRangoSemanaLabel(lunesIso){
+  return fechaISOaDDMMAAAA(lunesIso).slice(0,5)+' al '+fechaISOaDDMMAAAA(gimnasioDomingoDeSemana(lunesIso)).slice(0,5);
+}
+function gimnasioStatsPorSemana(){
+  var mapa = {};
+  STATE.gimnasioVisitas.forEach(function(v){
+    if(v.persona!=='ana' && v.persona!=='franco') return;
+    var lunes = gimnasioLunesDeSemana(v.fecha);
+    if(!mapa[lunes]) mapa[lunes] = {ana:0, franco:0};
+    mapa[lunes][v.persona]++;
+  });
+  var lunesActual = gimnasioLunesDeSemana(fechaHoyISO());
+  if(!mapa[lunesActual]) mapa[lunesActual] = {ana:0, franco:0};
+  return Object.keys(mapa).sort().reverse().map(function(lunes){
+    var s = mapa[lunes];
+    var ganador = s.ana>s.franco ? 'ana' : (s.franco>s.ana ? 'franco' : (s.ana>0 ? 'empate' : null));
+    return {lunes:lunes, ana:s.ana, franco:s.franco, ganador:ganador};
+  });
+}
+function gimnasioBarraPersona(persona, puntos){
+  var color = GYM_COLOR[persona];
+  var pct = Math.min(100, Math.round((puntos/GYM_TOPE_WOW)*100));
+  var badge = puntos>=GYM_TOPE_WOW ? '<div style="font-size:11px;color:'+color+';font-weight:600;margin:2px 0 8px 190px">🌟 ¡WOW, se pasó de la meta!</div>'
+    : (puntos>=GYM_META_SEMANAL ? '<div style="font-size:11px;color:var(--ink-soft);margin:2px 0 8px 190px">✅ meta cumplida</div>' : '<div style="margin-bottom:8px"></div>');
+  return '<div class="bar-row">'+
+      '<div class="name" style="color:'+color+';font-weight:600">'+nombrePersona(persona)+'</div>'+
+      '<div class="bar-track"><div class="bar-fill" style="background:'+color+';width:'+pct+'%"></div></div>'+
+      '<div class="amt">'+puntos+' pto'+(puntos===1?'':'s')+'</div>'+
+    '</div>'+badge;
+}
+function gimnasioBotonMarcar(persona, yaMarcoHoy){
+  if(!persona) return '<div style="font-size:12px;color:var(--ink-soft);margin-top:6px">Iniciá sesión con tu usuario para poder cargar tu visita de hoy.</div>';
+  if(yaMarcoHoy) return '<button disabled style="margin-top:6px;width:100%">✅ Ya fichaste hoy, '+nombrePersona(persona)+'. ¡Grande!</button>';
+  return '<button data-action="gym-marcar-visita" style="margin-top:6px;width:100%;font-size:15px;padding:12px">💪 Marcar mi visita de hoy ('+nombrePersona(persona)+')</button>';
+}
+function gimnasioSummaryCard(persona, semanasGanadas, vaGanando){
+  var color = GYM_COLOR[persona];
+  return '<div class="summary-card" style="border-color:'+(vaGanando?color:'var(--rule)')+'">'+
+    '<div class="label" style="color:'+color+'">'+nombrePersona(persona)+(vaGanando?' 👑':'')+'</div>'+
+    '<div class="value">'+semanasGanadas+' semana'+(semanasGanadas===1?'':'s')+'</div>'+
+  '</div>';
+}
+function gimnasioTablaHistorial(semanas){
+  if(!semanas.length) return '<div class="empty">Todavía no hay semanas registradas.</div>';
+  var filas = semanas.map(function(s){
+    var ganadorLabel = s.ganador==='ana' ? '🏆 Ana' : (s.ganador==='franco' ? '🏆 Franco' : (s.ganador==='empate' ? '🤝 Empate' : '—'));
+    return '<tr>'+
+      '<td data-label="Semana">'+gimnasioRangoSemanaLabel(s.lunes)+'</td>'+
+      '<td class="num" data-label="Ana">'+s.ana+'</td>'+
+      '<td class="num" data-label="Franco">'+s.franco+'</td>'+
+      '<td data-label="Ganador">'+ganadorLabel+'</td>'+
+    '</tr>';
+  }).join('');
+  return '<table class="tabla-movil"><thead><tr><th>Semana</th><th class="num">Ana</th><th class="num">Franco</th><th>Ganador</th></tr></thead><tbody>'+filas+'</tbody></table>';
+}
+function gimnasioListaUltimasVisitas(){
+  var lista = STATE.gimnasioVisitas.slice().sort(function(a,b){ return b.fecha.localeCompare(a.fecha); }).slice(0,10);
+  if(!lista.length) return '<div class="empty">Todavía no cargaron ninguna visita. ¡Arranquen! 🚀</div>';
+  return lista.map(function(v){
+    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--rule)">'+
+      '<span><strong style="color:'+GYM_COLOR[v.persona]+'">'+nombrePersona(v.persona)+'</strong> — '+fechaISOaDDMMAAAA(v.fecha)+'</span>'+
+      '<button class="icon-btn icon-btn-danger" data-action="gym-borrar-visita" data-id="'+v.id+'" title="Borrar (fue un error)">🗑️</button>'+
+    '</div>';
+  }).join('');
+}
+function renderGimnasio(){
+  var persona = personaPorUsuario();
+  var hoy = fechaHoyISO();
+  var lunesActual = gimnasioLunesDeSemana(hoy);
+  var semanas = gimnasioStatsPorSemana();
+  var semanaActual = semanas.filter(function(s){ return s.lunes===lunesActual; })[0] || {lunes:lunesActual, ana:0, franco:0};
+  var yaMarcoHoy = !!(persona && STATE.gimnasioVisitas.some(function(v){ return v.persona===persona && v.fecha===hoy; }));
+  var semanasGanadasAna = semanas.filter(function(s){ return s.ganador==='ana'; }).length;
+  var semanasGanadasFranco = semanas.filter(function(s){ return s.ganador==='franco'; }).length;
+
+  var html = '';
+  if(STATE.gimnasioMsg){ html += '<div class="msg err">'+esc(STATE.gimnasioMsg)+'</div>'; }
+
+  html += '<div class="card" style="background:linear-gradient(135deg, var(--accent-soft), #fff)">'+
+    '<h2 style="font-size:19px">🏋️ Bonus Track: Ana vs Franco</h2>'+
+    '<div style="font-size:12px;color:var(--ink-soft);margin-top:2px">Cada visita al gimnasio suma un punto. Meta: '+GYM_META_SEMANAL+' por semana. '+GYM_TOPE_WOW+' es WOW. El que más suma en la semana, se la lleva — y algo de orgullo.</div>'+
+  '</div>';
+
+  html += '<div class="card" style="text-align:center;font-weight:600;color:var(--accent)">'+esc(fraseGimnasioDelDia())+'</div>';
+
+  html += '<div class="card">'+
+    '<h3>Semana actual ('+gimnasioRangoSemanaLabel(lunesActual)+')</h3>'+
+    '<div style="font-size:13px;margin-bottom:14px">'+esc(fraseGimnasioEstadoSemana(semanaActual))+'</div>'+
+    gimnasioBarraPersona('ana', semanaActual.ana)+
+    gimnasioBarraPersona('franco', semanaActual.franco)+
+    gimnasioBotonMarcar(persona, yaMarcoHoy)+
+  '</div>';
+
+  html += '<div class="card">'+
+    '<h3>Marcador general (semanas ganadas)</h3>'+
+    '<div class="summary-cards">'+
+      gimnasioSummaryCard('ana', semanasGanadasAna, semanasGanadasAna>semanasGanadasFranco)+
+      gimnasioSummaryCard('franco', semanasGanadasFranco, semanasGanadasFranco>semanasGanadasAna)+
+    '</div>'+
+  '</div>';
+
+  html += '<div class="card"><h3>Historial semanal</h3>'+gimnasioTablaHistorial(semanas)+'</div>';
+
+  html += '<div class="card"><h3>Últimas visitas (por si te equivocaste)</h3>'+gimnasioListaUltimasVisitas()+'</div>';
+
+  return html;
+}
+
 // ===================== EVENTOS =====================
 function bindEvents(){
   var btnLogout = document.getElementById('btnLogout');
@@ -3386,6 +3562,33 @@ async function handleAction(action, id){
   if(action==='borrar-regla'){
     STATE.reglas = STATE.reglas.filter(function(r){ return r.id !== id; });
     guardarReglas(STATE.reglas);
+    render(); return;
+  }
+
+  // ---- GIMNASIO (bonus track Ana vs Franco) ----
+  if(action==='gym-marcar-visita'){
+    STATE.gimnasioMsg = null;
+    var personaGym = personaPorUsuario();
+    if(!personaGym){ STATE.gimnasioMsg = 'No pudimos identificar tu usuario para cargar la visita.'; render(); return; }
+    var hoyGym = fechaHoyISO();
+    var yaExiste = STATE.gimnasioVisitas.some(function(v){ return v.persona===personaGym && v.fecha===hoyGym; });
+    if(yaExiste){ render(); return; }
+    try{
+      var filasGym = await dbInsert('gimnasio_visitas', [{persona:personaGym, fecha:hoyGym}]);
+      STATE.gimnasioVisitas = STATE.gimnasioVisitas.concat(filasGym.map(fromDbGimnasioVisita));
+    }catch(e){
+      STATE.gimnasioMsg = 'No se pudo guardar la visita: '+(e.message||e);
+    }
+    render(); return;
+  }
+  if(action==='gym-borrar-visita'){
+    STATE.gimnasioMsg = null;
+    try{
+      await dbDelete('gimnasio_visitas', id);
+      STATE.gimnasioVisitas = STATE.gimnasioVisitas.filter(function(v){ return v.id!==id; });
+    }catch(e){
+      STATE.gimnasioMsg = 'No se pudo borrar la visita: '+(e.message||e);
+    }
     render(); return;
   }
 }
