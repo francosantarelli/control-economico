@@ -1722,7 +1722,7 @@ function renderMovimientos(){
     var campoCuotas = e.tarjeta ? ''+
       '<div class="row" style="margin-top:10px">'+
         '<div class="field"><label>Fecha de consumo (opcional)</label><input type="date" id="f-mov-fecha-consumo" value="'+esc(e.fechaConsumo||'')+'"></div>'+
-        '<div class="field"><label>Marca de tarjeta (opcional)</label><input type="text" id="f-mov-tarjeta-marca" placeholder="Visa, Mastercard, Amex..." value="'+esc(e.tarjetaMarca||'')+'" style="width:140px"></div>'+
+        '<div class="field"><label>Marca de tarjeta (opcional)</label><input type="text" id="f-mov-tarjeta-marca" autocomplete="off" placeholder="Visa, Mastercard, Amex..." value="'+esc(e.tarjetaMarca||'')+'" style="width:140px"></div>'+
         '<div class="field"><label>Cantidad de cuotas</label><input type="number" min="1" step="1" id="f-mov-cuotas" value="'+cuotasNum+'" style="width:100px"></div>'+
         '<div class="field" style="flex:2 1 260px;justify-content:flex-end"><div style="font-size:11px;color:var(--ink-soft);padding-bottom:8px">'+textoAyudaCuotas+'</div></div>'+
       '</div>' : '';
@@ -1850,7 +1850,7 @@ function renderImportar(){
         '<option value="mercadopago" '+(STATE.importBanco==='mercadopago'?'selected':'')+'>Mercado Pago</option>'+
       '</select></div>'+
       '<div class="field"><label>Vencimiento</label><input type="text" id="imp-vencimiento" placeholder="dd/mm/aa" value="'+esc(STATE.importVencimiento||'')+'" style="width:90px"></div>'+
-      '<div class="field"><label>Marca de tarjeta (opcional)</label><input type="text" id="imp-tarjeta-marca" placeholder="Visa, Mastercard, Amex..." value="'+esc(STATE.importTarjetaMarca||'')+'" style="width:150px"></div>';
+      '<div class="field"><label>Marca de tarjeta (opcional)</label><input type="text" id="imp-tarjeta-marca" autocomplete="off" placeholder="Visa, Mastercard, Amex..." value="'+esc(STATE.importTarjetaMarca||'')+'" style="width:150px"></div>';
   }
 
   var excelHint = e==='excel' ? '<div class="msg ok" style="margin-top:8px">Pegá las filas copiadas de tu Excel, en este orden de columnas (separadas por tab): Periodo, Cuenta, Categoría, Subcategoría, CC, Fecha, Proveedor, Detalle, Ingresos, Egresos. Si falta un Centro de Costo, Categoría o Subcategoría, se crea automáticamente al importar.</div>' : '';
