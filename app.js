@@ -1999,7 +1999,7 @@ function renderVencimientos(){
   // Movimientos ya cargados con fecha futura (p. ej. cuotas de tarjeta): no aparecen en Movimientos
   // hasta que llega su fecha, pero se pueden revisar/editar/borrar acá mientras tanto.
   var pendientesMov = STATE.movimientos.filter(esMovimientoPendiente).sort(function(a,b){ return (a.fecha||'').localeCompare(b.fecha||''); });
-  var rowsPendientes = pendientesMov.map(function(m){
+  function filaMovPendiente(m){
     var dias = diasHasta(m.fecha);
     var diasTxt = dias===null ? '' : (dias===0 ? 'Vence hoy' : 'en '+dias+' día(s)');
     return '<tr>'+
@@ -2014,10 +2014,49 @@ function renderVencimientos(){
       '<td class="actions-cell"><button class="link" data-action="edit-mov" data-id="'+m.id+'">editar</button>'+
       '<button class="link" data-action="del-mov" data-id="'+m.id+'">borrar</button></td>'+
     '</tr>';
+  }
+
+  // De los pendientes con tarjeta, agrupar por Fecha + Centro (la cuenta desde la que se paga esa tarjeta)
+  // para ver de un vistazo el total a pagar de cada resumen, con el detalle desplegable.
+  var pendientesTarjeta = pendientesMov.filter(function(m){ return !!m.tarjeta; });
+  var pendientesOtros = pendientesMov.filter(function(m){ return !m.tarjeta; });
+  var gruposTarjetaMap = {}, gruposTarjetaOrden = [];
+  pendientesTarjeta.forEach(function(m){
+    var clave = m.fecha+'|'+(m.centroId||'');
+    if(!gruposTarjetaMap[clave]){
+      gruposTarjetaMap[clave] = { fecha:m.fecha, centroId:m.centroId||'', movs:[], total:0 };
+      gruposTarjetaOrden.push(clave);
+    }
+    gruposTarjetaMap[clave].movs.push(m);
+    gruposTarjetaMap[clave].total += (Number(m.egreso)||0) - (Number(m.ingreso)||0);
+  });
+  var gruposTarjetaHtml = gruposTarjetaOrden.map(function(clave){
+    var g = gruposTarjetaMap[clave];
+    var dias = diasHasta(g.fecha);
+    var diasTxt = dias===null ? '' : (dias===0 ? 'Vence hoy' : 'en '+dias+' día(s)');
+    var nombreCC = g.centroId ? nombreCentro(g.centroId) : '(sin centro asignado)';
+    var filasGrupo = g.movs.map(filaMovPendiente).join('');
+    return '<details class="resumen-tarjeta">'+
+      '<summary>'+
+        '<span class="mono">'+esc(fechaISOaDDMMAAAA(g.fecha)||g.fecha)+'</span>'+
+        '<span style="color:var(--ink-soft);font-size:12px">'+diasTxt+'</span>'+
+        '<span>💳 '+esc(nombreCC)+'</span>'+
+        '<span style="font-size:12px;color:var(--ink-soft)">'+g.movs.length+' movimiento(s)</span>'+
+        '<span class="mono egreso" style="margin-left:auto;font-weight:600">'+fmtMonto(g.total)+'</span>'+
+      '</summary>'+
+      '<div style="overflow-x:auto;margin-top:10px"><table class="tabla-movil"><thead><tr><th>Fecha</th><th>Vence</th><th>Centro</th><th>Categoría</th><th>Proveedor</th><th>Detalle</th><th class="num">Ingreso</th><th class="num">Egreso</th><th></th></tr></thead><tbody>'+filasGrupo+'</tbody></table></div>'+
+    '</details>';
   }).join('');
+
+  var rowsPendientesOtros = pendientesOtros.map(filaMovPendiente).join('');
   var tablePendientesMovHtml = '<div class="card"><h3>Movimientos con fecha futura ('+pendientesMov.length+')</h3>'+
     '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Movimientos ya cargados (por ejemplo, cuotas de tarjeta) con fecha posterior a hoy. No se cuentan en Saldos todavía; al llegar su fecha van a pasar a verse en Movimientos automáticamente.</div>'+
-    (pendientesMov.length ? '<table class="tabla-movil"><thead><tr><th>Fecha</th><th>Vence</th><th>Centro</th><th>Categoría</th><th>Proveedor</th><th>Detalle</th><th class="num">Ingreso</th><th class="num">Egreso</th><th></th></tr></thead><tbody>'+rowsPendientes+'</tbody></table>' : '<div class="empty">No hay movimientos con fecha futura.</div>')+
+    (gruposTarjetaHtml ? gruposTarjetaHtml : '')+
+    (pendientesOtros.length ? ''+
+      (gruposTarjetaHtml ? '<div style="font-size:11px;color:var(--ink-soft);margin:14px 0 8px;text-transform:uppercase;letter-spacing:.04em">Otros movimientos pendientes</div>' : '')+
+      '<table class="tabla-movil"><thead><tr><th>Fecha</th><th>Vence</th><th>Centro</th><th>Categoría</th><th>Proveedor</th><th>Detalle</th><th class="num">Ingreso</th><th class="num">Egreso</th><th></th></tr></thead><tbody>'+rowsPendientesOtros+'</tbody></table>'
+      : '')+
+    (!pendientesMov.length ? '<div class="empty">No hay movimientos con fecha futura.</div>' : '')+
   '</div>';
 
   return formHtml + tablePendientesMovHtml + tableHtml;

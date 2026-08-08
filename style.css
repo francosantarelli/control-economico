@@ -179,6 +179,17 @@ tr.fila-duplicada{ background:var(--danger-soft); }
 tr.fila-duplicada:hover{ background:#F5D9D2; }
 tfoot td{ border-top:2px solid var(--accent); border-bottom:none; font-weight:600; font-family:'Geist Mono',ui-monospace,Consolas,monospace; font-variant-numeric:tabular-nums; }
 
+.resumen-tarjeta{ border:1px solid var(--rule); border-radius:8px; padding:0; margin-bottom:10px; }
+.resumen-tarjeta summary{
+  list-style:none; cursor:pointer; padding:10px 12px; display:flex; align-items:center; gap:12px;
+  flex-wrap:wrap; font-size:13px;
+}
+.resumen-tarjeta summary::-webkit-details-marker{ display:none; }
+.resumen-tarjeta summary::before{ content:'▸'; color:var(--ink-soft); font-size:11px; }
+.resumen-tarjeta[open] summary::before{ content:'▾'; }
+.resumen-tarjeta summary:hover{ background:var(--bg); }
+.resumen-tarjeta > div{ padding:0 12px 12px; }
+
 .empty{ color:var(--ink-soft); font-style:italic; padding:16px 4px; font-size:13px; }
 .msg{ font-size:12px; padding:8px 10px; border-radius:4px; margin-bottom:12px; }
 .msg.ok{ background:var(--accent-soft); color:var(--accent); }
