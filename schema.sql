@@ -42,6 +42,8 @@ create table movimientos (
   detalle text,
   ingreso numeric(14,2) default 0,
   egreso numeric(14,2) default 0,
+  fecha_consumo date, -- fecha real de la compra (para movimientos de tarjeta); puede diferir de "fecha" (vencimiento del resumen)
+  tarjeta_marca text, -- Visa, Mastercard, Amex, etc. (para agrupar y titular el resumen de tarjeta correspondiente)
   created_at timestamptz default now()
 );
 
@@ -103,3 +105,10 @@ insert into centros (codigo, nombre) values
   ('BSF', 'Banco Santander'),
   ('BNF', 'Banco Nación'),
   ('BPF', 'Banco Provincia');
+
+-- ============================================================
+-- MIGRACIÓN (si la base ya existía antes de que se agregara fecha_consumo):
+-- correr solo esto en el SQL Editor de Supabase, no hace falta recrear nada.
+-- ============================================================
+-- alter table movimientos add column fecha_consumo date;
+-- alter table movimientos add column tarjeta_marca text;

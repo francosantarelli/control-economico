@@ -51,7 +51,7 @@ function cargarReglas(){
 }
 
 var STATE = { centros: [], categorias: [], subcategorias: [], movimientos: [], vencimientos: [], gimnasioVisitas: [], activeTab: 'movimientos', editing: null, ready:false,
-  importEntidad:'mp', importAnio:'26', importBanco:'nacion', importVencimiento:'', importRaw:'', importPreview:null, importPreviewExcel:null, importMsg:null,
+  importEntidad:'mp', importAnio:'26', importBanco:'nacion', importVencimiento:'', importTarjetaMarca:'', importRaw:'', importPreview:null, importPreviewExcel:null, importMsg:null,
   bulkCatMsg:null, bulkColorCatMsg:null, confirmState:null, subDeleteState:null, movFormMsg:null,
   filtros:{centro:[], categoria:[], subcategoria:[], mes:[], texto:'', soloIncompletos:false, soloTarjeta:false},
   resumenFiltros:{centro:[], categoria:[], mes:[], vista:'categoria'}, multiSelectAbierto:null, multiSelectBusqueda:'', abmSubTab:'categorias', grillaRango:'todo',
@@ -59,7 +59,7 @@ var STATE = { centros: [], categorias: [], subcategorias: [], movimientos: [], v
   usuarioEmail:null, efectivoAbierto:false, efectivoMsg:null, efectivoCategoriaId:'', backupMsg:null, backupPendiente:null, menuMovilAbierto:false, incompletosSnapshotIds:null,
   reglas: cargarReglas(), reglaFormMsg:null,
   nuevoMovAbierto:false, movDraftCentroDestinoId:'', comboAbierto:null, comboBusqueda:'', comboHighlight:0,
-  movSeleccionados:[], bulkEditMovAbierto:false, bulkEditMovMsg:null, movPaginaActual:1 };
+  movSeleccionados:[], bulkEditMovAbierto:false, bulkEditMovMsg:null, movPaginaActual:1, gruposAbiertos:{} };
 var MOV_PAGE_SIZE = 50;
 
 // ===================== FILTROS MÚLTIPLES (selects convertidos a checkboxes) =====================
@@ -255,8 +255,8 @@ function toDbCategoria(c){ return {id:c.id, nombre:c.nombre, tipo:c.tipo||null, 
 function fromDbCategoria(r){ return {id:r.id, nombre:r.nombre, tipo:r.tipo||'', color:r.color||'', colorTexto:r.color_texto||''}; }
 function toDbSubcategoria(s){ return {id:s.id, categoria_id:s.categoriaId||null, nombre:s.nombre}; }
 function fromDbSubcategoria(r){ return {id:r.id, categoriaId:r.categoria_id||'', nombre:r.nombre}; }
-function toDbMovimiento(m){ return {id:m.id, fecha:m.fecha, centro_id:m.centroId||null, categoria_id:m.categoriaId||null, subcategoria_id:m.subcategoriaId||null, proveedor:m.proveedor||null, detalle:m.detalle||null, ingreso:Number(m.ingreso)||0, egreso:Number(m.egreso)||0, tarjeta:!!m.tarjeta}; }
-function fromDbMovimiento(r){ return {id:r.id, fecha:r.fecha, centroId:r.centro_id||'', categoriaId:r.categoria_id||'', subcategoriaId:r.subcategoria_id||'', proveedor:r.proveedor||'', detalle:r.detalle||'', ingreso:Number(r.ingreso)||0, egreso:Number(r.egreso)||0, tarjeta:!!r.tarjeta}; }
+function toDbMovimiento(m){ return {id:m.id, fecha:m.fecha, centro_id:m.centroId||null, categoria_id:m.categoriaId||null, subcategoria_id:m.subcategoriaId||null, proveedor:m.proveedor||null, detalle:m.detalle||null, ingreso:Number(m.ingreso)||0, egreso:Number(m.egreso)||0, tarjeta:!!m.tarjeta, fecha_consumo:m.fechaConsumo||null, tarjeta_marca:m.tarjetaMarca||null}; }
+function fromDbMovimiento(r){ return {id:r.id, fecha:r.fecha, centroId:r.centro_id||'', categoriaId:r.categoria_id||'', subcategoriaId:r.subcategoria_id||'', proveedor:r.proveedor||'', detalle:r.detalle||'', ingreso:Number(r.ingreso)||0, egreso:Number(r.egreso)||0, tarjeta:!!r.tarjeta, fechaConsumo:r.fecha_consumo||'', tarjetaMarca:r.tarjeta_marca||''}; }
 function toDbVencimiento(v){ return {id:v.id, concepto:v.concepto, fecha:v.fecha, monto:Number(v.monto)||0, centro_id:v.centroId||null, estado:v.estado||'pendiente'}; }
 function fromDbVencimiento(r){ return {id:r.id, concepto:r.concepto, fecha:r.fecha, monto:Number(r.monto)||0, centroId:r.centro_id||'', estado:r.estado||'pendiente'}; }
 function fromDbGimnasioVisita(r){ return {id:r.id, persona:r.persona, fecha:r.fecha}; }
@@ -550,7 +550,7 @@ function parseTarjetaSantander(raw, vencimientoStr){
     .map(function(l){ return l.replace(/\r$/,'').replace(/^\s*\*\s*/, '').trim(); })
     .filter(function(l){ return l.length>0; });
 
-  var reDateHeader = /^\d{1,2}\s+de\s+[a-záéíóúñ]+$/i;
+  var reDateHeader = /^(\d{1,2})\s+de\s+([a-záéíóúñ]+)$/i;
   var reDollarLine = /^\$$/;
   var reAmount = /^-?\d{1,3}(?:\.\d{3})*,\d{2}-?$/;
   var reUSD = /^U\$S$/i;
@@ -559,13 +559,21 @@ function parseTarjetaSantander(raw, vencimientoStr){
 
   var vf = (vencimientoStr||'').trim().match(/^(\d{2})\/(\d{2})\/(\d{2,4})$/);
   var fechaOut = vf ? (vf[1]+'-'+vf[2]+'-'+(vf[3].length===4?vf[3].slice(2):vf[3])) : (vencimientoStr||'').trim();
+  var anioCortoVenc = vf ? (vf[3].length===4?vf[3].slice(2):vf[3]) : '';
 
   var rows = [];
   var pendingName = [];
+  var fechaConsumoActual = '';
   var i = 0;
   while(i < lines.length){
     var l = lines[i];
-    if(reDateHeader.test(l)){ pendingName = []; i++; continue; }
+    var mFechaHeader = l.match(reDateHeader);
+    if(mFechaHeader){
+      pendingName = [];
+      var mesCodHeader = MESES_ABR_MAP[mFechaHeader[2].toLowerCase().slice(0,3)];
+      fechaConsumoActual = mesCodHeader ? (mFechaHeader[1].padStart(2,'0')+'-'+mesCodHeader+'-'+anioCortoVenc) : '';
+      i++; continue;
+    }
     if(reSubtotal.test(l)){
       i++;
       if(lines[i] && reDollarLine.test(lines[i])) i++;
@@ -593,6 +601,7 @@ function parseTarjetaSantander(raw, vencimientoStr){
           var monto = -val;
           rows.push({
             fecha: fechaOut,
+            fechaConsumo: fechaConsumoActual,
             proveedor: detalle,
             tipo: '',
             monto: monto,
@@ -624,7 +633,9 @@ function parseTarjeta(raw, vencimientoStr){
   var rows = [];
   lines.forEach(function(line){
     var trimmed = line.trim();
-    if(!reFecha.test(trimmed)) return;
+    var fm = trimmed.match(reFecha);
+    if(!fm) return;
+    var fechaConsumo = fm[1]+'-'+fm[2]+'-'+fm[3];
 
     var tokens = trimmed.split(/\s+/).filter(function(t){ return t.length>0; });
     var rest = tokens.slice(1);
@@ -653,6 +664,7 @@ function parseTarjeta(raw, vencimientoStr){
 
     rows.push({
       fecha: fechaOut,
+      fechaConsumo: fechaConsumo,
       proveedor: detalle,
       tipo: '',
       monto: monto,
@@ -704,6 +716,7 @@ function parseTarjetaMercadoPago(raw, anio){
 
     rows.push({
       fecha: marca.dia+'-'+marca.mes+'-'+yy,
+      fechaConsumo: marca.dia+'-'+marca.mes+'-'+yy,
       proveedor: detalle,
       tipo: '',
       monto: monto,
@@ -1455,6 +1468,38 @@ function camposFaltantes(m){
   return faltan;
 }
 
+// Celdas editables (selects/inputs) para categorizar un movimiento en línea, sin abrir el modal:
+// se usan tanto en "Solo incompletos" como dentro de los grupos de tarjeta desplegables.
+function celdasEditablesMov(m){
+  var subOpcionesFila = subcategoriasOrdenadas(STATE.subcategorias.filter(function(s){ return s.categoriaId===m.categoriaId; }))
+    .map(function(s){ return '<option value="'+s.id+'" '+(m.subcategoriaId===s.id?'selected':'')+'>'+esc(s.nombre)+'</option>'; }).join('');
+  return {
+    centro: '<td data-label="Centro"><select data-mov-id="'+m.id+'" data-field="centroId"><option value="">—</option>'+
+      centrosOrdenados().map(function(c){ return '<option value="'+c.id+'" '+(m.centroId===c.id?'selected':'')+'>'+esc(c.codigo)+'</option>'; }).join('')+
+      '</select></td>',
+    categoria: '<td data-label="Categoría"><select data-mov-id="'+m.id+'" data-field="categoriaId"><option value="">—</option>'+
+      categoriasOrdenadas().map(function(c){ return '<option value="'+c.id+'" '+(m.categoriaId===c.id?'selected':'')+'>'+esc(c.nombre)+'</option>'; }).join('')+
+      '</select></td>',
+    subcategoria: '<td data-label="Subcategoría"><select data-mov-id="'+m.id+'" data-field="subcategoriaId"><option value="">—</option>'+subOpcionesFila+'</select></td>',
+    proveedor: '<td data-label="Proveedor">'+(m.tarjeta?'<span title="Pagado con tarjeta de crédito">💳</span> ':'')+'<input type="text" data-mov-id="'+m.id+'" data-field="proveedor" value="'+esc(m.proveedor||'')+'" style="width:100%;box-sizing:border-box"></td>',
+    detalle: '<td data-label="Detalle"><input type="text" data-mov-id="'+m.id+'" data-field="detalle" value="'+esc(m.detalle||'')+'" style="width:100%;box-sizing:border-box"></td>'
+  };
+}
+
+// Celdas de solo lectura (chips + texto, con filtro al click) para mostrar un movimiento sin editar
+// en línea: se usan en la tabla normal y dentro de las líneas de un resumen de tarjeta desplegado.
+// Para editarlas hay que usar el ícono de editar (abre el modal completo), igual que cualquier otra fila.
+function celdasSoloLecturaMov(m){
+  var subValorFiltro = m.subcategoriaId || '__vacio__';
+  return {
+    centro: '<td'+(m.centroId?' class="celda-filtrable" data-filter-field="centro" data-filter-value="'+esc(m.centroId)+'" title="Filtrar por este Centro de Costo"':'')+' data-label="Centro">'+(m.centroId?renderChip(nombreCentro(m.centroId).split(' · ')[0], colorCentro(m.centroId), colorTextoCentro(m.centroId)):'—')+'</td>',
+    categoria: '<td'+(m.categoriaId?' class="celda-filtrable" data-filter-field="categoria" data-filter-value="'+esc(m.categoriaId)+'" title="Filtrar por esta Categoría"':'')+' data-label="Categoría">'+(m.categoriaId?renderChip(nombreCategoria(m.categoriaId), colorCategoria(m.categoriaId), colorTextoCategoria(m.categoriaId)):'—')+'</td>',
+    subcategoria: '<td class="celda-filtrable" data-filter-field="subcategoria" data-filter-value="'+esc(subValorFiltro)+'" title="Filtrar por esta Subcategoría" data-label="Subcategoría">'+esc(nombreSubcategoria(m.subcategoriaId))+'</td>',
+    proveedor: '<td'+(m.proveedor?' class="celda-filtrable" data-filter-field="texto" data-filter-value="'+esc(m.proveedor)+'" title="Filtrar por este Proveedor"':'')+' data-label="Proveedor">'+(m.tarjeta?'<span title="Pagado con tarjeta de crédito">💳</span> ':'')+esc(m.proveedor||'')+'</td>',
+    detalle: '<td data-label="Detalle">'+esc(m.detalle||'')+'</td>'
+  };
+}
+
 function renderBulkEditMovModal(){
   var n = (STATE.movSeleccionados||[]).length;
   var subOpts = subcategoriasOrdenadas(STATE.subcategorias).map(function(s){
@@ -1542,43 +1587,53 @@ function renderMovimientos(){
   var totalIngreso = lista.reduce(function(s,m){ return esTipoCategoria(m.categoriaId,'tec') ? s : s + (Number(m.ingreso)||0); },0);
   var totalEgreso = lista.reduce(function(s,m){ return esTipoCategoria(m.categoriaId,'tec') ? s : s + (Number(m.egreso)||0); },0);
 
-  var totalPaginasMov = Math.max(1, Math.ceil(lista.length / MOV_PAGE_SIZE));
+  // Los movimientos con tarjeta se agrupan por Fecha + Centro + Marca (un resumen = un pago de una
+  // tarjeta puntual) en una sola línea desplegable, ubicada en la tabla en el mismo lugar cronológico
+  // que le tocaría a cualquier otro movimiento (no aparte). Con "Solo incompletos" activo no se agrupa,
+  // para no interferir con ese filtro.
+  var agruparTarjeta = !f.soloIncompletos;
+  var gruposTarjetaMap = {};
+  var vista = [];
+  lista.forEach(function(m){
+    if(!agruparTarjeta || !m.tarjeta){ vista.push({tipo:'mov', mov:m}); return; }
+    var clave = 'mov-tarjeta|'+m.fecha+'|'+(m.centroId||'')+'|'+(m.tarjetaMarca||'');
+    var g = gruposTarjetaMap[clave];
+    if(!g){
+      g = {tipo:'grupo', clave:clave, fecha:m.fecha, centroId:m.centroId||'', marca:m.tarjetaMarca||'', movs:[]};
+      gruposTarjetaMap[clave] = g;
+      vista.push(g);
+    }
+    g.movs.push(m);
+  });
+
+  var totalPaginasMov = Math.max(1, Math.ceil(vista.length / MOV_PAGE_SIZE));
   if(STATE.movPaginaActual > totalPaginasMov) STATE.movPaginaActual = totalPaginasMov;
   if(STATE.movPaginaActual < 1) STATE.movPaginaActual = 1;
   var inicioPaginaMov = (STATE.movPaginaActual-1) * MOV_PAGE_SIZE;
-  var listaPagina = lista.slice(inicioPaginaMov, inicioPaginaMov + MOV_PAGE_SIZE);
+  var vistaPagina = vista.slice(inicioPaginaMov, inicioPaginaMov + MOV_PAGE_SIZE);
 
   var seleccionados = STATE.movSeleccionados || [];
-  var rows = listaPagina.map(function(m){
+  var idsCheckboxVisibles = [];
+
+  function filaMovNormal(m){
     var faltan = camposFaltantes(m);
     var incompleto = faltan.length>0;
 
     var celdaCentro, celdaCategoria, celdaSubcategoria, celdaProveedor, celdaDetalle;
     if(f.soloIncompletos){
-      var subOpcionesFila = subcategoriasOrdenadas(STATE.subcategorias.filter(function(s){ return s.categoriaId===m.categoriaId; }))
-        .map(function(s){ return '<option value="'+s.id+'" '+(m.subcategoriaId===s.id?'selected':'')+'>'+esc(s.nombre)+'</option>'; }).join('');
-      celdaCentro = '<td data-label="Centro"><select data-mov-id="'+m.id+'" data-field="centroId"><option value="">—</option>'+
-        centrosOrdenados().map(function(c){ return '<option value="'+c.id+'" '+(m.centroId===c.id?'selected':'')+'>'+esc(c.codigo)+'</option>'; }).join('')+
-        '</select></td>';
-      celdaCategoria = '<td data-label="Categoría"><select data-mov-id="'+m.id+'" data-field="categoriaId"><option value="">—</option>'+
-        categoriasOrdenadas().map(function(c){ return '<option value="'+c.id+'" '+(m.categoriaId===c.id?'selected':'')+'>'+esc(c.nombre)+'</option>'; }).join('')+
-        '</select></td>';
-      celdaSubcategoria = '<td data-label="Subcategoría"><select data-mov-id="'+m.id+'" data-field="subcategoriaId"><option value="">—</option>'+subOpcionesFila+'</select></td>';
-      celdaProveedor = '<td data-label="Proveedor">'+(m.tarjeta?'<span title="Pagado con tarjeta de crédito">💳</span> ':'')+'<input type="text" data-mov-id="'+m.id+'" data-field="proveedor" value="'+esc(m.proveedor||'')+'" style="width:100%;box-sizing:border-box"></td>';
-      celdaDetalle = '<td data-label="Detalle"><input type="text" data-mov-id="'+m.id+'" data-field="detalle" value="'+esc(m.detalle||'')+'" style="width:100%;box-sizing:border-box"></td>';
+      var celdasEd = celdasEditablesMov(m);
+      celdaCentro = celdasEd.centro; celdaCategoria = celdasEd.categoria; celdaSubcategoria = celdasEd.subcategoria;
+      celdaProveedor = celdasEd.proveedor; celdaDetalle = celdasEd.detalle;
     } else {
-      var mesFila = (m.fecha||'').slice(0,7);
-      var subValorFiltro = m.subcategoriaId || '__vacio__';
-      celdaCentro = '<td'+(m.centroId?' class="celda-filtrable" data-filter-field="centro" data-filter-value="'+esc(m.centroId)+'" title="Filtrar por este Centro de Costo"':'')+' data-label="Centro">'+(m.centroId?renderChip(nombreCentro(m.centroId).split(' · ')[0], colorCentro(m.centroId), colorTextoCentro(m.centroId)):'—')+'</td>';
-      celdaCategoria = '<td'+(m.categoriaId?' class="celda-filtrable" data-filter-field="categoria" data-filter-value="'+esc(m.categoriaId)+'" title="Filtrar por esta Categoría"':'')+' data-label="Categoría">'+(m.categoriaId?renderChip(nombreCategoria(m.categoriaId), colorCategoria(m.categoriaId), colorTextoCategoria(m.categoriaId)):'—')+'</td>';
-      celdaSubcategoria = '<td class="celda-filtrable" data-filter-field="subcategoria" data-filter-value="'+esc(subValorFiltro)+'" title="Filtrar por esta Subcategoría" data-label="Subcategoría">'+esc(nombreSubcategoria(m.subcategoriaId))+'</td>';
-      celdaProveedor = '<td'+(m.proveedor?' class="celda-filtrable" data-filter-field="texto" data-filter-value="'+esc(m.proveedor)+'" title="Filtrar por este Proveedor"':'')+' data-label="Proveedor">'+(m.tarjeta?'<span title="Pagado con tarjeta de crédito">💳</span> ':'')+esc(m.proveedor||'')+'</td>';
-      celdaDetalle = '<td data-label="Detalle">'+esc(m.detalle||'')+'</td>';
+      var celdasRO = celdasSoloLecturaMov(m);
+      celdaCentro = celdasRO.centro; celdaCategoria = celdasRO.categoria; celdaSubcategoria = celdasRO.subcategoria;
+      celdaProveedor = celdasRO.proveedor; celdaDetalle = celdasRO.detalle;
     }
 
     var claseFila = incompleto ? 'fila-incompleta' : '';
     var tituloFila = incompleto ? ' title="Falta: '+esc(faltan.join(', '))+'"' : '';
     var fechaFiltrable = !f.soloIncompletos && (m.fecha||'').slice(0,7);
+    idsCheckboxVisibles.push(m.id);
     return '<tr'+(claseFila?' class="'+claseFila+'"':'')+tituloFila+'>'+
       '<td data-label=""><input type="checkbox" class="chk-select-mov" data-mov-id="'+m.id+'" '+(seleccionados.indexOf(m.id)!==-1?'checked':'')+'></td>'+
       '<td class="mono'+(fechaFiltrable?' celda-filtrable':'')+'" data-label="Fecha"'+(fechaFiltrable?' data-filter-field="mes" data-filter-value="'+esc(fechaFiltrable)+'" title="Filtrar por este Mes"':'')+'>'+(incompleto?'⚠️ ':'')+esc(fechaISOaDDMMAAAA(m.fecha)||m.fecha||'')+'</td>'+
@@ -1588,7 +1643,48 @@ function renderMovimientos(){
       '<td class="actions-cell"><button class="icon-btn" data-action="edit-mov" data-id="'+m.id+'" title="Editar" aria-label="Editar">✏️</button>'+
       '<button class="icon-btn icon-btn-danger" data-action="del-mov" data-id="'+m.id+'" title="Borrar" aria-label="Borrar">🗑️</button></td>'+
     '</tr>';
-  }).join('');
+  }
+
+  function filaDetalleTarjeta(m){
+    var faltan = camposFaltantes(m);
+    var incompleto = faltan.length>0;
+    var celdas = celdasSoloLecturaMov(m);
+    var tituloFila = incompleto ? ' title="Falta: '+esc(faltan.join(', '))+'"' : '';
+    idsCheckboxVisibles.push(m.id);
+    return '<tr class="fila-detalle-tarjeta'+(incompleto?' fila-incompleta':'')+'"'+tituloFila+'>'+
+      '<td data-label=""><input type="checkbox" class="chk-select-mov" data-mov-id="'+m.id+'" '+(seleccionados.indexOf(m.id)!==-1?'checked':'')+'></td>'+
+      '<td class="mono" data-label="Fecha de consumo">'+(incompleto?'⚠️ ':'')+esc(m.fechaConsumo?fechaISOaDDMMAAAA(m.fechaConsumo):'—')+'</td>'+
+      '<td class="mono" data-label="Centro" style="color:var(--ink-soft)">↳</td>'+
+      celdas.categoria + celdas.subcategoria + celdas.proveedor + celdas.detalle +
+      '<td class="num ingreso" data-label="Ingreso">'+(Number(m.ingreso)?fmtMonto(m.ingreso):'')+'</td>'+
+      '<td class="num egreso" data-label="Egreso">'+(Number(m.egreso)?fmtMonto(m.egreso):'')+'</td>'+
+      '<td class="actions-cell"><button class="icon-btn" data-action="edit-mov" data-id="'+m.id+'" title="Editar" aria-label="Editar">✏️</button>'+
+      '<button class="icon-btn icon-btn-danger" data-action="del-mov" data-id="'+m.id+'" title="Borrar" aria-label="Borrar">🗑️</button></td>'+
+    '</tr>';
+  }
+
+  function filaGrupoTarjeta(g){
+    var abierto = !!STATE.gruposAbiertos[g.clave];
+    var totalIngresoG = g.movs.reduce(function(s,m){ return s+(Number(m.ingreso)||0); },0);
+    var totalEgresoG = g.movs.reduce(function(s,m){ return s+(Number(m.egreso)||0); },0);
+    var faltantesGrupo = g.movs.filter(function(m){ return camposFaltantes(m).length>0; }).length;
+    var caret = abierto ? '▾' : '▸';
+    var leyenda = 'Resumen '+(g.marca ? esc(g.marca) : 'tarjeta')+' · '+g.movs.length+' movimiento(s)'+(faltantesGrupo?' · ⚠️ '+faltantesGrupo+' por categorizar':'');
+    var filaResumen = '<tr class="fila-grupo-tarjeta">'+
+      '<td data-label=""></td>'+
+      '<td class="mono" data-label="Fecha">'+esc(fechaISOaDDMMAAAA(g.fecha)||g.fecha)+'</td>'+
+      '<td data-label="Centro">'+(g.centroId?renderChip(nombreCentro(g.centroId).split(' · ')[0], colorCentro(g.centroId), colorTextoCentro(g.centroId)):'—')+'</td>'+
+      '<td colspan="4" data-label="Detalle"><button class="link" data-action="toggle-grupo-tarjeta-mov" data-id="'+esc(g.clave)+'">'+caret+' 💳 '+leyenda+'</button></td>'+
+      '<td class="num ingreso" data-label="Ingreso">'+(totalIngresoG?fmtMonto(totalIngresoG):'')+'</td>'+
+      '<td class="num egreso" data-label="Egreso">'+(totalEgresoG?fmtMonto(totalEgresoG):'')+'</td>'+
+      '<td class="actions-cell"></td>'+
+    '</tr>';
+    if(!abierto) return filaResumen;
+    return filaResumen + g.movs.map(filaDetalleTarjeta).join('');
+  }
+
+  var rows = vistaPagina.map(function(item){ return item.tipo==='grupo' ? filaGrupoTarjeta(item) : filaMovNormal(item.mov); }).join('');
+  var todosVisiblesSeleccionados = idsCheckboxVisibles.length>0 && idsCheckboxVisibles.every(function(mid){ return seleccionados.indexOf(mid)!==-1; });
 
   var editing = STATE.editing && STATE.editing.type==='mov' ? STATE.movimientos.find(function(x){return x.id===STATE.editing.id;}) : null;
   var editingNormalizado = editing ? {
@@ -1596,9 +1692,9 @@ function renderMovimientos(){
     proveedor: editing.proveedor, detalle: editing.detalle,
     tipo: Number(editing.ingreso) > 0 ? 'ingreso' : 'egreso',
     monto: Number(editing.ingreso) > 0 ? editing.ingreso : editing.egreso,
-    tarjeta: !!editing.tarjeta, fechaConsumo:'', cuotas:1
+    tarjeta: !!editing.tarjeta, fechaConsumo: editing.fechaConsumo||'', tarjetaMarca: editing.tarjetaMarca||'', cuotas:1
   } : null;
-  var e = STATE.movDraft || editingNormalizado || {fecha:'', centroId:'', categoriaId:'', subcategoriaId:'', proveedor:'', detalle:'', tipo:'egreso', monto:'', tarjeta:false, fechaConsumo:'', cuotas:1};
+  var e = STATE.movDraft || editingNormalizado || {fecha:'', centroId:'', categoriaId:'', subcategoriaId:'', proveedor:'', detalle:'', tipo:'egreso', monto:'', tarjeta:false, fechaConsumo:'', tarjetaMarca:'', cuotas:1};
   var subOptionsArr = subcategoriasOrdenadas(STATE.subcategorias.filter(function(s){ return s.categoriaId === e.categoriaId; }))
     .map(function(s){ return {value:s.id, label:s.nombre}; });
 
@@ -1626,6 +1722,7 @@ function renderMovimientos(){
     var campoCuotas = e.tarjeta ? ''+
       '<div class="row" style="margin-top:10px">'+
         '<div class="field"><label>Fecha de consumo (opcional)</label><input type="date" id="f-mov-fecha-consumo" value="'+esc(e.fechaConsumo||'')+'"></div>'+
+        '<div class="field"><label>Marca de tarjeta (opcional)</label><input type="text" id="f-mov-tarjeta-marca" placeholder="Visa, Mastercard, Amex..." value="'+esc(e.tarjetaMarca||'')+'" style="width:140px"></div>'+
         '<div class="field"><label>Cantidad de cuotas</label><input type="number" min="1" step="1" id="f-mov-cuotas" value="'+cuotasNum+'" style="width:100px"></div>'+
         '<div class="field" style="flex:2 1 260px;justify-content:flex-end"><div style="font-size:11px;color:var(--ink-soft);padding-bottom:8px">'+textoAyudaCuotas+'</div></div>'+
       '</div>' : '';
@@ -1707,7 +1804,6 @@ function renderMovimientos(){
     '</div>'+
   '</div>';
 
-  var todosVisiblesSeleccionados = listaPagina.length>0 && listaPagina.every(function(m){ return seleccionados.indexOf(m.id)!==-1; });
   var barraSeleccionHtml = seleccionados.length ? ''+
     '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;font-size:13px">'+
       '<span>'+seleccionados.length+' seleccionado(s)</span>'+
@@ -1715,7 +1811,7 @@ function renderMovimientos(){
       '<button class="secondary" data-action="deseleccionar-mov" style="font-size:12px;padding:6px 12px">Deseleccionar todo</button>'+
     '</div>' : '';
 
-  var paginacionHtml = lista.length ? ''+
+  var paginacionHtml = vista.length ? ''+
     '<div style="display:flex;align-items:center;justify-content:center;gap:14px;margin-top:12px;font-size:13px">'+
       '<button class="secondary" data-action="mov-pagina-anterior" style="font-size:12px;padding:6px 12px"'+(STATE.movPaginaActual<=1?' disabled':'')+'>« Anterior</button>'+
       '<span>Página '+STATE.movPaginaActual+' de '+totalPaginasMov+'</span>'+
@@ -1753,7 +1849,8 @@ function renderImportar(){
         '<option value="provincia" '+(STATE.importBanco==='provincia'?'selected':'')+'>Provincia</option>'+
         '<option value="mercadopago" '+(STATE.importBanco==='mercadopago'?'selected':'')+'>Mercado Pago</option>'+
       '</select></div>'+
-      '<div class="field"><label>Vencimiento</label><input type="text" id="imp-vencimiento" placeholder="dd/mm/aa" value="'+esc(STATE.importVencimiento||'')+'" style="width:90px"></div>';
+      '<div class="field"><label>Vencimiento</label><input type="text" id="imp-vencimiento" placeholder="dd/mm/aa" value="'+esc(STATE.importVencimiento||'')+'" style="width:90px"></div>'+
+      '<div class="field"><label>Marca de tarjeta (opcional)</label><input type="text" id="imp-tarjeta-marca" placeholder="Visa, Mastercard, Amex..." value="'+esc(STATE.importTarjetaMarca||'')+'" style="width:150px"></div>';
   }
 
   var excelHint = e==='excel' ? '<div class="msg ok" style="margin-top:8px">Pegá las filas copiadas de tu Excel, en este orden de columnas (separadas por tab): Periodo, Cuenta, Categoría, Subcategoría, CC, Fecha, Proveedor, Detalle, Ingresos, Egresos. Si falta un Centro de Costo, Categoría o Subcategoría, se crea automáticamente al importar.</div>' : '';
@@ -2036,7 +2133,8 @@ function renderVencimientos(){
     var diasTxt = dias===null ? '' : (dias===0 ? 'Vence hoy' : 'en '+dias+' día(s)');
     var nombreCC = g.centroId ? nombreCentro(g.centroId) : '(sin centro asignado)';
     var filasGrupo = g.movs.map(filaMovPendiente).join('');
-    return '<details class="resumen-tarjeta">'+
+    var claveAbierto = 'venc-tarjeta|'+clave;
+    return '<details class="resumen-tarjeta" data-grupo-key="'+esc(claveAbierto)+'"'+(STATE.gruposAbiertos[claveAbierto]?' open':'')+'>'+
       '<summary>'+
         '<span class="mono">'+esc(fechaISOaDDMMAAAA(g.fecha)||g.fecha)+'</span>'+
         '<span style="color:var(--ink-soft);font-size:12px">'+diasTxt+'</span>'+
@@ -2664,6 +2762,14 @@ function bindEvents(){
     });
   });
 
+  // El evento "toggle" de <details> no burbujea: hay que escucharlo en cada uno para recordar
+  // qué resúmenes de tarjeta quedaron abiertos y que no se cierren solos en el próximo render().
+  document.querySelectorAll('details.resumen-tarjeta[data-grupo-key]').forEach(function(det){
+    det.addEventListener('toggle', function(){
+      STATE.gruposAbiertos[det.getAttribute('data-grupo-key')] = det.open;
+    });
+  });
+
   document.querySelectorAll('.tab').forEach(function(t){
     t.addEventListener('click', function(){ STATE.activeTab = t.getAttribute('data-tab'); STATE.editing = null; STATE.movDraft = null; STATE.nuevoMovAbierto = false; STATE.menuMovilAbierto = false; STATE.multiSelectAbierto = null; STATE.bulkEditMovAbierto = false; STATE.movSeleccionados = []; render(); });
   });
@@ -2837,6 +2943,8 @@ function bindEvents(){
   if(impBanco){ impBanco.addEventListener('change', function(){ STATE.importBanco = impBanco.value; }); }
   var impVenc = document.getElementById('imp-vencimiento');
   if(impVenc){ impVenc.addEventListener('input', function(){ STATE.importVencimiento = impVenc.value; }); }
+  var impTarjetaMarca = document.getElementById('imp-tarjeta-marca');
+  if(impTarjetaMarca){ impTarjetaMarca.addEventListener('input', function(){ STATE.importTarjetaMarca = impTarjetaMarca.value; }); }
   var impRaw = document.getElementById('imp-raw');
   if(impRaw){ impRaw.addEventListener('input', function(){ STATE.importRaw = impRaw.value; }); }
 
@@ -2959,6 +3067,7 @@ function getMovFormValues(){
     monto: (document.getElementById('f-mov-monto')||{}).value || '',
     tarjeta: (document.getElementById('f-mov-tarjeta')||{}).checked || false,
     fechaConsumo: (document.getElementById('f-mov-fecha-consumo')||{}).value || '',
+    tarjetaMarca: (document.getElementById('f-mov-tarjeta-marca')||{}).value || '',
     cuotas: (document.getElementById('f-mov-cuotas')||{}).value || 1
   };
 }
@@ -3403,6 +3512,10 @@ async function handleAction(action, id){
   }
 
   // ---- MOVIMIENTOS ----
+  if(action==='toggle-grupo-tarjeta-mov'){
+    STATE.gruposAbiertos[id] = !STATE.gruposAbiertos[id];
+    render(); return;
+  }
   if(action==='edit-mov'){
     STATE.editing = {type:'mov', id:id}; STATE.movFormMsg = null; STATE.movDraftCentroDestinoId = '';
     STATE.bulkEditMovAbierto = false;
@@ -3448,18 +3561,20 @@ async function handleAction(action, id){
       proveedor: v.proveedor, detalle: v.detalle,
       ingreso: v.tipo==='ingreso' ? monto : 0,
       egreso: v.tipo==='egreso' ? monto : 0,
-      tarjeta: !!v.tarjeta
+      tarjeta: !!v.tarjeta,
+      fechaConsumo: v.tarjeta ? (v.fechaConsumo||'') : '',
+      tarjetaMarca: v.tarjeta ? (v.tarjetaMarca||'').trim() : ''
     };
     // Compra en cuotas con tarjeta: la Fecha cargada es el vencimiento de la 1ª cuota;
     // las siguientes caen un mes después cada una, con el mismo monto (no se divide).
+    // La Fecha de consumo (si se cargó) es la misma para todas las cuotas: la compra se hizo una sola vez.
     // Al editar un movimiento ya cargado también se puede sumar cuotas: el movimiento editado
     // queda como la 1ª cuota y se crean nuevos movimientos para las cuotas restantes.
     var cuotasTotal = v.tarjeta ? Math.max(1, parseInt(v.cuotas,10)||1) : 1;
     var detalleBase = v.detalle||'';
     function detalleConSufijo(numeroCuota){
       if(cuotasTotal<=1) return detalleBase;
-      var sufijoConsumo = v.fechaConsumo ? ' · Consumo '+fechaISOaDDMMAAAA(v.fechaConsumo) : '';
-      return detalleBase + sufijoConsumo + ' ('+numeroCuota+'/'+cuotasTotal+')';
+      return detalleBase + ' ('+numeroCuota+'/'+cuotasTotal+')';
     }
     try{
       if(id){
@@ -3650,9 +3765,10 @@ async function handleAction(action, id){
       STATE.importMsg = {type:'err', text: textoVacio}; STATE.importPreview = null; render(); return;
     }
     var defaultCentroId = findDefaultCentroId();
+    var tarjetaMarcaLote = (STATE.importEntidad==='tarjeta') ? (STATE.importTarjetaMarca||'').trim() : '';
     STATE.importPreview = res.rows.map(function(r){
       var sugerido = aplicarReglaAFila(r.proveedor);
-      return { id:uid(), fecha: fechaCortaAISO(r.fecha), proveedor: r.proveedor||'', detalle: r.tipo||'', monto: r.monto,
+      return { id:uid(), fecha: fechaCortaAISO(r.fecha), fechaConsumo: r.fechaConsumo ? fechaCortaAISO(r.fechaConsumo) : '', tarjetaMarca: tarjetaMarcaLote, proveedor: r.proveedor||'', detalle: r.tipo||'', monto: r.monto,
         centroId: defaultCentroId||'', categoriaId: sugerido.categoriaId, subcategoriaId: sugerido.subcategoriaId, incluir:true, guardarRegla:false };
     });
     STATE.importMsg = defaultCentroId ? null : {type:'err', text:'No encontré un Centro de Costo con el código esperado para esta entidad. Asigná uno por fila abajo, o cargalo primero en ABM → Centros de Costo.'};
@@ -3750,7 +3866,9 @@ async function handleAction(action, id){
         proveedor: r.proveedor, detalle: r.detalle,
         ingreso: r.monto>0 ? r.monto : 0,
         egreso: r.monto<0 ? -r.monto : 0,
-        tarjeta: esTarjeta
+        tarjeta: esTarjeta,
+        fechaConsumo: r.fechaConsumo || '',
+        tarjetaMarca: r.tarjetaMarca || ''
       };
     });
     try{
