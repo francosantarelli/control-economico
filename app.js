@@ -58,7 +58,9 @@ var STATE = { centros: [], categorias: [], subcategorias: [], movimientos: [], v
   bulkVencMsg:null, vencFormMsg:null, dbError:null, saldosCache:null, saldosDirty:true, gimnasioMsg:null,
   usuarioEmail:null, efectivoAbierto:false, efectivoMsg:null, efectivoCategoriaId:'', backupMsg:null, backupPendiente:null, menuMovilAbierto:false, incompletosSnapshotIds:null,
   reglas: cargarReglas(), reglaFormMsg:null,
-  nuevoMovAbierto:false, movDraftCentroDestinoId:'', comboAbierto:null, comboBusqueda:'', comboHighlight:0 };
+  nuevoMovAbierto:false, movDraftCentroDestinoId:'', comboAbierto:null, comboBusqueda:'', comboHighlight:0,
+  movSeleccionados:[], bulkEditMovAbierto:false, bulkEditMovMsg:null, movPaginaActual:1 };
+var MOV_PAGE_SIZE = 50;
 
 // ===================== FILTROS MÚLTIPLES (selects convertidos a checkboxes) =====================
 var MULTISELECT_MAP = {
@@ -82,6 +84,7 @@ function toggleMultiSelectValor(msId, valor, marcado){
   var idx = arr.indexOf(valor);
   if(marcado && idx===-1) arr.push(valor);
   else if(!marcado && idx!==-1) arr.splice(idx,1);
+  if(MULTISELECT_MAP[msId] && MULTISELECT_MAP[msId].store==='filtros') STATE.movPaginaActual = 1;
   if(msId==='ff-categoria' && STATE.filtros.categoria.length){
     // podar de la selección de Subcategoría las que ya no pertenecen a ninguna categoría elegida
     var catArr = STATE.filtros.categoria;
@@ -1452,6 +1455,44 @@ function camposFaltantes(m){
   return faltan;
 }
 
+function renderBulkEditMovModal(){
+  var n = (STATE.movSeleccionados||[]).length;
+  var subOpts = subcategoriasOrdenadas(STATE.subcategorias).map(function(s){
+    return {value:s.id, label:nombreCategoria(s.categoriaId)+' → '+s.nombre};
+  });
+  var msgHtml = STATE.bulkEditMovMsg ? '<div class="msg '+(STATE.bulkEditMovMsg.type==='ok'?'ok':'err')+'">'+esc(STATE.bulkEditMovMsg.text)+'</div>' : '';
+  return '<div class="modal-overlay" data-modal-backdrop="edit"><div class="modal-card">'+
+    '<h2>Editar '+n+' movimiento(s) seleccionado(s)</h2>'+
+    '<div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px">Dejá "— Sin cambios —" (o vacío) en los campos que no querés tocar: solo se aplican a los '+n+' movimientos los campos que completes acá.</div>'+
+    msgHtml+
+    '<div class="row">'+
+      '<div class="field"><label>Fecha</label><input type="date" id="bem-fecha"></div>'+
+      '<div class="field"><label>Centro de Costo</label><select id="bem-centro"><option value="">— Sin cambios —</option><option value="__vaciar__">(Vaciar)</option>'+
+        centrosOrdenados().map(function(c){ return '<option value="'+c.id+'">'+esc(c.codigo+' · '+c.nombre)+'</option>'; }).join('')+
+      '</select></div>'+
+      '<div class="field"><label>Categoría</label><select id="bem-categoria"><option value="">— Sin cambios —</option><option value="__vaciar__">(Vaciar)</option>'+
+        categoriasOrdenadas().map(function(c){ return '<option value="'+c.id+'">'+esc(c.nombre)+'</option>'; }).join('')+
+      '</select></div>'+
+      '<div class="field"><label>Subcategoría</label><select id="bem-subcategoria"><option value="">— Sin cambios —</option><option value="__vaciar__">(Vaciar)</option>'+
+        subOpts.map(function(o){ return '<option value="'+o.value+'">'+esc(o.label)+'</option>'; }).join('')+
+      '</select></div>'+
+    '</div>'+
+    '<div class="row" style="margin-top:10px">'+
+      '<div class="field"><label>Proveedor</label><input type="text" id="bem-proveedor" placeholder="— Sin cambios —" style="width:160px"></div>'+
+      '<div class="field" style="justify-content:flex-end"><label style="font-size:12px;font-weight:normal;display:flex;align-items:center;gap:4px;padding-bottom:8px;white-space:nowrap"><input type="checkbox" id="bem-proveedor-vaciar" style="width:auto"> Vaciar</label></div>'+
+      '<div class="field"><label>Detalle</label><input type="text" id="bem-detalle" placeholder="— Sin cambios —" style="width:160px"></div>'+
+      '<div class="field" style="justify-content:flex-end"><label style="font-size:12px;font-weight:normal;display:flex;align-items:center;gap:4px;padding-bottom:8px;white-space:nowrap"><input type="checkbox" id="bem-detalle-vaciar" style="width:auto"> Vaciar</label></div>'+
+    '</div>'+
+    '<div class="row" style="margin-top:10px">'+
+      '<div class="field"><label>Tipo</label><select id="bem-tipo"><option value="">— Sin cambios —</option><option value="egreso">Egreso</option><option value="ingreso">Ingreso</option></select></div>'+
+      '<div class="field"><label>Monto</label><input type="number" step="0.01" id="bem-monto" placeholder="— Sin cambios —" style="width:120px"></div>'+
+      '<div class="field"><label>Tarjeta</label><select id="bem-tarjeta"><option value="">— Sin cambios —</option><option value="si">💳 Marcar</option><option value="no">Desmarcar</option></select></div>'+
+    '</div>'+
+    '<button data-action="guardar-bulk-edit-mov">Aplicar a '+n+' movimiento(s)</button>'+
+    '<button class="secondary" data-action="cancel-edit">Cancelar</button>'+
+  '</div></div>';
+}
+
 function renderMovimientos(){
   var f = STATE.filtros || {centro:[], categoria:[], mes:[], texto:'', subcategoria:[], soloIncompletos:false};
 
@@ -1465,7 +1506,7 @@ function renderMovimientos(){
     return {value:s.id, label:etiqueta};
   }));
 
-  var cantidadIncompletos = STATE.movimientos.filter(function(m){ return camposFaltantes(m).length>0; }).length;
+  var cantidadIncompletos = STATE.movimientos.filter(function(m){ return !esMovimientoPendiente(m) && camposFaltantes(m).length>0; }).length;
 
   // Control de integridad de TEC: debería dar 0 (cada transferencia es un ingreso en un centro y un egreso en otro, por el mismo monto)
   var movsTec = STATE.movimientos.filter(function(m){ return esTipoCategoria(m.categoriaId,'tec'); });
@@ -1501,7 +1542,14 @@ function renderMovimientos(){
   var totalIngreso = lista.reduce(function(s,m){ return esTipoCategoria(m.categoriaId,'tec') ? s : s + (Number(m.ingreso)||0); },0);
   var totalEgreso = lista.reduce(function(s,m){ return esTipoCategoria(m.categoriaId,'tec') ? s : s + (Number(m.egreso)||0); },0);
 
-  var rows = lista.map(function(m){
+  var totalPaginasMov = Math.max(1, Math.ceil(lista.length / MOV_PAGE_SIZE));
+  if(STATE.movPaginaActual > totalPaginasMov) STATE.movPaginaActual = totalPaginasMov;
+  if(STATE.movPaginaActual < 1) STATE.movPaginaActual = 1;
+  var inicioPaginaMov = (STATE.movPaginaActual-1) * MOV_PAGE_SIZE;
+  var listaPagina = lista.slice(inicioPaginaMov, inicioPaginaMov + MOV_PAGE_SIZE);
+
+  var seleccionados = STATE.movSeleccionados || [];
+  var rows = listaPagina.map(function(m){
     var faltan = camposFaltantes(m);
     var incompleto = faltan.length>0;
 
@@ -1532,6 +1580,7 @@ function renderMovimientos(){
     var tituloFila = incompleto ? ' title="Falta: '+esc(faltan.join(', '))+'"' : '';
     var fechaFiltrable = !f.soloIncompletos && (m.fecha||'').slice(0,7);
     return '<tr'+(claseFila?' class="'+claseFila+'"':'')+tituloFila+'>'+
+      '<td data-label=""><input type="checkbox" class="chk-select-mov" data-mov-id="'+m.id+'" '+(seleccionados.indexOf(m.id)!==-1?'checked':'')+'></td>'+
       '<td class="mono'+(fechaFiltrable?' celda-filtrable':'')+'" data-label="Fecha"'+(fechaFiltrable?' data-filter-field="mes" data-filter-value="'+esc(fechaFiltrable)+'" title="Filtrar por este Mes"':'')+'>'+(incompleto?'⚠️ ':'')+esc(fechaISOaDDMMAAAA(m.fecha)||m.fecha||'')+'</td>'+
       celdaCentro + celdaCategoria + celdaSubcategoria + celdaProveedor + celdaDetalle +
       '<td class="num ingreso" data-label="Ingreso">'+(Number(m.ingreso)?fmtMonto(m.ingreso):'')+'</td>'+
@@ -1557,10 +1606,13 @@ function renderMovimientos(){
     var catSel = STATE.categorias.find(function(c){return c.id===e.categoriaId;});
     var esTec = catSel && catSel.tipo === 'tec';
     var destinoOpts = [comboOpcionVacia()].concat(STATE.centros.filter(function(c){return c.id!==e.centroId;}).map(function(c){ return {value:c.id, label:c.codigo+' · '+c.nombre}; }));
-    var campoDestino = (!editing && esTec) ? ''+
+    var campoDestino = esTec ? ''+
       '<div class="row" style="margin-top:10px">'+
         '<div class="field" style="flex:1 1 240px"><label>Centro de Costo Destino (transferencia, opcional)</label>'+renderCombo('mov-centro-destino', 'f-mov-centro-destino', destinoOpts, STATE.movDraftCentroDestinoId, 'Elegir...')+'</div>'+
-        '<div class="field" style="flex:2 1 260px;justify-content:flex-end"><div style="font-size:11px;color:var(--ink-soft);padding-bottom:8px">Si lo completás, se va a crear automáticamente el movimiento espejo en ese centro (misma fecha y categoría, mismo monto, tipo contrario). Si lo dejás vacío, se carga solo este movimiento.</div></div>'+
+        '<div class="field" style="flex:2 1 260px;justify-content:flex-end"><div style="font-size:11px;color:var(--ink-soft);padding-bottom:8px">'+(editing ?
+          'Si lo completás, se va a crear un movimiento espejo nuevo en ese centro (misma fecha y categoría, mismo monto, tipo contrario) — pensado para cuando falta la contrapartida de un movimiento importado. No hace falta si ya la cargaste.' :
+          'Si lo completás, se va a crear automáticamente el movimiento espejo en ese centro (misma fecha y categoría, mismo monto, tipo contrario). Si lo dejás vacío, se carga solo este movimiento.'
+        )+'</div></div>'+
       '</div>' : '';
     var cuotasNum = Math.max(1, parseInt(e.cuotas,10)||1);
     var textoAyudaCuotas;
@@ -1606,7 +1658,9 @@ function renderMovimientos(){
       campoCuotas;
   }
 
-  if(editing || STATE.nuevoMovAbierto){
+  if(STATE.bulkEditMovAbierto){
+    MODAL_HTML = renderBulkEditMovModal();
+  } else if(editing || STATE.nuevoMovAbierto){
     MODAL_HTML = '<div class="modal-overlay" data-modal-backdrop="edit"><div class="modal-card">'+
       '<h2>'+(editing?'Editar movimiento':'Nuevo movimiento')+'</h2>'+
       camposMov(e, subOptionsArr)+
@@ -1653,14 +1707,31 @@ function renderMovimientos(){
     '</div>'+
   '</div>';
 
+  var todosVisiblesSeleccionados = listaPagina.length>0 && listaPagina.every(function(m){ return seleccionados.indexOf(m.id)!==-1; });
+  var barraSeleccionHtml = seleccionados.length ? ''+
+    '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;font-size:13px">'+
+      '<span>'+seleccionados.length+' seleccionado(s)</span>'+
+      '<button data-action="abrir-bulk-edit-mov" style="font-size:12px;padding:6px 12px">✏️ Editar seleccionados</button>'+
+      '<button class="secondary" data-action="deseleccionar-mov" style="font-size:12px;padding:6px 12px">Deseleccionar todo</button>'+
+    '</div>' : '';
+
+  var paginacionHtml = lista.length ? ''+
+    '<div style="display:flex;align-items:center;justify-content:center;gap:14px;margin-top:12px;font-size:13px">'+
+      '<button class="secondary" data-action="mov-pagina-anterior" style="font-size:12px;padding:6px 12px"'+(STATE.movPaginaActual<=1?' disabled':'')+'>« Anterior</button>'+
+      '<span>Página '+STATE.movPaginaActual+' de '+totalPaginasMov+'</span>'+
+      '<button class="secondary" data-action="mov-pagina-siguiente" style="font-size:12px;padding:6px 12px"'+(STATE.movPaginaActual>=totalPaginasMov?' disabled':'')+'>Siguiente »</button>'+
+    '</div>' : '';
+
   var tableHtml = ''+
   '<div class="card">'+
     '<h3>Movimientos ('+lista.length+')</h3>'+
+    barraSeleccionHtml+
     (lista.length ? ''+
-    '<table id="tabla-movimientos" class="tabla-movil"><thead><tr><th>Fecha</th><th>CC</th><th>Categoría</th><th>Subcategoría</th><th>Proveedor</th><th>Detalle</th><th class="num">Ingreso</th><th class="num">Egreso</th><th></th></tr></thead>'+
+    '<table id="tabla-movimientos" class="tabla-movil"><thead><tr><th><input type="checkbox" id="chk-select-all-mov" '+(todosVisiblesSeleccionados?'checked':'')+'></th><th>Fecha</th><th>CC</th><th>Categoría</th><th>Subcategoría</th><th>Proveedor</th><th>Detalle</th><th class="num">Ingreso</th><th class="num">Egreso</th><th></th></tr></thead>'+
     '<tbody>'+rows+'</tbody>'+
-    '<tfoot><tr><td colspan="6" data-label="">Totales (sin TEC)</td><td class="num ingreso" data-label="Total Ingreso">'+fmtMonto(totalIngreso)+'</td><td class="num egreso" data-label="Total Egreso">'+fmtMonto(totalEgreso)+'</td><td class="num '+(totalIngreso-totalEgreso>=0?'ingreso':'egreso')+'" data-label="Ingresos - Egresos">'+fmtMonto(totalIngreso-totalEgreso)+'</td></tr></tfoot>'+
+    '<tfoot><tr><td colspan="7" data-label="">Totales (sin TEC)</td><td class="num ingreso" data-label="Total Ingreso">'+fmtMonto(totalIngreso)+'</td><td class="num egreso" data-label="Total Egreso">'+fmtMonto(totalEgreso)+'</td><td class="num '+(totalIngreso-totalEgreso>=0?'ingreso':'egreso')+'" data-label="Ingresos - Egresos">'+fmtMonto(totalIngreso-totalEgreso)+'</td></tr></tfoot>'+
     '</table>' : '<div class="empty">No hay movimientos que coincidan con los filtros.</div>')+
+    paginacionHtml+
   '</div>';
 
   return controlTecHtml + filtersHtml + tableHtml;
@@ -2555,7 +2626,7 @@ function bindEvents(){
   });
 
   document.querySelectorAll('.tab').forEach(function(t){
-    t.addEventListener('click', function(){ STATE.activeTab = t.getAttribute('data-tab'); STATE.editing = null; STATE.movDraft = null; STATE.nuevoMovAbierto = false; STATE.menuMovilAbierto = false; STATE.multiSelectAbierto = null; render(); });
+    t.addEventListener('click', function(){ STATE.activeTab = t.getAttribute('data-tab'); STATE.editing = null; STATE.movDraft = null; STATE.nuevoMovAbierto = false; STATE.menuMovilAbierto = false; STATE.multiSelectAbierto = null; STATE.bulkEditMovAbierto = false; STATE.movSeleccionados = []; render(); });
   });
 
   document.querySelectorAll('.subtab').forEach(function(t){
@@ -2571,13 +2642,14 @@ function bindEvents(){
 
   // Filtros de movimientos (Centro/Categoría/Subcategoría/Mes son multiselect, ver checkboxes más abajo)
   var ffTexto = document.getElementById('ff-texto');
-  if(ffTexto){ ffTexto.addEventListener('input', function(){ STATE.filtros.texto = ffTexto.value; render(); }); }
+  if(ffTexto){ ffTexto.addEventListener('input', function(){ STATE.filtros.texto = ffTexto.value; STATE.movPaginaActual = 1; render(); }); }
   var ffSoloIncompletos = document.getElementById('ff-solo-incompletos');
   if(ffSoloIncompletos){
     ffSoloIncompletos.addEventListener('change', function(){
       STATE.filtros.soloIncompletos = ffSoloIncompletos.checked;
+      STATE.movPaginaActual = 1;
       if(ffSoloIncompletos.checked){
-        STATE.incompletosSnapshotIds = STATE.movimientos.filter(function(m){ return camposFaltantes(m).length>0; }).map(function(m){ return m.id; });
+        STATE.incompletosSnapshotIds = STATE.movimientos.filter(function(m){ return !esMovimientoPendiente(m) && camposFaltantes(m).length>0; }).map(function(m){ return m.id; });
       } else {
         STATE.incompletosSnapshotIds = null;
       }
@@ -2585,7 +2657,7 @@ function bindEvents(){
     });
   }
   var ffSoloTarjeta = document.getElementById('ff-solo-tarjeta');
-  if(ffSoloTarjeta){ ffSoloTarjeta.addEventListener('change', function(){ STATE.filtros.soloTarjeta = ffSoloTarjeta.checked; render(); }); }
+  if(ffSoloTarjeta){ ffSoloTarjeta.addEventListener('change', function(){ STATE.filtros.soloTarjeta = ffSoloTarjeta.checked; STATE.movPaginaActual = 1; render(); }); }
 
   // Filtros del Resumen (Centro/Categoría/Mes son multiselect, ver checkboxes más abajo)
   var rfVista = document.getElementById('rf-vista');
@@ -2760,6 +2832,23 @@ function bindEvents(){
   if(tablaMovimientos){
     tablaMovimientos.addEventListener('change', async function(ev){
       var t = ev.target;
+      if(t.classList.contains('chk-select-mov')){
+        var midSel = t.getAttribute('data-mov-id');
+        var sel = STATE.movSeleccionados || (STATE.movSeleccionados = []);
+        var iSel = sel.indexOf(midSel);
+        if(t.checked && iSel===-1) sel.push(midSel);
+        else if(!t.checked && iSel!==-1) sel.splice(iSel,1);
+        render(); return;
+      }
+      if(t.id==='chk-select-all-mov'){
+        var idsVisibles = Array.prototype.map.call(tablaMovimientos.querySelectorAll('.chk-select-mov'), function(c){ return c.getAttribute('data-mov-id'); });
+        if(t.checked){
+          idsVisibles.forEach(function(mid){ if(STATE.movSeleccionados.indexOf(mid)===-1) STATE.movSeleccionados.push(mid); });
+        } else {
+          STATE.movSeleccionados = STATE.movSeleccionados.filter(function(mid){ return idsVisibles.indexOf(mid)===-1; });
+        }
+        render(); return;
+      }
       var movId = t.getAttribute('data-mov-id');
       var campo = t.getAttribute('data-field');
       if(!movId || !campo) return;
@@ -2795,6 +2884,7 @@ function bindEvents(){
       if(!valorFiltro) return;
       if(campoFiltro === 'texto') STATE.filtros.texto = valorFiltro;
       else STATE.filtros[campoFiltro] = [valorFiltro];
+      STATE.movPaginaActual = 1;
       render();
     });
   }
@@ -2837,14 +2927,91 @@ function getMovFormValues(){
 async function handleAction(action, id){
   STATE.movDraft = null;
 
+  if(action==='mov-pagina-anterior'){ STATE.movPaginaActual = Math.max(1, STATE.movPaginaActual-1); render(); return; }
+  if(action==='mov-pagina-siguiente'){ STATE.movPaginaActual = STATE.movPaginaActual+1; render(); return; }
   if(action==='cancel-edit'){
     STATE.editing = null; STATE.nuevoMovAbierto = false; STATE.movDraftCentroDestinoId = '';
     STATE.comboAbierto = null; STATE.comboBusqueda = '';
+    STATE.bulkEditMovAbierto = false; STATE.bulkEditMovMsg = null;
     render(); return;
   }
   if(action==='abrir-nuevo-mov'){
     STATE.nuevoMovAbierto = true; STATE.movFormMsg = null; STATE.movDraftCentroDestinoId = '';
     STATE.comboAbierto = null; STATE.comboBusqueda = ''; STATE.menuMovilAbierto = false;
+    STATE.bulkEditMovAbierto = false;
+    render(); return;
+  }
+  if(action==='deseleccionar-mov'){ STATE.movSeleccionados = []; render(); return; }
+  if(action==='abrir-bulk-edit-mov'){
+    if(!STATE.movSeleccionados || !STATE.movSeleccionados.length) return;
+    STATE.editing = null; STATE.nuevoMovAbierto = false;
+    STATE.bulkEditMovAbierto = true; STATE.bulkEditMovMsg = null;
+    render(); return;
+  }
+  if(action==='guardar-bulk-edit-mov'){
+    var idsSel = (STATE.movSeleccionados||[]).slice();
+    if(!idsSel.length){ STATE.bulkEditMovAbierto = false; render(); return; }
+    var valBem = function(elId){ return (document.getElementById(elId)||{}).value || ''; };
+    var fechaV = valBem('bem-fecha');
+    var centroV = valBem('bem-centro');
+    var categoriaV = valBem('bem-categoria');
+    var subcategoriaV = valBem('bem-subcategoria');
+    var proveedorV = valBem('bem-proveedor');
+    var proveedorVaciar = !!(document.getElementById('bem-proveedor-vaciar')||{}).checked;
+    var detalleV = valBem('bem-detalle');
+    var detalleVaciar = !!(document.getElementById('bem-detalle-vaciar')||{}).checked;
+    var tipoV = valBem('bem-tipo');
+    var montoV = valBem('bem-monto');
+    var tarjetaV = valBem('bem-tarjeta');
+
+    var tocaFecha = !!fechaV;
+    var tocaCentro = !!centroV;
+    var tocaCategoria = !!categoriaV;
+    var tocaSubcategoria = !!subcategoriaV;
+    var tocaProveedor = proveedorVaciar || !!proveedorV;
+    var tocaDetalle = detalleVaciar || !!detalleV;
+    var tocaTipo = !!tipoV;
+    var tocaMonto = montoV !== '';
+    var tocaTarjeta = !!tarjetaV;
+
+    if(!tocaFecha && !tocaCentro && !tocaCategoria && !tocaSubcategoria && !tocaProveedor && !tocaDetalle && !tocaTipo && !tocaMonto && !tocaTarjeta){
+      STATE.bulkEditMovMsg = { type:'err', text:'Elegí al menos un campo para modificar.' };
+      render(); return;
+    }
+
+    var montoNum = tocaMonto ? (Math.abs(parseFloat(montoV))||0) : 0;
+    try{
+      for(var bi=0; bi<idsSel.length; bi++){
+        var mov = STATE.movimientos.find(function(m){ return m.id===idsSel[bi]; });
+        if(!mov) continue;
+        var camposDb = {};
+        if(tocaFecha){ mov.fecha = fechaV; camposDb.fecha = fechaV; }
+        if(tocaCentro){ mov.centroId = centroV==='__vaciar__' ? '' : centroV; camposDb.centro_id = mov.centroId||null; }
+        if(tocaCategoria){
+          mov.categoriaId = categoriaV==='__vaciar__' ? '' : categoriaV;
+          camposDb.categoria_id = mov.categoriaId||null;
+          if(!tocaSubcategoria){ mov.subcategoriaId = ''; camposDb.subcategoria_id = null; }
+        }
+        if(tocaSubcategoria){ mov.subcategoriaId = subcategoriaV==='__vaciar__' ? '' : subcategoriaV; camposDb.subcategoria_id = mov.subcategoriaId||null; }
+        if(tocaProveedor){ mov.proveedor = proveedorVaciar ? '' : proveedorV; camposDb.proveedor = mov.proveedor||null; }
+        if(tocaDetalle){ mov.detalle = detalleVaciar ? '' : detalleV; camposDb.detalle = mov.detalle||null; }
+        if(tocaTipo || tocaMonto){
+          var tipoActual = Number(mov.ingreso)>0 ? 'ingreso' : 'egreso';
+          var tipoFinal = tocaTipo ? tipoV : tipoActual;
+          var montoActual = tipoActual==='ingreso' ? Number(mov.ingreso)||0 : Number(mov.egreso)||0;
+          var montoFinal = tocaMonto ? montoNum : montoActual;
+          mov.ingreso = tipoFinal==='ingreso' ? montoFinal : 0;
+          mov.egreso = tipoFinal==='egreso' ? montoFinal : 0;
+          camposDb.ingreso = mov.ingreso; camposDb.egreso = mov.egreso;
+        }
+        if(tocaTarjeta){ mov.tarjeta = tarjetaV==='si'; camposDb.tarjeta = mov.tarjeta; }
+        await dbUpdate('movimientos', mov.id, camposDb);
+      }
+      STATE.saldosDirty = true;
+      STATE.bulkEditMovAbierto = false;
+      STATE.bulkEditMovMsg = null;
+      STATE.movSeleccionados = [];
+    }catch(e){ STATE.dbError = 'No se pudo aplicar la edición masiva: '+(e.message||e); }
     render(); return;
   }
 
@@ -3066,12 +3233,13 @@ async function handleAction(action, id){
   }
 
   if(action==='refrescar-incompletos'){
-    STATE.incompletosSnapshotIds = STATE.movimientos.filter(function(m){ return camposFaltantes(m).length>0; }).map(function(m){ return m.id; });
+    STATE.incompletosSnapshotIds = STATE.movimientos.filter(function(m){ return !esMovimientoPendiente(m) && camposFaltantes(m).length>0; }).map(function(m){ return m.id; });
     render(); return;
   }
   if(action==='limpiar-filtros-mov'){
     STATE.filtros = {centro:[], categoria:[], subcategoria:[], mes:[], texto:'', soloIncompletos:false, soloTarjeta:false};
     STATE.incompletosSnapshotIds = null;
+    STATE.movPaginaActual = 1;
     render(); return;
   }
 
@@ -3196,7 +3364,11 @@ async function handleAction(action, id){
   }
 
   // ---- MOVIMIENTOS ----
-  if(action==='edit-mov'){ STATE.editing = {type:'mov', id:id}; STATE.movFormMsg = null; render(); return; }
+  if(action==='edit-mov'){
+    STATE.editing = {type:'mov', id:id}; STATE.movFormMsg = null; STATE.movDraftCentroDestinoId = '';
+    STATE.bulkEditMovAbierto = false;
+    render(); return;
+  }
   if(action==='del-mov'){
     STATE.confirmState = { message:'¿Borrar este movimiento?', action:'del-mov-do', id:id };
     render(); return;
@@ -3205,6 +3377,7 @@ async function handleAction(action, id){
     try{
       await dbDelete('movimientos', id);
       STATE.movimientos = STATE.movimientos.filter(function(m){return m.id!==id;});
+      if(STATE.movSeleccionados) STATE.movSeleccionados = STATE.movSeleccionados.filter(function(mid){return mid!==id;});
       STATE.saldosDirty = true;
     }catch(e){ STATE.dbError = 'No se pudo borrar el movimiento: '+(e.message||e); }
     render(); return;
@@ -3224,7 +3397,7 @@ async function handleAction(action, id){
     var centroDestinoEl = document.getElementById('f-mov-centro-destino');
     var centroDestino = centroDestinoEl ? centroDestinoEl.value : '';
 
-    if(!id && esTecMov && centroDestino && centroDestino === v.centroId){
+    if(esTecMov && centroDestino && centroDestino === v.centroId){
       STATE.movFormMsg = 'El Centro de Costo Destino tiene que ser distinto al de origen.';
       render(); return;
     }
@@ -3255,6 +3428,19 @@ async function handleAction(action, id){
         await dbUpdate('movimientos', id, toDbMovimiento(Object.assign({id:id}, movEditado)));
         var idx = STATE.movimientos.findIndex(function(m){return m.id===id;});
         if(idx>-1) STATE.movimientos[idx] = Object.assign({id:id}, movEditado);
+
+        if(esTecMov && centroDestino){
+          // faltaba la línea espejo (típico de movimientos importados): crearla ahora, sin tocar ninguna otra existente
+          var nuevoEspejo = {
+            id: uid(), fecha: movEditado.fecha, centroId: centroDestino, categoriaId: movEditado.categoriaId, subcategoriaId: movEditado.subcategoriaId,
+            proveedor: movEditado.proveedor, detalle: (movEditado.detalle ? movEditado.detalle+' ' : '')+'(transferencia automática)',
+            ingreso: v.tipo==='ingreso' ? 0 : monto,
+            egreso: v.tipo==='ingreso' ? monto : 0,
+            tarjeta: !!v.tarjeta
+          };
+          await dbInsert('movimientos', [toDbMovimiento(nuevoEspejo)]);
+          STATE.movimientos.push(nuevoEspejo);
+        }
 
         if(cuotasTotal>1){
           var loteRestante = [];
