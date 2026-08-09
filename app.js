@@ -557,9 +557,11 @@ function parseTarjetaSantander(raw, vencimientoStr){
   var reSubtotal = /^subtotal$/i;
   var reOtros = /^otros conceptos$/i;
 
-  var vf = (vencimientoStr||'').trim().match(/^(\d{2})\/(\d{2})\/(\d{2,4})$/);
-  var fechaOut = vf ? (vf[1]+'-'+vf[2]+'-'+(vf[3].length===4?vf[3].slice(2):vf[3])) : (vencimientoStr||'').trim();
-  var anioCortoVenc = vf ? (vf[3].length===4?vf[3].slice(2):vf[3]) : '';
+  // vencimientoStr viene en formato ISO (yyyy-mm-dd) del input de fecha; se pasa a dd-mm-aa corto
+  // porque el resto del pipeline de importación (fechaCortaAISO) espera ese formato en "fecha".
+  var vf = (vencimientoStr||'').trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  var fechaOut = vf ? (vf[3]+'-'+vf[2]+'-'+vf[1].slice(2)) : (vencimientoStr||'').trim();
+  var anioCortoVenc = vf ? vf[1].slice(2) : '';
 
   var rows = [];
   var pendingName = [];
@@ -627,8 +629,10 @@ function parseTarjeta(raw, vencimientoStr){
   var reMoney = /^-?\$?\d{1,3}(?:\.\d{3})*,\d{2}-?$/;
   var reComprobante = /^\d+\*?$/;
 
-  var vf = (vencimientoStr||'').trim().match(/^(\d{2})\/(\d{2})\/(\d{2,4})$/);
-  var fechaOut = vf ? (vf[1]+'-'+vf[2]+'-'+(vf[3].length===4?vf[3].slice(2):vf[3])) : (vencimientoStr||'').trim();
+  // vencimientoStr viene en formato ISO (yyyy-mm-dd) del input de fecha; se pasa a dd-mm-aa corto
+  // porque el resto del pipeline de importación (fechaCortaAISO) espera ese formato en "fecha".
+  var vf = (vencimientoStr||'').trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  var fechaOut = vf ? (vf[3]+'-'+vf[2]+'-'+vf[1].slice(2)) : (vencimientoStr||'').trim();
 
   var rows = [];
   lines.forEach(function(line){
@@ -685,8 +689,10 @@ function parseTarjetaMercadoPago(raw, anio, vencimientoStr){
   var yy = (anio||'26').toString().trim();
   if(yy.length===4) yy = yy.slice(2);
 
-  var vf = (vencimientoStr||'').trim().match(/^(\d{2})\/(\d{2})\/(\d{2,4})$/);
-  var fechaOut = vf ? (vf[1]+'-'+vf[2]+'-'+(vf[3].length===4?vf[3].slice(2):vf[3])) : (vencimientoStr||'').trim();
+  // vencimientoStr viene en formato ISO (yyyy-mm-dd) del input de fecha; se pasa a dd-mm-aa corto
+  // porque el resto del pipeline de importación (fechaCortaAISO) espera ese formato en "fecha".
+  var vfVenc = (vencimientoStr||'').trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  var fechaOut = vfVenc ? (vfVenc[3]+'-'+vfVenc[2]+'-'+vfVenc[1].slice(2)) : (vencimientoStr||'').trim();
 
   var reFecha = /(\d{1,2})\/([a-záéíóúñ]{3,4})\b/gi;
   var marcas = [];
@@ -1063,8 +1069,7 @@ function runParser(){
       // el resumen de MP trae fecha propia por fila (dd/mmm, sin año): se usa como Fecha de consumo,
       // y el Vencimiento tipeado (con el que también se deduce el año de esas fechas) queda como fecha
       // del movimiento, igual que en Nación/Santander.
-      var vf = venc.trim().match(/^(\d{2})\/(\d{2})\/(\d{2,4})$/);
-      var anioMp = vf ? (vf[3].length===4 ? vf[3].slice(2) : vf[3]) : '26';
+      var anioMp = /^\d{4}/.test(venc.trim()) ? venc.trim().slice(2,4) : '26';
       var resMp = parseTarjetaMercadoPago(raw, anioMp, venc);
       return { rows: resMp.rows, error: null, omitidas: resMp.omitidas };
     }
@@ -1854,7 +1859,7 @@ function renderImportar(){
         '<option value="provincia" '+(STATE.importBanco==='provincia'?'selected':'')+'>Provincia</option>'+
         '<option value="mercadopago" '+(STATE.importBanco==='mercadopago'?'selected':'')+'>Mercado Pago</option>'+
       '</select></div>'+
-      '<div class="field"><label>Vencimiento</label><input type="text" id="imp-vencimiento" placeholder="dd/mm/aa" value="'+esc(STATE.importVencimiento||'')+'" style="width:90px"></div>'+
+      '<div class="field"><label>Vencimiento</label><input type="date" id="imp-vencimiento" value="'+esc(STATE.importVencimiento||'')+'"></div>'+
       '<div class="field"><label>Marca de tarjeta (opcional)</label><input type="text" id="imp-tarjeta-marca" autocomplete="off" placeholder="Visa, Mastercard, Amex..." value="'+esc(STATE.importTarjetaMarca||'')+'" style="width:150px"></div>';
   }
 
