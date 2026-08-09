@@ -680,10 +680,13 @@ var MESES_ABR_MAP = {ene:'01',feb:'02',mar:'03',abr:'04',may:'05',jun:'06',jul:'
 // Resumen de Tarjeta de Crédito Mercado Pago: cada fila trae su propia fecha (dd/mmm, sin año) y
 // puede venir en Pesos ($) o Dólares (US$). Las filas en dólares se descartan (no hay forma de
 // cargarlas junto con las de pesos sin un campo de moneda en "movimientos") y se informan aparte.
-function parseTarjetaMercadoPago(raw, anio){
+function parseTarjetaMercadoPago(raw, anio, vencimientoStr){
   var text = raw.replace(/\s+/g, ' ').trim();
   var yy = (anio||'26').toString().trim();
   if(yy.length===4) yy = yy.slice(2);
+
+  var vf = (vencimientoStr||'').trim().match(/^(\d{2})\/(\d{2})\/(\d{2,4})$/);
+  var fechaOut = vf ? (vf[1]+'-'+vf[2]+'-'+(vf[3].length===4?vf[3].slice(2):vf[3])) : (vencimientoStr||'').trim();
 
   var reFecha = /(\d{1,2})\/([a-záéíóúñ]{3,4})\b/gi;
   var marcas = [];
@@ -715,7 +718,7 @@ function parseTarjetaMercadoPago(raw, anio){
     var monto = -val; // un consumo de tarjeta es un egreso
 
     rows.push({
-      fecha: marca.dia+'-'+marca.mes+'-'+yy,
+      fecha: fechaOut,
       fechaConsumo: marca.dia+'-'+marca.mes+'-'+yy,
       proveedor: detalle,
       tipo: '',
@@ -1057,10 +1060,12 @@ function runParser(){
     if(!venc.trim()) return { rows: [], error: 'Ingresá la fecha de vencimiento del resumen.' };
     var banco = STATE.importBanco || 'nacion';
     if(banco === 'mercadopago'){
-      // el resumen de MP trae fecha propia por fila (dd/mmm, sin año); se usa el año del campo Vencimiento
+      // el resumen de MP trae fecha propia por fila (dd/mmm, sin año): se usa como Fecha de consumo,
+      // y el Vencimiento tipeado (con el que también se deduce el año de esas fechas) queda como fecha
+      // del movimiento, igual que en Nación/Santander.
       var vf = venc.trim().match(/^(\d{2})\/(\d{2})\/(\d{2,4})$/);
       var anioMp = vf ? (vf[3].length===4 ? vf[3].slice(2) : vf[3]) : '26';
-      var resMp = parseTarjetaMercadoPago(raw, anioMp);
+      var resMp = parseTarjetaMercadoPago(raw, anioMp, venc);
       return { rows: resMp.rows, error: null, omitidas: resMp.omitidas };
     }
     var rows = (banco === 'santander') ? parseTarjetaSantander(raw, venc) : parseTarjeta(raw, venc);
