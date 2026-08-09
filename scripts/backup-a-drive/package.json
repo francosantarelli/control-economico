@@ -1,0 +1,9 @@
+{
+  "name": "control-economico-backup",
+  "private": true,
+  "type": "module",
+  "description": "Script standalone (corre desde GitHub Actions) que exporta las tablas de Supabase a un JSON y lo sube a una carpeta de Google Drive. No forma parte de la app.",
+  "dependencies": {
+    "googleapis": "^140.0.0"
+  }
+}
