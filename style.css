@@ -11,6 +11,19 @@
   --danger:#D97B6C;
   --danger-soft:#FBEAE6;
 }
+:root[data-theme="oscuro"]{
+  --bg:#141B17;
+  --paper:#1E2721;
+  --ink:#E7EFE9;
+  --ink-soft:#8FA599;
+  --accent:#4E9D77;
+  --accent-soft:#20362A;
+  --rule:#2F3B34;
+  --danger:#D97B6C;
+  --danger-soft:#3A241F;
+}
+:root[data-theme="oscuro"] #tabla-movimientos tr.fila-incompleta:hover,
+:root[data-theme="oscuro"] tr.fila-duplicada:hover{ background:#4A2E28; }
 *{box-sizing:border-box}
 body{
   margin:0;
@@ -81,7 +94,7 @@ h1,h2,h3{ font-family:'Geist',sans-serif; font-weight:600; margin:0; }
 .field label{ font-size:11px; color:var(--ink-soft); font-weight:500; }
 input[type=text], input[type=date], input[type=number], select, textarea{
   font-family:inherit; font-size:13px; padding:7px 9px; border:1px solid var(--rule);
-  border-radius:6px; background:#fff; color:var(--ink); min-width:120px;
+  border-radius:6px; background:var(--paper); color:var(--ink); min-width:120px;
 }
 input:focus, select:focus, textarea:focus{ outline:2px solid var(--accent); outline-offset:1px; border-color:var(--accent); }
 
@@ -89,7 +102,7 @@ input:focus, select:focus, textarea:focus{ outline:2px solid var(--accent); outl
 .multiselect{ position:relative; display:inline-block; min-width:150px; }
 .multiselect-toggle{
   font-family:inherit; font-size:13px; padding:7px 9px; border:1px solid var(--rule);
-  border-radius:6px; background:#fff; color:var(--ink); min-width:150px; width:100%; text-align:left;
+  border-radius:6px; background:var(--paper); color:var(--ink); min-width:150px; width:100%; text-align:left;
   cursor:pointer; display:flex; align-items:center; justify-content:space-between; gap:8px;
 }
 .multiselect-toggle:hover{ border-color:var(--accent); }
@@ -135,11 +148,11 @@ input:focus, select:focus, textarea:focus{ outline:2px solid var(--accent); outl
 /* Chips de Centro de Costo / Categoría (color elegido en el ABM) */
 .chip{
   display:inline-block; padding:2px 9px; border-radius:12px; font-size:12px; font-weight:600;
-  white-space:nowrap; line-height:1.7;
+  white-space:nowrap; line-height:1.7; box-shadow:inset 0 0 0 1px rgba(0,0,0,.08);
 }
 input[type=color]{
   width:44px; min-width:0; padding:2px; border:1px solid var(--rule); border-radius:6px;
-  background:#fff; cursor:pointer;
+  background:var(--paper); cursor:pointer;
 }
 
 button{
@@ -147,8 +160,8 @@ button{
   border-radius:6px; border:1px solid var(--accent); background:var(--accent); color:#fff; cursor:pointer;
 }
 button:hover{ opacity:.88; }
-button.secondary{ background:#fff; color:var(--ink); border-color:var(--rule); }
-button.danger{ background:#fff; color:var(--danger); border-color:var(--danger); }
+button.secondary{ background:var(--paper); color:var(--ink); border-color:var(--rule); }
+button.danger{ background:var(--paper); color:var(--danger); border-color:var(--danger); }
 button.danger:hover{ background:var(--danger-soft); }
 button.link{ background:none; border:none; color:var(--ink-soft); text-decoration:underline; padding:2px 4px; font-size:12px; }
 button:disabled{ opacity:.5; cursor:not-allowed; }

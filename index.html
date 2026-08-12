@@ -5,6 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="icon" type="image/x-icon" href="/control-economico/favicon.ico">
 <title>Control — Control Económico</title>
+<script>
+  // Aplicar el tema guardado ANTES de que cargue el CSS, para no mostrar un flash del tema claro
+  // al entrar de nuevo con el oscuro elegido.
+  try{
+    if(localStorage.getItem('controlTema') === 'oscuro') document.documentElement.setAttribute('data-theme','oscuro');
+  }catch(e){}
+</script>
 <link rel="stylesheet" href="style.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -12,7 +19,7 @@
 <div class="login-wrap" id="loginWrap" style="display:none">
   <div class="login-card">
     <h1 style="font-size:24px;margin-bottom:4px">Control</h1>
-    <div style="font-size:12px;color:#7A8B83;margin-bottom:20px">Iniciá sesión para ver tu control económico</div>
+    <div style="font-size:12px;color:var(--ink-soft);margin-bottom:20px">Iniciá sesión para ver tu control económico</div>
     <div id="loginMsg"></div>
     <div class="field" style="margin-bottom:10px"><label>Email</label><input type="email" id="login-email" style="width:100%"></div>
     <div class="field" style="margin-bottom:16px"><label>Contraseña</label><input type="password" id="login-password" style="width:100%"></div>

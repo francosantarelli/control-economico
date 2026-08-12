@@ -59,7 +59,8 @@ var STATE = { centros: [], categorias: [], subcategorias: [], movimientos: [], v
   usuarioEmail:null, efectivoAbierto:false, efectivoMsg:null, efectivoCategoriaId:'', backupMsg:null, backupPendiente:null, menuMovilAbierto:false, incompletosSnapshotIds:null,
   reglas: cargarReglas(), reglaFormMsg:null,
   nuevoMovAbierto:false, movDraftCentroDestinoId:'', comboAbierto:null, comboBusqueda:'', comboHighlight:0,
-  movSeleccionados:[], bulkEditMovAbierto:false, bulkEditMovMsg:null, movPaginaActual:1, gruposAbiertos:{} };
+  movSeleccionados:[], bulkEditMovAbierto:false, bulkEditMovMsg:null, movPaginaActual:1, gruposAbiertos:{},
+  tema: (function(){ try{ return localStorage.getItem('controlTema')==='oscuro' ? 'oscuro' : 'claro'; }catch(e){ return 'claro'; } })() };
 var MOV_PAGE_SIZE = 50;
 
 // ===================== FILTROS MÚLTIPLES (selects convertidos a checkboxes) =====================
@@ -1130,7 +1131,10 @@ function renderInterno(){
     sidebarHtml += '<div class="tab '+(STATE.activeTab===t.id?'active':'')+'" data-tab="'+t.id+'"><span class="tab-icon">'+t.icono+'</span>'+t.label+'</div>';
   });
   sidebarHtml += '</div>'+
-    '<div style="margin-top:20px"><button class="secondary" id="btnLogout" style="width:100%;font-size:12px">Cerrar sesión</button></div>'+
+    '<div style="margin-top:20px;display:flex;flex-direction:column;gap:8px">'+
+      '<button class="secondary" data-action="toggle-tema" style="width:100%;font-size:12px">'+(STATE.tema==='oscuro'?'☀️ Modo claro':'🌙 Modo oscuro')+'</button>'+
+      '<button class="secondary" id="btnLogout" style="width:100%;font-size:12px">Cerrar sesión</button>'+
+    '</div>'+
     '</div>';
 
   var mobileTopbarHtml = '<div class="mobile-topbar">'+
@@ -3404,6 +3408,15 @@ async function handleAction(action, id){
   // ---- MENÚ MÓVIL ----
   if(action==='toggle-menu-movil'){ STATE.menuMovilAbierto = !STATE.menuMovilAbierto; render(); return; }
   if(action==='cerrar-menu-movil'){ STATE.menuMovilAbierto = false; render(); return; }
+
+  // ---- TEMA (claro/oscuro) ----
+  if(action==='toggle-tema'){
+    STATE.tema = STATE.tema==='oscuro' ? 'claro' : 'oscuro';
+    if(STATE.tema==='oscuro') document.documentElement.setAttribute('data-theme', 'oscuro');
+    else document.documentElement.removeAttribute('data-theme');
+    try{ localStorage.setItem('controlTema', STATE.tema); }catch(e){}
+    render(); return;
+  }
 
   // ---- FILTROS MULTISELECT ----
   if(action==='toggle-multiselect'){
