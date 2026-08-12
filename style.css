@@ -41,7 +41,7 @@ h1,h2,h3{ font-family:'Geist',sans-serif; font-weight:600; margin:0; }
 
 .layout{ display:flex; align-items:flex-start; min-height:100vh; }
 .sidebar{
-  width:200px; flex-shrink:0; padding:28px 16px; border-right:1px solid var(--rule);
+  width:64px; flex-shrink:0; padding:20px 8px; border-right:1px solid var(--rule);
   position:sticky; top:0; align-self:flex-start; height:100vh; overflow-y:auto; box-sizing:border-box;
 }
 .main-content{ flex:1; min-width:0; padding:28px 24px 60px; }
@@ -50,21 +50,24 @@ h1,h2,h3{ font-family:'Geist',sans-serif; font-weight:600; margin:0; }
 .sidebar-backdrop{ display:none; }
 .hamburger-btn{ background:none; border:none; color:var(--ink); font-size:22px; padding:6px 10px; min-height:auto; line-height:1; }
 
+/* En la franja angosta de escritorio solo queda un ícono de marca; el nombre completo
+   ("Control") se ve en el mobile-topbar y en el título de sección de arriba a la derecha. */
 .masthead{
-  border-bottom:2px solid var(--accent); padding-bottom:14px; margin-bottom:16px;
+  border-bottom:2px solid var(--accent); padding-bottom:14px; margin-bottom:16px; text-align:center;
 }
-.masthead h1{ font-size:22px; letter-spacing:-0.01em; color:var(--ink); margin-bottom:4px; }
-.masthead .tagline{ font-size:11px; color:var(--ink-soft); font-family:'Geist Mono',ui-monospace,Consolas,monospace; line-height:1.5; }
+.masthead h1, .masthead .tagline{ display:none; }
+.masthead::before{ content:"💰"; font-size:24px; line-height:1; display:block; }
 
 .tabs{
   display:flex; flex-direction:column; gap:2px;
 }
 .tab{
-  padding:9px 12px; cursor:pointer; font-size:13px; color:var(--ink-soft);
+  padding:11px 6px; cursor:pointer; font-size:13px; color:var(--ink-soft);
   border-left:3px solid transparent; user-select:none; font-weight:500; border-radius:0 6px 6px 0;
-  display:flex; align-items:center; gap:9px;
+  display:flex; align-items:center; justify-content:center; gap:9px;
 }
-.tab-icon{ font-size:15px; line-height:1; }
+.tab-icon{ font-size:17px; line-height:1; }
+.tab-label{ display:none; }
 .tab:hover{ color:var(--ink); background:var(--accent-soft); }
 .tab.active{ color:var(--accent); border-left-color:var(--accent); background:var(--accent-soft); font-weight:600; }
 
@@ -154,6 +157,37 @@ input[type=color]{
   width:44px; min-width:0; padding:2px; border:1px solid var(--rule); border-radius:6px;
   background:var(--paper); cursor:pointer;
 }
+
+/* Barra superior de escritorio: solo aloja el menú de usuario, arriba a la derecha */
+.topbar-desktop{
+  display:flex; justify-content:space-between; align-items:center; padding-bottom:14px;
+  position:sticky; top:0; background:var(--bg); z-index:40;
+}
+.topbar-titulo{ font-size:19px; }
+
+/* Menú de usuario (avatar con iniciales + dropdown de tema/cerrar sesión) */
+.user-menu-wrap{ position:relative; }
+.avatar-btn{
+  width:38px; height:38px; border-radius:50%; padding:0;
+  background:var(--accent); color:#fff; border:none; font-size:13px; font-weight:700;
+  display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;
+}
+.avatar-btn:hover{ opacity:.88; }
+.user-menu-wrap.abierto .avatar-btn{ outline:2px solid var(--accent); outline-offset:2px; }
+.user-menu-panel{
+  position:absolute; top:calc(100% + 8px); right:0; z-index:990; min-width:190px;
+  background:var(--paper); border:1px solid var(--rule); border-radius:8px; box-shadow:0 6px 20px rgba(0,0,0,.15);
+  padding:6px; display:flex; flex-direction:column; gap:2px;
+}
+.user-menu-email{
+  font-size:11px; color:var(--ink-soft); padding:6px 8px 8px; border-bottom:1px solid var(--rule);
+  margin-bottom:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.user-menu-item{
+  background:none; border:none; color:var(--ink); text-align:left; font-size:13px; font-weight:500;
+  padding:8px; border-radius:5px; cursor:pointer;
+}
+.user-menu-item:hover{ background:var(--accent-soft); }
 
 button{
   font-family:'Geist',sans-serif; font-size:13px; font-weight:500; padding:8px 14px;
@@ -247,6 +281,8 @@ footer.small{ margin-top:28px; font-size:11px; color:var(--ink-soft); text-align
 @media (max-width: 640px){
   .layout{ flex-direction:column; padding-top:56px; }
 
+  .topbar-desktop{ display:none; }
+
   .mobile-topbar{
     display:flex; align-items:center; justify-content:space-between; gap:10px;
     position:fixed; top:0; left:0; right:0; z-index:950;
@@ -267,9 +303,14 @@ footer.small{ margin-top:28px; font-size:11px; color:var(--ink-soft); text-align
     padding:16px; padding-top:calc(16px + env(safe-area-inset-top));
   }
   .sidebar.abierto{ transform:translateX(0); box-shadow:4px 0 16px rgba(0,0,0,.25); }
+  /* El drawer de mobile no es una franja angosta permanente: se ve la marca y el texto completos */
+  .masthead{ text-align:left; }
+  .masthead::before{ display:none; }
+  .masthead h1, .masthead .tagline{ display:block; }
   .tabs{ flex-direction:column; }
-  .tab{ border-left:3px solid transparent; border-bottom:none; border-radius:0 6px 6px 0; padding:10px 12px; }
+  .tab{ border-left:3px solid transparent; border-bottom:none; border-radius:0 6px 6px 0; padding:10px 12px; justify-content:flex-start; }
   .tab.active{ border-bottom:none; border-left-color:var(--accent); }
+  .tab-label{ display:inline; }
   .main-content{ padding:16px; padding-bottom:calc(16px + env(safe-area-inset-bottom)); }
 
   .card{ padding:14px; border-radius:8px; }

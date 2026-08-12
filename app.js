@@ -60,7 +60,8 @@ var STATE = { centros: [], categorias: [], subcategorias: [], movimientos: [], v
   reglas: cargarReglas(), reglaFormMsg:null,
   nuevoMovAbierto:false, movDraftCentroDestinoId:'', comboAbierto:null, comboBusqueda:'', comboHighlight:0,
   movSeleccionados:[], bulkEditMovAbierto:false, bulkEditMovMsg:null, movPaginaActual:1, gruposAbiertos:{},
-  tema: (function(){ try{ return localStorage.getItem('controlTema')==='oscuro' ? 'oscuro' : 'claro'; }catch(e){ return 'claro'; } })() };
+  tema: (function(){ try{ return localStorage.getItem('controlTema')==='oscuro' ? 'oscuro' : 'claro'; }catch(e){ return 'claro'; } })(),
+  menuUsuarioAbierto:false };
 var MOV_PAGE_SIZE = 50;
 
 // ===================== FILTROS MÚLTIPLES (selects convertidos a checkboxes) =====================
@@ -122,6 +123,33 @@ function renderMultiSelect(id, options, seleccion){
   }
   return '<div class="multiselect'+(abierto?' abierto':'')+'" data-multiselect-wrap="'+id+'">'+
     '<button type="button" class="multiselect-toggle" data-action="toggle-multiselect" data-id="'+id+'">'+esc(resumen)+' <span class="multiselect-caret">▾</span></button>'+
+    panelHtml+
+  '</div>';
+}
+
+// ===================== MENÚ DE USUARIO (avatar arriba a la derecha) =====================
+function inicialesUsuario(){
+  var email = STATE.usuarioEmail || '';
+  var nombre = (email.split('@')[0] || '').replace(/[^a-zA-Zá-úÁ-Ú]+/g, ' ').trim();
+  var partes = nombre.split(/\s+/).filter(Boolean);
+  var iniciales = partes.length >= 2 ? (partes[0][0] + partes[1][0]) : nombre.slice(0, 2);
+  return (iniciales || '?').toUpperCase();
+}
+// Se renderiza tanto en la barra superior de escritorio como en la de mobile (misma marca
+// data-user-menu-wrap, mismo STATE.menuUsuarioAbierto) — solo una de las dos queda visible
+// según el ancho de pantalla, pero conviene que las dos compartan el mismo estado.
+function renderMenuUsuario(){
+  var abierto = STATE.menuUsuarioAbierto;
+  var panelHtml = '';
+  if(abierto){
+    panelHtml = '<div class="user-menu-panel">'+
+      (STATE.usuarioEmail ? '<div class="user-menu-email">'+esc(STATE.usuarioEmail)+'</div>' : '')+
+      '<button type="button" class="user-menu-item" data-action="toggle-tema">'+(STATE.tema==='oscuro'?'☀️ Modo claro':'🌙 Modo oscuro')+'</button>'+
+      '<button type="button" class="user-menu-item" data-action="cerrar-sesion">Cerrar sesión</button>'+
+    '</div>';
+  }
+  return '<div class="user-menu-wrap'+(abierto?' abierto':'')+'" data-user-menu-wrap>'+
+    '<button type="button" class="avatar-btn" data-action="toggle-menu-usuario" aria-label="Cuenta" title="'+esc(STATE.usuarioEmail||'')+'">'+esc(inicialesUsuario())+'</button>'+
     panelHtml+
   '</div>';
 }
@@ -1124,27 +1152,26 @@ function renderInterno(){
 
   var sidebarHtml = '<div class="sidebar'+(STATE.menuMovilAbierto?' abierto':'')+'">'+
     '<div class="masthead"><h1>Control</h1><div class="tagline">Control económico<br>datos compartidos</div></div>'+
-    '<button data-action="abrir-nuevo-mov" style="width:100%;margin-bottom:10px;font-size:14px;padding:12px">+ Movimiento</button>'+
+    '<button data-action="abrir-nuevo-mov" title="Nuevo movimiento" style="width:100%;margin-bottom:10px;font-size:14px;padding:12px">+<span class="tab-label"> Movimiento</span></button>'+
     '<button data-action="abrir-efectivo" class="solo-mobile" style="width:100%;margin-bottom:16px;background:transparent;border:1.5px solid var(--accent);color:var(--accent);font-size:14px;padding:12px">💵 Efectivo</button>'+
     '<div class="tabs">';
   tabs.forEach(function(t){
-    sidebarHtml += '<div class="tab '+(STATE.activeTab===t.id?'active':'')+'" data-tab="'+t.id+'"><span class="tab-icon">'+t.icono+'</span>'+t.label+'</div>';
+    sidebarHtml += '<div class="tab '+(STATE.activeTab===t.id?'active':'')+'" data-tab="'+t.id+'" title="'+esc(t.label)+'"><span class="tab-icon">'+t.icono+'</span><span class="tab-label">'+esc(t.label)+'</span></div>';
   });
   sidebarHtml += '</div>'+
-    '<div style="margin-top:20px;display:flex;flex-direction:column;gap:8px">'+
-      '<button class="secondary" data-action="toggle-tema" style="width:100%;font-size:12px">'+(STATE.tema==='oscuro'?'☀️ Modo claro':'🌙 Modo oscuro')+'</button>'+
-      '<button class="secondary" id="btnLogout" style="width:100%;font-size:12px">Cerrar sesión</button>'+
-    '</div>'+
     '</div>';
+
+  var tabActual = tabs.find(function(t){ return t.id===STATE.activeTab; });
+  var tituloSeccion = tabActual ? tabActual.label : 'Control';
 
   var mobileTopbarHtml = '<div class="mobile-topbar">'+
     '<button class="hamburger-btn" data-action="toggle-menu-movil" aria-label="Abrir menú">☰</button>'+
     '<h1>Control</h1>'+
-    '<span style="width:40px"></span>'+
+    renderMenuUsuario()+
   '</div>'+
   '<div class="sidebar-backdrop'+(STATE.menuMovilAbierto?' visible':'')+'" data-action="cerrar-menu-movil"></div>';
 
-  var contentHtml = '';
+  var contentHtml = '<div class="topbar-desktop"><h2 class="topbar-titulo">'+esc(tituloSeccion)+'</h2>'+renderMenuUsuario()+'</div>';
   if(STATE.dbError){
     contentHtml += '<div class="msg err" style="margin-bottom:14px">'+esc(STATE.dbError)+'</div>';
   }
@@ -2764,9 +2791,6 @@ function renderGimnasio(){
 
 // ===================== EVENTOS =====================
 function bindEvents(){
-  var btnLogout = document.getElementById('btnLogout');
-  if(btnLogout){ btnLogout.addEventListener('click', cerrarSesion); }
-
   document.querySelectorAll('[data-modal-backdrop]').forEach(function(overlay){
     overlay.addEventListener('click', function(ev){
       if(ev.target !== overlay) return; // sólo si el click fue directo en el fondo, no en el contenido del modal
@@ -3415,8 +3439,13 @@ async function handleAction(action, id){
     if(STATE.tema==='oscuro') document.documentElement.setAttribute('data-theme', 'oscuro');
     else document.documentElement.removeAttribute('data-theme');
     try{ localStorage.setItem('controlTema', STATE.tema); }catch(e){}
+    STATE.menuUsuarioAbierto = false;
     render(); return;
   }
+
+  // ---- MENÚ DE USUARIO (avatar) ----
+  if(action==='toggle-menu-usuario'){ STATE.menuUsuarioAbierto = !STATE.menuUsuarioAbierto; render(); return; }
+  if(action==='cerrar-sesion'){ await cerrarSesion(); return; }
 
   // ---- FILTROS MULTISELECT ----
   if(action==='toggle-multiselect'){
@@ -3971,5 +4000,13 @@ document.addEventListener('click', function(ev){
   if(ev.target.closest && ev.target.closest('[data-multiselect-wrap]')) return;
   STATE.multiSelectAbierto = null;
   STATE.multiSelectBusqueda = '';
+  render();
+});
+
+// Cerrar el menú de usuario (avatar) al hacer clic fuera de él, mismo patrón que el multiselect de arriba.
+document.addEventListener('click', function(ev){
+  if(!STATE.menuUsuarioAbierto) return;
+  if(ev.target.closest && ev.target.closest('[data-user-menu-wrap]')) return;
+  STATE.menuUsuarioAbierto = false;
   render();
 });
