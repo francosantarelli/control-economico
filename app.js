@@ -56,7 +56,7 @@ var STATE = { centros: [], categorias: [], subcategorias: [], movimientos: [], v
   filtros:{centro:[], categoria:[], subcategoria:[], mes:[], texto:'', soloIncompletos:false, soloTarjeta:false},
   resumenFiltros:{centro:[], categoria:[], mes:[], vista:'categoria'}, multiSelectAbierto:null, multiSelectBusqueda:'', abmSubTab:'categorias', grillaRango:'todo',
   bulkVencMsg:null, vencFormMsg:null, dbError:null, saldosCache:null, saldosDirty:true, gimnasioMsg:null,
-  usuarioEmail:null, efectivoAbierto:false, efectivoMsg:null, efectivoCategoriaId:'', backupMsg:null, backupPendiente:null, menuMovilAbierto:false, incompletosSnapshotIds:null,
+  usuarioEmail:null, efectivoAbierto:false, efectivoMsg:null, efectivoCategoriaId:'', efectivoDraft:null, backupMsg:null, backupPendiente:null, menuMovilAbierto:false, incompletosSnapshotIds:null,
   reglas: cargarReglas(), reglaFormMsg:null,
   nuevoMovAbierto:false, movDraftCentroDestinoId:'', comboAbierto:null, comboBusqueda:'', comboHighlight:0,
   movSeleccionados:[], bulkEditMovAbierto:false, bulkEditMovMsg:null, movPaginaActual:1, gruposAbiertos:{},
@@ -1229,32 +1229,36 @@ function renderInterno(){
     var codigoDefault = codigoCentroPorUsuario();
     var centroDefault = STATE.centros.find(function(c){ return (c.codigo||'').toUpperCase()===codigoDefault; });
     var centroDefaultId = centroDefault ? centroDefault.id : '';
+    // Draft: conserva lo tipeado (Fecha/Centro/Tipo/Monto/Proveedor/Detalle/Subcategoría) entre
+    // renders disparados por el propio modal (p. ej. al elegir Categoría, ver el listener de
+    // ef-categoria más abajo) — si no, cada re-render los recrea vacíos porque no tienen otro estado.
+    var efd = STATE.efectivoDraft || {};
     MODAL_HTML = '<div class="modal-overlay" data-modal-backdrop="efectivo"><div class="modal-card">'+
       '<h2>💵 Cargar efectivo</h2>'+
       (STATE.efectivoMsg ? '<div class="msg err">'+esc(STATE.efectivoMsg)+'</div>' : '')+
       '<div class="row">'+
-        '<div class="field"><label>Fecha</label><input type="date" id="ef-fecha" value="'+fechaHoyISO()+'"></div>'+
+        '<div class="field"><label>Fecha</label><input type="date" id="ef-fecha" value="'+esc(efd.fecha||fechaHoyISO())+'"></div>'+
         '<div class="field"><label>Centro de Costo</label><select id="ef-centro"><option value="">Elegir...</option>'+
-          centrosOrdenados().map(function(c){ return '<option value="'+c.id+'" '+(centroDefaultId===c.id?'selected':'')+'>'+esc(c.codigo)+' · '+esc(c.nombre)+'</option>'; }).join('')+
+          centrosOrdenados().map(function(c){ return '<option value="'+c.id+'" '+((efd.centroId||centroDefaultId)===c.id?'selected':'')+'>'+esc(c.codigo)+' · '+esc(c.nombre)+'</option>'; }).join('')+
         '</select></div>'+
         '<div class="field"><label>Tipo</label><select id="ef-tipo">'+
-          '<option value="egreso" selected>Egreso</option>'+
-          '<option value="ingreso">Ingreso</option>'+
+          '<option value="egreso" '+((efd.tipo||'egreso')==='egreso'?'selected':'')+'>Egreso</option>'+
+          '<option value="ingreso" '+(efd.tipo==='ingreso'?'selected':'')+'>Ingreso</option>'+
         '</select></div>'+
       '</div>'+
       '<div class="row" style="margin-top:10px">'+
-        '<div class="field" style="flex:1 1 100%"><label>Monto</label><input type="number" step="0.01" id="ef-monto" placeholder="0.00" style="font-size:18px"></div>'+
+        '<div class="field" style="flex:1 1 100%"><label>Monto</label><input type="number" step="0.01" id="ef-monto" placeholder="0.00" value="'+esc(efd.monto||'')+'" style="font-size:18px"></div>'+
       '</div>'+
       '<div class="row" style="margin-top:10px">'+
-        '<div class="field"><label>Proveedor (opcional)</label><input type="text" id="ef-proveedor" placeholder="Ej: Kiosco"></div>'+
-        '<div class="field"><label>Detalle (opcional)</label><input type="text" id="ef-detalle"></div>'+
+        '<div class="field"><label>Proveedor (opcional)</label><input type="text" id="ef-proveedor" placeholder="Ej: Kiosco" value="'+esc(efd.proveedor||'')+'"></div>'+
+        '<div class="field"><label>Detalle (opcional)</label><input type="text" id="ef-detalle" value="'+esc(efd.detalle||'')+'"></div>'+
       '</div>'+
       '<div class="row" style="margin-top:10px">'+
         '<div class="field"><label>Categoría (opcional)</label><select id="ef-categoria"><option value="">Elegir...</option>'+
           categoriasOrdenadas().map(function(c){ return '<option value="'+c.id+'" '+(STATE.efectivoCategoriaId===c.id?'selected':'')+'>'+esc(c.nombre)+'</option>'; }).join('')+
         '</select></div>'+
         '<div class="field"><label>Subcategoría (opcional)</label><select id="ef-subcategoria"><option value="">Elegir...</option>'+
-          subcategoriasOrdenadas(STATE.subcategorias.filter(function(s){return s.categoriaId===STATE.efectivoCategoriaId;})).map(function(s){ return '<option value="'+s.id+'">'+esc(s.nombre)+'</option>'; }).join('')+
+          subcategoriasOrdenadas(STATE.subcategorias.filter(function(s){return s.categoriaId===STATE.efectivoCategoriaId;})).map(function(s){ return '<option value="'+s.id+'" '+(efd.subcategoriaId===s.id?'selected':'')+'>'+esc(s.nombre)+'</option>'; }).join('')+
         '</select></div>'+
       '</div>'+
       '<div style="font-size:11px;color:var(--ink-soft);margin-top:10px">Podés completar Categoría y Subcategoría ahora, o dejarlas para después desde Movimientos.</div>'+
@@ -2946,6 +2950,10 @@ function bindEvents(){
   var efCategoriaSel = document.getElementById('ef-categoria');
   if(efCategoriaSel){
     efCategoriaSel.addEventListener('change', function(){
+      // Snapshot ANTES de re-renderizar: ver el comentario en efectivoDraft dentro del render.
+      var draft = getEfectivoFormValues();
+      draft.subcategoriaId = ''; // cambió la categoría: la subcategoría anterior ya no aplica
+      STATE.efectivoDraft = draft;
       STATE.efectivoCategoriaId = efCategoriaSel.value;
       render();
     });
@@ -3091,6 +3099,18 @@ function bindEvents(){
   document.querySelectorAll('[data-action]').forEach(function(btn){
     btn.addEventListener('click', function(){ handleAction(btn.getAttribute('data-action'), btn.getAttribute('data-id')); });
   });
+}
+
+function getEfectivoFormValues(){
+  return {
+    fecha: (document.getElementById('ef-fecha')||{}).value || '',
+    centroId: (document.getElementById('ef-centro')||{}).value || '',
+    tipo: (document.getElementById('ef-tipo')||{}).value || 'egreso',
+    monto: (document.getElementById('ef-monto')||{}).value || '',
+    proveedor: (document.getElementById('ef-proveedor')||{}).value || '',
+    detalle: (document.getElementById('ef-detalle')||{}).value || '',
+    subcategoriaId: (document.getElementById('ef-subcategoria')||{}).value || ''
+  };
 }
 
 function getMovFormValues(){
@@ -3466,6 +3486,7 @@ async function handleAction(action, id){
     STATE.efectivoMsg = null;
     STATE.efectivoAbierto = true;
     STATE.efectivoCategoriaId = '';
+    STATE.efectivoDraft = null;
     STATE.menuMovilAbierto = false;
     render(); return;
   }
@@ -3473,6 +3494,7 @@ async function handleAction(action, id){
     STATE.efectivoAbierto = false;
     STATE.efectivoMsg = null;
     STATE.efectivoCategoriaId = '';
+    STATE.efectivoDraft = null;
     render(); return;
   }
   if(action==='guardar-efectivo'){
@@ -3486,6 +3508,9 @@ async function handleAction(action, id){
     var efSubcategoria = document.getElementById('ef-subcategoria').value;
 
     if(!efFecha || !efMonto){
+      // Conservar lo tipeado: sin este snapshot, el render de abajo recrea el modal con los
+      // campos en blanco (ver efectivoDraft) aunque el usuario ya haya cargado casi todo.
+      STATE.efectivoDraft = getEfectivoFormValues();
       STATE.efectivoMsg = 'Completá al menos la fecha y el monto.';
       render(); return;
     }
@@ -3502,7 +3527,12 @@ async function handleAction(action, id){
       STATE.saldosDirty = true;
       STATE.efectivoAbierto = false;
       STATE.efectivoCategoriaId = '';
-    }catch(e){ STATE.dbError = 'No se pudo guardar el movimiento: '+(e.message||e); }
+      STATE.efectivoDraft = null;
+    }catch(e){
+      // Falló el guardado (p. ej. sin conexión): conservar lo tipeado también acá.
+      STATE.efectivoDraft = getEfectivoFormValues();
+      STATE.dbError = 'No se pudo guardar el movimiento: '+(e.message||e);
+    }
     render(); return;
   }
 
