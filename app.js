@@ -50,7 +50,7 @@ function cargarReglas(){
   return seed;
 }
 
-var STATE = { centros: [], categorias: [], subcategorias: [], movimientos: [], vencimientos: [], gimnasioVisitas: [], activeTab: 'movimientos', editing: null, ready:false,
+var STATE = { centros: [], categorias: [], subcategorias: [], movimientos: [], vencimientos: [], gimnasioVisitas: [], usdtMovimientos: [], activeTab: 'movimientos', editing: null, ready:false,
   importEntidad:'mp', importAnio:'26', importBanco:'nacion', importVencimiento:'', importTarjetaMarca:'', importRaw:'', importPreview:null, importPreviewExcel:null, importMsg:null,
   bulkCatMsg:null, bulkColorCatMsg:null, confirmState:null, subDeleteState:null, movFormMsg:null,
   filtros:{centro:[], categoria:[], subcategoria:[], mes:[], texto:'', soloIncompletos:false, soloTarjeta:false},
@@ -61,7 +61,8 @@ var STATE = { centros: [], categorias: [], subcategorias: [], movimientos: [], v
   nuevoMovAbierto:false, movDraftCentroDestinoId:'', comboAbierto:null, comboBusqueda:'', comboHighlight:0,
   movSeleccionados:[], bulkEditMovAbierto:false, bulkEditMovMsg:null, movPaginaActual:1, gruposAbiertos:{},
   tema: (function(){ try{ return localStorage.getItem('controlTema')==='oscuro' ? 'oscuro' : 'claro'; }catch(e){ return 'claro'; } })(),
-  menuUsuarioAbierto:false };
+  menuUsuarioAbierto:false, usdtFormMsg:null, usdtDraft:null,
+  usdtCotizacionBid:null, usdtCotizacionActualizada:null, usdtCotizacionError:null, usdtCotizacionCargando:false };
 var MOV_PAGE_SIZE = 50;
 
 // ===================== FILTROS MÚLTIPLES (selects convertidos a checkboxes) =====================
@@ -289,6 +290,25 @@ function fromDbMovimiento(r){ return {id:r.id, fecha:r.fecha, centroId:r.centro_
 function toDbVencimiento(v){ return {id:v.id, concepto:v.concepto, fecha:v.fecha, monto:Number(v.monto)||0, centro_id:v.centroId||null, estado:v.estado||'pendiente'}; }
 function fromDbVencimiento(r){ return {id:r.id, concepto:r.concepto, fecha:r.fecha, monto:Number(r.monto)||0, centroId:r.centro_id||'', estado:r.estado||'pendiente'}; }
 function fromDbGimnasioVisita(r){ return {id:r.id, persona:r.persona, fecha:r.fecha}; }
+function toDbUsdt(u){
+  return {
+    id:u.id, fecha:u.fecha, tipo:u.tipo, cantidad:Number(u.cantidad)||0,
+    monto_ars: u.tipo==='venta' ? (Number(u.montoArs)||0) : null,
+    cotizacion: u.tipo==='venta' ? (Number(u.cotizacion)||0) : null,
+    centro_id: u.tipo==='venta' ? (u.centroId||null) : null,
+    categoria_id: u.tipo==='venta' ? (u.categoriaId||null) : null,
+    subcategoria_id: u.tipo==='venta' ? (u.subcategoriaId||null) : null,
+    movimiento_id: u.movimientoId||null, detalle: u.detalle||null
+  };
+}
+function fromDbUsdt(r){
+  return {
+    id:r.id, fecha:r.fecha, tipo:r.tipo, cantidad:Number(r.cantidad)||0,
+    montoArs:Number(r.monto_ars)||0, cotizacion:Number(r.cotizacion)||0,
+    centroId:r.centro_id||'', categoriaId:r.categoria_id||'', subcategoriaId:r.subcategoria_id||'',
+    movimientoId:r.movimiento_id||'', detalle:r.detalle||''
+  };
+}
 
 // ---- CRUD genérico contra Supabase ----
 async function dbFetchAll(table){
@@ -340,6 +360,11 @@ async function cargarTodo(){
     var gimnasioVisitas = await dbFetchAll('gimnasio_visitas');
     STATE.gimnasioVisitas = gimnasioVisitas.map(fromDbGimnasioVisita);
   }catch(e){ STATE.gimnasioVisitas = []; }
+  try{
+    // Idem: si todavía no corriste migracion_usdt.sql, arranca vacío en vez de romper la carga.
+    var usdtMovimientos = await dbFetchAll('usdt_movimientos');
+    STATE.usdtMovimientos = usdtMovimientos.map(fromDbUsdt);
+  }catch(e){ STATE.usdtMovimientos = []; }
 }
 
 // ===================== AUTENTICACIÓN =====================
@@ -396,6 +421,36 @@ async function initAuth(){
 function fmtMonto(n){
   n = Number(n)||0;
   return n.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+function fmtCantidadUsdt(n){
+  n = Number(n)||0;
+  return n.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:6});
+}
+function calcularSaldoUsdt(){
+  return STATE.usdtMovimientos.reduce(function(s,u){
+    return s + (u.tipo==='ingreso' ? (Number(u.cantidad)||0) : -(Number(u.cantidad)||0));
+  }, 0);
+}
+// Cotización de venta de USDT en Binance P2P (ARS), vía CriptoYa (API pública, sin key, CORS abierto).
+// "bid" es lo que te pagan si vendés ahora — es lo que corresponde acá, no "ask" (precio de compra).
+async function obtenerCotizacionUsdt(){
+  if(STATE.usdtCotizacionCargando) return;
+  STATE.usdtCotizacionCargando = true;
+  STATE.usdtCotizacionError = null;
+  render();
+  try{
+    var res = await fetch('https://criptoya.com/api/binancep2p/usdt/ars/1');
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    var data = await res.json();
+    var bid = Number(data && data.bid);
+    if(!bid || bid<=0) throw new Error('respuesta inesperada de la API');
+    STATE.usdtCotizacionBid = bid;
+    STATE.usdtCotizacionActualizada = new Date();
+  }catch(e){
+    STATE.usdtCotizacionError = 'No se pudo obtener la cotización de Binance P2P ('+(e.message||e)+').';
+  }
+  STATE.usdtCotizacionCargando = false;
+  render();
 }
 function nombreCentro(id){ var c = STATE.centros.find(function(x){return x.id===id;}); return c ? c.codigo+' · '+c.nombre : '—'; }
 function centrosOrdenados(){ return STATE.centros.slice().sort(function(a,b){ return (a.codigo||'').localeCompare(b.codigo||'', 'es', {sensitivity:'base'}); }); }
@@ -1146,6 +1201,7 @@ function renderInterno(){
     {id:'vencimientos', label:'Vencimientos', icono:'⏰'},
     {id:'saldos', label:'Saldos', icono:'🏦'},
     {id:'resumen', label:'Resumen', icono:'📊'},
+    {id:'usdt', label:'USDT', icono:'🪙'},
     {id:'gimnasio', label:'Gimnasio', icono:'💪'},
     {id:'abm', label:'ABM', icono:'⚙️'}
   ];
@@ -1188,6 +1244,7 @@ function renderInterno(){
     else if(STATE.activeTab==='vencimientos') contentHtml += renderVencimientos();
     else if(STATE.activeTab==='saldos') contentHtml += renderSaldos();
     else if(STATE.activeTab==='resumen') contentHtml += renderResumen();
+    else if(STATE.activeTab==='usdt') contentHtml += renderUsdt();
     else if(STATE.activeTab==='gimnasio') contentHtml += renderGimnasio();
     else if(STATE.activeTab==='abm') contentHtml += renderABM();
   }
@@ -1812,6 +1869,31 @@ function renderMovimientos(){
     '</div></div>';
   }
 
+  var vencimientosProximos = STATE.vencimientos.filter(function(v){
+    if(v.estado==='pagado') return false;
+    var dias = diasHasta(v.fecha);
+    return dias===0 || dias===1;
+  }).map(function(v){
+    return {dias:diasHasta(v.fecha), concepto:v.concepto, monto:v.monto, centroId:v.centroId};
+  }).concat(STATE.movimientos.filter(function(m){
+    if(!esMovimientoPendiente(m)) return false;
+    var dias = diasHasta(m.fecha);
+    return dias===0 || dias===1;
+  }).map(function(m){
+    return {dias:diasHasta(m.fecha), concepto:m.proveedor||nombreCategoria(m.categoriaId)||m.detalle||'Movimiento', monto:(Number(m.egreso)||0)-(Number(m.ingreso)||0), centroId:m.centroId};
+  })).sort(function(a,b){ return a.dias-b.dias; });
+
+  var alertaVencimientosHtml = vencimientosProximos.length ? ''+
+  '<div class="card" style="border-color:var(--danger);background:var(--danger-soft)">'+
+    '<h3 style="color:var(--danger)">⏰ Vencimientos próximos</h3>'+
+    '<div style="font-size:13px;margin-bottom:8px">'+
+      vencimientosProximos.map(function(x){
+        return '<div style="margin-bottom:4px">'+(x.dias===0?'<strong>Hoy</strong>':'<strong>Mañana</strong>')+' — '+esc(x.concepto)+(x.centroId?' ('+esc(nombreCentro(x.centroId).split(' · ')[0])+')':'')+' — <span class="mono">'+fmtMonto(x.monto)+'</span></div>';
+      }).join('')+
+    '</div>'+
+    '<button class="secondary" data-action="ir-a-vencimientos" style="font-size:12px;padding:6px 12px">Ver vencimientos</button>'+
+  '</div>' : '';
+
   var controlTecHtml = (Math.abs(difTec) > 0.005 || categoriasSospechosas.length > 0) ? ''+
   '<div class="card" style="border-color:var(--danger);background:var(--danger-soft)">'+
     '<h3 style="color:var(--danger)">⚠️ Control TEC</h3>'+
@@ -1875,7 +1957,7 @@ function renderMovimientos(){
     paginacionHtml+
   '</div>';
 
-  return controlTecHtml + filtersHtml + tableHtml;
+  return alertaVencimientosHtml + controlTecHtml + filtersHtml + tableHtml;
 }
 
 // ===================== IMPORTAR =====================
@@ -2750,6 +2832,120 @@ function gimnasioListaUltimasVisitas(){
     '</div>';
   }).join('');
 }
+
+// ===================== USDT (tenencia + ventas que se acreditan en pesos) =====================
+function getUsdtFormValues(){
+  return {
+    tipo: (document.getElementById('f-usdt-tipo')||{}).value || 'ingreso',
+    fecha: (document.getElementById('f-usdt-fecha')||{}).value || '',
+    cantidad: (document.getElementById('f-usdt-cantidad')||{}).value || '',
+    detalle: (document.getElementById('f-usdt-detalle')||{}).value || '',
+    montoArs: (document.getElementById('f-usdt-monto-ars')||{}).value || '',
+    centroId: (document.getElementById('f-usdt-centro')||{}).value || '',
+    categoriaId: (document.getElementById('f-usdt-categoria')||{}).value || '',
+    subcategoriaId: (document.getElementById('f-usdt-subcategoria')||{}).value || ''
+  };
+}
+function campoUsdt(e){
+  var esVenta = e.tipo === 'venta';
+  var subOpciones = subcategoriasOrdenadas(STATE.subcategorias.filter(function(s){ return s.categoriaId === e.categoriaId; }))
+    .map(function(s){ return '<option value="'+s.id+'" '+(e.subcategoriaId===s.id?'selected':'')+'>'+esc(s.nombre)+'</option>'; }).join('');
+  var camposVenta = esVenta ? ''+
+    '<div class="row" style="margin-top:10px">'+
+      '<div class="field"><label>Monto recibido (ARS)</label><input type="number" step="0.01" id="f-usdt-monto-ars" value="'+esc(e.montoArs)+'" style="width:140px"></div>'+
+      '<div class="field"><label>Centro de Costo destino</label><select id="f-usdt-centro"><option value="">Elegir...</option>'+
+        centrosOrdenados().map(function(c){ return '<option value="'+c.id+'" '+(e.centroId===c.id?'selected':'')+'>'+esc(c.codigo)+' · '+esc(c.nombre)+'</option>'; }).join('')+
+      '</select></div>'+
+      '<div class="field"><label>Categoría</label><select id="f-usdt-categoria"><option value="">Elegir...</option>'+
+        categoriasOrdenadas().map(function(c){ return '<option value="'+c.id+'" '+(e.categoriaId===c.id?'selected':'')+'>'+esc(c.nombre)+'</option>'; }).join('')+
+      '</select></div>'+
+      '<div class="field"><label>Subcategoría</label><select id="f-usdt-subcategoria"><option value="">—</option>'+subOpciones+'</select></div>'+
+    '</div>'+
+    '<div style="font-size:11px;color:var(--ink-soft);margin-top:8px">Al guardar se crea (o actualiza) automáticamente un ingreso en pesos en Movimientos, por el monto recibido, en el Centro de Costo y Categoría elegidos acá.</div>'
+    : '';
+  return ''+
+    (STATE.usdtFormMsg ? '<div class="msg err">'+esc(STATE.usdtFormMsg)+'</div>' : '')+
+    '<div class="row">'+
+      '<div class="field"><label>Tipo</label><select id="f-usdt-tipo">'+
+        '<option value="ingreso" '+(e.tipo==='ingreso'?'selected':'')+'>Ingreso de USDT</option>'+
+        '<option value="venta" '+(e.tipo==='venta'?'selected':'')+'>Venta de USDT</option>'+
+      '</select></div>'+
+      '<div class="field"><label>Fecha</label><input type="date" id="f-usdt-fecha" value="'+esc(e.fecha)+'"></div>'+
+      '<div class="field"><label>Cantidad (USDT)</label><input type="number" step="0.00000001" min="0" id="f-usdt-cantidad" value="'+esc(e.cantidad)+'" style="width:150px"></div>'+
+      '<div class="field"><label>Detalle (opcional)</label><input type="text" id="f-usdt-detalle" value="'+esc(e.detalle)+'" style="width:200px"></div>'+
+    '</div>'+
+    camposVenta;
+}
+function renderUsdt(){
+  var saldo = calcularSaldoUsdt();
+  var editing = STATE.editing && STATE.editing.type==='usdt' ? STATE.usdtMovimientos.find(function(x){return x.id===STATE.editing.id;}) : null;
+  var editingNormalizado = editing ? {
+    tipo: editing.tipo, fecha: editing.fecha, cantidad: editing.cantidad, detalle: editing.detalle,
+    montoArs: editing.montoArs||'', centroId: editing.centroId, categoriaId: editing.categoriaId, subcategoriaId: editing.subcategoriaId
+  } : null;
+  var e = STATE.usdtDraft || editingNormalizado || {tipo:'ingreso', fecha:fechaHoyISO(), cantidad:'', detalle:'', montoArs:'', centroId:'', categoriaId:'', subcategoriaId:''};
+
+  var formHtml = '';
+  if(editing){
+    MODAL_HTML = '<div class="modal-overlay" data-modal-backdrop="edit"><div class="modal-card">'+
+      '<h2>Editar movimiento USDT</h2>'+
+      campoUsdt(e)+
+      '<div class="row" style="margin-top:14px">'+
+        '<button data-action="save-usdt" data-id="'+editing.id+'">Guardar cambios</button>'+
+        '<button class="secondary" data-action="cancel-edit">Cancelar</button>'+
+      '</div>'+
+    '</div></div>';
+  } else {
+    formHtml = ''+
+    '<div class="card">'+
+      '<h2>Nuevo movimiento USDT</h2>'+
+      campoUsdt(e)+
+      '<div class="row" style="margin-top:14px"><button data-action="save-usdt" data-id="">Agregar</button></div>'+
+    '</div>';
+  }
+
+  var lista = STATE.usdtMovimientos.slice().sort(function(a,b){ return (b.fecha||'').localeCompare(a.fecha||''); });
+  var rows = lista.map(function(u){
+    var esVenta = u.tipo==='venta';
+    return '<tr>'+
+      '<td class="mono" data-label="Fecha">'+esc(fechaISOaDDMMAAAA(u.fecha)||u.fecha||'')+'</td>'+
+      '<td data-label="Tipo">'+(esVenta?'🔴 Venta':'🟢 Ingreso')+'</td>'+
+      '<td class="num mono" data-label="Cantidad">'+fmtCantidadUsdt(u.cantidad)+'</td>'+
+      '<td class="num mono" data-label="Monto ARS">'+(esVenta?fmtMonto(u.montoArs):'—')+'</td>'+
+      '<td class="num mono" data-label="Cotización">'+(esVenta && u.cotizacion?fmtMonto(u.cotizacion):'—')+'</td>'+
+      '<td data-label="Centro">'+(esVenta?esc(nombreCentro(u.centroId).split(' · ')[0]):'—')+'</td>'+
+      '<td data-label="Detalle">'+esc(u.detalle||'')+'</td>'+
+      '<td class="actions-cell"><button class="icon-btn" data-action="edit-usdt" data-id="'+u.id+'" title="Editar" aria-label="Editar">✏️</button>'+
+      '<button class="icon-btn icon-btn-danger" data-action="del-usdt" data-id="'+u.id+'" title="Borrar" aria-label="Borrar">🗑️</button></td>'+
+    '</tr>';
+  }).join('');
+
+  return ''+
+  '<div class="card">'+
+    '<h2>🪙 Tenencia de USDT</h2>'+
+    '<div style="font-size:12px;color:var(--ink-soft);margin-top:2px">Registrá acá tus ingresos en USDT y, cuando los vendas, cuánto recibiste en pesos. La venta resta de tu tenencia y crea sola el ingreso en pesos en Movimientos — no hace falta cargarlo dos veces.</div>'+
+  '</div>'+
+  '<div class="summary-cards">'+
+    '<div class="summary-card"><div class="label">Tenencia actual</div><div class="value">'+fmtCantidadUsdt(saldo)+' USDT</div></div>'+
+    '<div class="summary-card">'+
+      '<div class="label">Valor en pesos (Binance P2P)</div>'+
+      (STATE.usdtCotizacionCargando ? '<div class="value" style="font-size:14px;color:var(--ink-soft)">Consultando…</div>'
+        : STATE.usdtCotizacionBid ? '<div class="value">$'+fmtMonto(saldo*STATE.usdtCotizacionBid)+'</div>'
+        : '<div class="value" style="font-size:14px;color:var(--ink-soft)">Sin cotización</div>')+
+      '<div style="font-size:11px;color:var(--ink-soft);margin-top:4px">'+
+        (STATE.usdtCotizacionBid ? 'Cotización de venta: $'+fmtMonto(STATE.usdtCotizacionBid)+' · actualizada a las '+STATE.usdtCotizacionActualizada.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})+' — ' : '')+
+        '<button class="link" data-action="actualizar-cotizacion-usdt" style="padding:0;font-size:11px">↻ Actualizar</button>'+
+        (STATE.usdtCotizacionError ? '<div style="color:var(--danger);margin-top:2px">'+esc(STATE.usdtCotizacionError)+'</div>' : '')+
+      '</div>'+
+    '</div>'+
+  '</div>'+
+  formHtml+
+  '<div class="card">'+
+    '<h3>Movimientos ('+lista.length+')</h3>'+
+    (lista.length ? '<table class="tabla-movil"><thead><tr><th>Fecha</th><th>Tipo</th><th class="num">Cantidad</th><th class="num">Monto ARS</th><th class="num">Cotización</th><th>Centro</th><th>Detalle</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>' : '<div class="empty">Todavía no cargaste ningún movimiento de USDT.</div>')+
+  '</div>';
+}
+
 function renderGimnasio(){
   var persona = personaPorUsuario();
   var hoy = fechaHoyISO();
@@ -2813,7 +3009,13 @@ function bindEvents(){
   });
 
   document.querySelectorAll('.tab').forEach(function(t){
-    t.addEventListener('click', function(){ STATE.activeTab = t.getAttribute('data-tab'); STATE.editing = null; STATE.movDraft = null; STATE.nuevoMovAbierto = false; STATE.menuMovilAbierto = false; STATE.multiSelectAbierto = null; STATE.bulkEditMovAbierto = false; STATE.movSeleccionados = []; render(); });
+    t.addEventListener('click', function(){
+      var tabId = t.getAttribute('data-tab');
+      STATE.activeTab = tabId; STATE.editing = null; STATE.movDraft = null; STATE.usdtDraft = null; STATE.usdtFormMsg = null; STATE.nuevoMovAbierto = false; STATE.menuMovilAbierto = false; STATE.multiSelectAbierto = null; STATE.bulkEditMovAbierto = false; STATE.movSeleccionados = [];
+      render();
+      // Primera vez que se entra a USDT en esta sesión: traer la cotización sola, sin que haya que tocar "Actualizar".
+      if(tabId==='usdt' && STATE.usdtCotizacionBid===null && !STATE.usdtCotizacionCargando) obtenerCotizacionUsdt();
+    });
   });
 
   document.querySelectorAll('.subtab').forEach(function(t){
@@ -2955,6 +3157,28 @@ function bindEvents(){
       draft.subcategoriaId = ''; // cambió la categoría: la subcategoría anterior ya no aplica
       STATE.efectivoDraft = draft;
       STATE.efectivoCategoriaId = efCategoriaSel.value;
+      render();
+    });
+  }
+
+  // Formulario de USDT: mostrar/ocultar los campos de venta al cambiar el Tipo,
+  // y refrescar las subcategorías disponibles al cambiar la Categoría.
+  var usdtTipoSel = document.getElementById('f-usdt-tipo');
+  if(usdtTipoSel){
+    usdtTipoSel.addEventListener('change', function(){
+      var draft = getUsdtFormValues();
+      draft.tipo = usdtTipoSel.value;
+      STATE.usdtDraft = draft;
+      render();
+    });
+  }
+  var usdtCategoriaSel = document.getElementById('f-usdt-categoria');
+  if(usdtCategoriaSel){
+    usdtCategoriaSel.addEventListener('change', function(){
+      var draft = getUsdtFormValues();
+      draft.categoriaId = usdtCategoriaSel.value;
+      draft.subcategoriaId = '';
+      STATE.usdtDraft = draft;
       render();
     });
   }
@@ -3132,13 +3356,16 @@ function getMovFormValues(){
 
 async function handleAction(action, id){
   STATE.movDraft = null;
+  STATE.usdtDraft = null;
 
   if(action==='mov-pagina-anterior'){ STATE.movPaginaActual = Math.max(1, STATE.movPaginaActual-1); render(); return; }
   if(action==='mov-pagina-siguiente'){ STATE.movPaginaActual = STATE.movPaginaActual+1; render(); return; }
+  if(action==='ir-a-vencimientos'){ STATE.activeTab = 'vencimientos'; render(); return; }
   if(action==='cancel-edit'){
     STATE.editing = null; STATE.nuevoMovAbierto = false; STATE.movDraftCentroDestinoId = '';
     STATE.comboAbierto = null; STATE.comboBusqueda = '';
     STATE.bulkEditMovAbierto = false; STATE.bulkEditMovMsg = null;
+    STATE.usdtFormMsg = null;
     render(); return;
   }
   if(action==='abrir-nuevo-mov'){
@@ -4014,6 +4241,111 @@ async function handleAction(action, id){
     }catch(e){
       STATE.gimnasioMsg = 'No se pudo borrar la visita: '+(e.message||e);
     }
+    render(); return;
+  }
+
+  // ---- USDT ----
+  if(action==='actualizar-cotizacion-usdt'){ await obtenerCotizacionUsdt(); return; }
+  if(action==='edit-usdt'){ STATE.editing = {type:'usdt', id:id}; STATE.usdtFormMsg = null; render(); return; }
+  if(action==='del-usdt'){
+    var uBorrar = STATE.usdtMovimientos.find(function(x){return x.id===id;});
+    var avisoVinculado = (uBorrar && uBorrar.movimientoId) ? ' Esto también borra el movimiento en pesos vinculado en Movimientos.' : '';
+    STATE.confirmState = { message:'¿Borrar este movimiento de USDT?'+avisoVinculado, action:'del-usdt-do', id:id };
+    render(); return;
+  }
+  if(action==='del-usdt-do'){
+    try{
+      var uBorrado = STATE.usdtMovimientos.find(function(x){return x.id===id;});
+      if(uBorrado && uBorrado.movimientoId){
+        await dbDelete('movimientos', uBorrado.movimientoId);
+        STATE.movimientos = STATE.movimientos.filter(function(m){return m.id!==uBorrado.movimientoId;});
+        STATE.saldosDirty = true;
+      }
+      await dbDelete('usdt_movimientos', id);
+      STATE.usdtMovimientos = STATE.usdtMovimientos.filter(function(x){return x.id!==id;});
+    }catch(e){ STATE.dbError = 'No se pudo borrar el movimiento de USDT: '+(e.message||e); }
+    render(); return;
+  }
+  if(action==='save-usdt'){
+    var vU = getUsdtFormValues();
+    STATE.usdtDraft = vU;
+    if(!vU.fecha || !vU.cantidad || parseFloat(vU.cantidad)<=0){
+      STATE.usdtFormMsg = 'Completá al menos: fecha y cantidad de USDT (mayor a 0).';
+      render(); return;
+    }
+    var esVentaU = vU.tipo === 'venta';
+    if(esVentaU && (!vU.montoArs || parseFloat(vU.montoArs)<=0 || !vU.centroId || !vU.categoriaId)){
+      STATE.usdtFormMsg = 'Para una venta completá también: monto en pesos recibido, Centro de Costo y Categoría.';
+      render(); return;
+    }
+    STATE.usdtFormMsg = null; STATE.dbError = null;
+    var cantidadU = Math.abs(parseFloat(vU.cantidad))||0;
+    var montoArsU = esVentaU ? Math.abs(parseFloat(vU.montoArs))||0 : 0;
+    var cotizacionU = (esVentaU && cantidadU) ? montoArsU/cantidadU : 0;
+    var detalleMovVinculado = (vU.detalle?vU.detalle+' — ':'')+'Venta '+fmtCantidadUsdt(cantidadU)+' USDT (cotización $'+fmtMonto(cotizacionU)+')';
+
+    try{
+      if(id){
+        var existenteU = STATE.usdtMovimientos.find(function(x){return x.id===id;});
+        var movimientoIdPrevio = existenteU ? existenteU.movimientoId : '';
+        var movimientoIdFinal = movimientoIdPrevio;
+
+        if(esVentaU){
+          var datosMovU = {
+            fecha: vU.fecha, centroId: vU.centroId, categoriaId: vU.categoriaId, subcategoriaId: vU.subcategoriaId,
+            proveedor: 'Venta USDT', detalle: detalleMovVinculado, ingreso: montoArsU, egreso: 0, tarjeta:false
+          };
+          if(movimientoIdPrevio){
+            await dbUpdate('movimientos', movimientoIdPrevio, toDbMovimiento(Object.assign({id:movimientoIdPrevio}, datosMovU)));
+            var movAActualizar = STATE.movimientos.find(function(m){return m.id===movimientoIdPrevio;});
+            if(movAActualizar) Object.assign(movAActualizar, datosMovU);
+          } else {
+            movimientoIdFinal = uid();
+            var movNuevoDesdeEdicion = Object.assign({id:movimientoIdFinal}, datosMovU);
+            await dbInsert('movimientos', toDbMovimiento(movNuevoDesdeEdicion));
+            STATE.movimientos.push(movNuevoDesdeEdicion);
+          }
+        } else if(movimientoIdPrevio){
+          // Pasó de venta a ingreso: ya no corresponde el movimiento en pesos que tenía vinculado.
+          await dbDelete('movimientos', movimientoIdPrevio);
+          STATE.movimientos = STATE.movimientos.filter(function(m){return m.id!==movimientoIdPrevio;});
+          movimientoIdFinal = '';
+        }
+
+        var usdtActualizado = {
+          id:id, tipo:vU.tipo, fecha:vU.fecha, cantidad:cantidadU, detalle:vU.detalle,
+          montoArs:montoArsU, cotizacion:cotizacionU,
+          centroId: esVentaU?vU.centroId:'', categoriaId: esVentaU?vU.categoriaId:'', subcategoriaId: esVentaU?vU.subcategoriaId:'',
+          movimientoId: movimientoIdFinal
+        };
+        await dbUpdate('usdt_movimientos', id, toDbUsdt(usdtActualizado));
+        var idxU = STATE.usdtMovimientos.findIndex(function(x){return x.id===id;});
+        if(idxU>-1) STATE.usdtMovimientos[idxU] = usdtActualizado;
+        STATE.saldosDirty = true;
+      } else {
+        var movimientoIdNuevo = '';
+        if(esVentaU){
+          movimientoIdNuevo = uid();
+          var movNuevoU = {
+            id: movimientoIdNuevo, fecha: vU.fecha, centroId: vU.centroId, categoriaId: vU.categoriaId, subcategoriaId: vU.subcategoriaId,
+            proveedor: 'Venta USDT', detalle: detalleMovVinculado, ingreso: montoArsU, egreso: 0, tarjeta:false
+          };
+          await dbInsert('movimientos', toDbMovimiento(movNuevoU));
+          STATE.movimientos.push(movNuevoU);
+        }
+        var usdtNuevo = {
+          id: uid(), tipo: vU.tipo, fecha: vU.fecha, cantidad: cantidadU, detalle: vU.detalle,
+          montoArs: montoArsU, cotizacion: cotizacionU,
+          centroId: esVentaU?vU.centroId:'', categoriaId: esVentaU?vU.categoriaId:'', subcategoriaId: esVentaU?vU.subcategoriaId:'',
+          movimientoId: movimientoIdNuevo
+        };
+        await dbInsert('usdt_movimientos', toDbUsdt(usdtNuevo));
+        STATE.usdtMovimientos.push(usdtNuevo);
+        STATE.saldosDirty = true;
+      }
+      STATE.editing = null;
+      STATE.usdtDraft = null;
+    }catch(e){ STATE.dbError = 'No se pudo guardar el movimiento de USDT: '+(e.message||e); }
     render(); return;
   }
 }
