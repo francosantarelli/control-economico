@@ -160,10 +160,12 @@ input[type=color]{
 
 /* Barra superior de escritorio: solo aloja el menú de usuario, arriba a la derecha */
 .topbar-desktop{
-  display:flex; justify-content:space-between; align-items:center; padding-bottom:14px;
-  position:sticky; top:0; background:var(--bg); z-index:40;
+  display:flex; justify-content:space-between; align-items:center;
+  margin:-28px -24px 20px; padding:10px 24px;
+  background:var(--accent-soft); border-bottom:2px solid var(--accent);
+  position:sticky; top:0; z-index:40;
 }
-.topbar-titulo{ font-size:19px; }
+.topbar-titulo{ font-size:19px; color:var(--accent); }
 
 /* Menú de usuario (avatar con iniciales + dropdown de tema/cerrar sesión) */
 .user-menu-wrap{ position:relative; }
