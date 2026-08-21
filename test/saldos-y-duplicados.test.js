@@ -25,14 +25,15 @@ describe('existeMovimientoIgual / calcularDuplicados', () => {
     ];
   });
 
-  it('detecta un movimiento existente igual (mismo día, centro, proveedor normalizado y monto)', () => {
+  it('detecta un movimiento existente igual (mismo día, centro y monto; el proveedor no se compara)', () => {
     expect(win.existeMovimientoIgual('2026-08-01', 'c1', 'SUPERMERCADO LA ANONIMA', -1000)).toBe(true);
+    // el proveedor puede venir distinto (p. ej. lo editó el usuario después de importar) y sigue marcando duplicado
+    expect(win.existeMovimientoIgual('2026-08-01', 'c1', 'Otro proveedor', -1000)).toBe(true);
   });
 
-  it('no lo considera igual si difiere el centro, el monto o el proveedor', () => {
+  it('no lo considera igual si difiere el centro o el monto', () => {
     expect(win.existeMovimientoIgual('2026-08-01', 'c2', 'Supermercado La Anonima', -1000)).toBe(false);
     expect(win.existeMovimientoIgual('2026-08-01', 'c1', 'Supermercado La Anonima', -999)).toBe(false);
-    expect(win.existeMovimientoIgual('2026-08-01', 'c1', 'Otro proveedor', -1000)).toBe(false);
   });
 
   it('sin fecha o centro nunca marca como duplicado', () => {

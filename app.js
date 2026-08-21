@@ -1017,8 +1017,12 @@ function agregarOActualizarRegla(proveedorTexto, categoriaNombre, subcategoriaNo
 }
 
 // ===================== DETECCIÓN DE DUPLICADOS EN IMPORTACIÓN =====================
-// Un movimiento se considera "el mismo" si coincide Centro de Costo, día y proveedor,
-// y el monto (con signo: ingreso positivo, egreso negativo) es igual.
+// Un movimiento se considera "el mismo" si coincide Centro de Costo, día y el monto (con
+// signo: ingreso positivo, egreso negativo). El proveedor NO se usa para comparar: en las
+// entidades que parsean el detalle crudo del resumen (Provincia, Nación, Santander) ese texto
+// suele quedar feo y el usuario lo prolija después de importar; si comparáramos por proveedor,
+// una fila re-pegada de un resumen superpuesto dejaría de matchear contra el movimiento ya
+// guardado (con el proveedor editado) y el aviso de duplicado no aparecería.
 function montoSignedMovimiento(m){
   var ingreso = Number(m.ingreso)||0, egreso = Number(m.egreso)||0;
   return ingreso>0 ? ingreso : -egreso;
@@ -1028,9 +1032,8 @@ function montosIguales(a, b){ return Math.round((Number(a)||0)*100) === Math.rou
 
 function existeMovimientoIgual(fecha, centroId, proveedor, monto){
   if(!fecha || !centroId) return false;
-  var provNorm = normalizarProveedor(proveedor);
   return STATE.movimientos.some(function(m){
-    return m.fecha===fecha && m.centroId===centroId && normalizarProveedor(m.proveedor)===provNorm && montosIguales(montoSignedMovimiento(m), monto);
+    return m.fecha===fecha && m.centroId===centroId && montosIguales(montoSignedMovimiento(m), monto);
   });
 }
 
@@ -1044,7 +1047,7 @@ function calcularDuplicados(filasNormalizadas){
     for(var j=0;j<filasNormalizadas.length;j++){
       if(j===i) continue;
       var o = filasNormalizadas[j];
-      if(o.fecha===f.fecha && o.centroId===f.centroId && normalizarProveedor(o.proveedor)===normalizarProveedor(f.proveedor) && montosIguales(o.monto, f.monto)){
+      if(o.fecha===f.fecha && o.centroId===f.centroId && montosIguales(o.monto, f.monto)){
         dupIds[f.id] = true; break;
       }
     }
@@ -2021,7 +2024,7 @@ function renderImportar(){
       var subOpts = subcategoriasOrdenadas(STATE.subcategorias.filter(function(s){return s.categoriaId===r.categoriaId;}))
         .map(function(s){ return '<option value="'+s.id+'" '+(r.subcategoriaId===s.id?'selected':'')+'>'+esc(s.nombre)+'</option>'; }).join('');
       var subSel = '<select data-rowid="'+r.id+'" data-field="subcategoriaId"><option value="">—</option>'+subOpts+'</select>';
-      var dupTag = esDup ? ' <span title="Posible duplicado: mismo Centro, fecha, proveedor y monto que otro movimiento. Revisá antes de importar." style="color:var(--danger)">⚠️</span>' : '';
+      var dupTag = esDup ? ' <span title="Posible duplicado: mismo Centro, fecha y monto que otro movimiento. Revisá antes de importar." style="color:var(--danger)">⚠️</span>' : '';
       var provInput = '<input type="text" id="imp-prov-'+r.id+'" data-rowid="'+r.id+'" data-field="proveedor" value="'+esc(r.proveedor)+'" style="width:100%;min-width:110px;box-sizing:border-box">';
       var detInput = '<input type="text" id="imp-det-'+r.id+'" data-rowid="'+r.id+'" data-field="detalle" value="'+esc(r.detalle)+'" style="width:100%;min-width:110px;box-sizing:border-box">';
       return '<tr'+(esDup?' class="fila-duplicada"':'')+'>'+
@@ -2052,7 +2055,7 @@ function renderImportar(){
     '</div>'+
     '<div class="card">'+
       '<h3>Previsualización ('+STATE.importPreview.length+' movimiento(s), '+incluidos+' seleccionado(s))</h3>'+
-      (duplicados>0 ? '<div class="msg err">⚠️ '+duplicados+' fila(s) marcada(s) como posible duplicado (mismo Centro, fecha, proveedor y monto que otro movimiento). Revisalas antes de confirmar.</div>' : '')+
+      (duplicados>0 ? '<div class="msg err">⚠️ '+duplicados+' fila(s) marcada(s) como posible duplicado (mismo Centro, fecha y monto que otro movimiento). Revisalas antes de confirmar.</div>' : '')+
       '<table id="import-preview-table"><thead><tr><th></th><th>Fecha</th><th>Centro</th><th>Categoría</th><th>Subcategoría</th><th>Proveedor</th><th>Detalle</th><th class="num">Ingreso</th><th class="num">Egreso</th><th title="Guardar la relación proveedor → categoría como regla para futuras importaciones">Regla</th></tr></thead>'+
       '<tbody>'+rows+'</tbody></table>'+
       '<div class="row" style="margin-top:14px">'+
@@ -2074,7 +2077,7 @@ function renderImportar(){
       var tagCC = r.ccExists ? '' : ' <span style="color:var(--danger);font-size:11px">(se creará)</span>';
       var tagCat = r.catExists ? '' : ' <span style="color:var(--danger);font-size:11px">(se creará)</span>';
       var tagSub = (!r.subcategoriaText) ? '' : (r.subExists ? '' : ' <span style="color:var(--danger);font-size:11px">(se creará)</span>');
-      var dupTag = esDup ? ' <span title="Posible duplicado: mismo Centro, fecha, proveedor y monto que otro movimiento. Revisá antes de importar." style="color:var(--danger)">⚠️</span>' : '';
+      var dupTag = esDup ? ' <span title="Posible duplicado: mismo Centro, fecha y monto que otro movimiento. Revisá antes de importar." style="color:var(--danger)">⚠️</span>' : '';
       return '<tr'+(esDup?' class="fila-duplicada"':'')+'>'+
         '<td><input type="checkbox" data-rowid="'+r.id+'" data-field="incluir" '+(r.incluir?'checked':'')+'></td>'+
         '<td class="mono">'+esc(fechaISOaDDMMAAAA(r.fecha)||r.fecha)+dupTag+'</td>'+
@@ -2096,7 +2099,7 @@ function renderImportar(){
     '<div class="card">'+
       '<h3>Previsualización ('+STATE.importPreviewExcel.length+' movimiento(s), '+incluidosExcel+' seleccionado(s))</h3>'+
       (nuevosCC>0||nuevasCat>0 ? '<div class="msg ok">Se van a crear automáticamente: '+nuevosCC+' Centro(s) de Costo nuevo(s), '+nuevasCat+' Categoría(s) nueva(s) (marcados en rojo abajo). Revisá que no sean errores de tipeo antes de confirmar.</div>' : '')+
-      (duplicadosExcel>0 ? '<div class="msg err">⚠️ '+duplicadosExcel+' fila(s) marcada(s) como posible duplicado (mismo Centro, fecha, proveedor y monto que otro movimiento). Revisalas antes de confirmar.</div>' : '')+
+      (duplicadosExcel>0 ? '<div class="msg err">⚠️ '+duplicadosExcel+' fila(s) marcada(s) como posible duplicado (mismo Centro, fecha y monto que otro movimiento). Revisalas antes de confirmar.</div>' : '')+
       '<table id="import-preview-excel-table"><thead><tr><th></th><th>Fecha</th><th>CC</th><th>Categoría</th><th>Subcategoría</th><th>Proveedor</th><th>Detalle</th><th class="num">Ingreso</th><th class="num">Egreso</th></tr></thead>'+
       '<tbody>'+rowsExcel+'</tbody></table>'+
       '<div class="row" style="margin-top:14px">'+
