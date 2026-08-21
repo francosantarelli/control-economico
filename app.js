@@ -51,7 +51,7 @@ function cargarReglas(){
 }
 
 var STATE = { centros: [], categorias: [], subcategorias: [], movimientos: [], vencimientos: [], gimnasioVisitas: [], usdtMovimientos: [], activeTab: 'movimientos', editing: null, ready:false,
-  importEntidad:'mp', importAnio:'26', importBanco:'nacion', importVencimiento:'', importTarjetaMarca:'', importRaw:'', importPreview:null, importPreviewExcel:null, importMsg:null,
+  importEntidad:'mp', importBanco:'nacion', importVencimiento:'', importTarjetaMarca:'', importRaw:'', importPreview:null, importPreviewExcel:null, importMsg:null,
   bulkCatMsg:null, bulkColorCatMsg:null, confirmState:null, subDeleteState:null, movFormMsg:null,
   filtros:{centro:[], categoria:[], subcategoria:[], mes:[], texto:'', soloIncompletos:false, soloTarjeta:false},
   resumenFiltros:{centro:[], categoria:[], mes:[], vista:'categoria'}, multiSelectAbierto:null, multiSelectBusqueda:'', abmSubTab:'categorias', grillaRango:'todo',
@@ -560,6 +560,11 @@ function joinFechaLines(lines){
 function getTodayStr(anio){
   var t = new Date();
   return String(t.getDate()).padStart(2,'0')+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+anio;
+}
+
+// Año de 2 dígitos a usar cuando el resumen no lo trae (ej. Mercado Pago, que solo da "día de mes").
+function anioActualCorto(){
+  return String(new Date().getFullYear()).slice(2);
 }
 
 function parseLines(lines, anio){
@@ -1144,7 +1149,7 @@ function runParser(){
   var entidad = STATE.importEntidad;
   var raw = STATE.importRaw || '';
   if(!raw.trim()) return { rows: [], error: 'Pegá el texto del resumen primero.' };
-  if(entidad === 'mp') return { rows: procesarTexto(raw, STATE.importAnio||'26'), error: null };
+  if(entidad === 'mp') return { rows: procesarTexto(raw, anioActualCorto()), error: null };
   if(entidad === 'santander') return { rows: parseSantander(raw), error: null };
   if(entidad === 'nacion') return { rows: parseNacion(raw), error: null };
   if(entidad === 'provincia') return { rows: parseProvincia(raw), error: null };
@@ -1969,9 +1974,7 @@ function renderImportar(){
   var msgHtml = STATE.importMsg ? '<div class="msg '+(STATE.importMsg.type==='ok'?'ok':'err')+'">'+esc(STATE.importMsg.text)+'</div>' : '';
 
   var subFieldsHtml = '';
-  if(e === 'mp'){
-    subFieldsHtml = '<div class="field"><label>Año</label><input type="text" id="imp-anio" value="'+esc(STATE.importAnio||'26')+'" style="width:60px"></div>';
-  } else if(e === 'tarjeta'){
+  if(e === 'tarjeta'){
     subFieldsHtml = ''+
       '<div class="field"><label>Banco</label><select id="imp-banco">'+
         '<option value="nacion" '+(STATE.importBanco==='nacion'?'selected':'')+'>Nación</option>'+
@@ -3210,8 +3213,6 @@ function bindEvents(){
   // Formulario de Importar
   var impEntidad = document.getElementById('imp-entidad');
   if(impEntidad){ impEntidad.addEventListener('change', function(){ STATE.importEntidad = impEntidad.value; STATE.importPreview = null; STATE.importPreviewExcel = null; STATE.importMsg = null; render(); }); }
-  var impAnio = document.getElementById('imp-anio');
-  if(impAnio){ impAnio.addEventListener('input', function(){ STATE.importAnio = impAnio.value; }); }
   var impBanco = document.getElementById('imp-banco');
   if(impBanco){ impBanco.addEventListener('change', function(){ STATE.importBanco = impBanco.value; }); }
   var impVenc = document.getElementById('imp-vencimiento');
