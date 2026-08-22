@@ -297,11 +297,11 @@ function fromDbGimnasioVisita(r){ return {id:r.id, persona:r.persona, fecha:r.fe
 function toDbUsdt(u){
   return {
     id:u.id, fecha:u.fecha, tipo:u.tipo, cantidad:Number(u.cantidad)||0,
-    monto_ars: u.tipo==='venta' ? (Number(u.montoArs)||0) : null,
-    cotizacion: u.tipo==='venta' ? (Number(u.cotizacion)||0) : null,
+    monto_ars: Number(u.montoArs)||null,
+    cotizacion: Number(u.cotizacion)||null,
     centro_id: u.tipo==='venta' ? (u.centroId||null) : null,
-    categoria_id: u.tipo==='venta' ? (u.categoriaId||null) : null,
-    subcategoria_id: u.tipo==='venta' ? (u.subcategoriaId||null) : null,
+    categoria_id: u.categoriaId||null,
+    subcategoria_id: u.subcategoriaId||null,
     movimiento_id: u.movimientoId||null, detalle: u.detalle||null
   };
 }
@@ -448,6 +448,21 @@ function usdtVinculadoAMovimiento(movId){
 }
 function esVentaUsdtPendiente(m){
   return (nombreSubcategoria(m.subcategoriaId)||'').trim()==='Venta USDT' && Number(m.ingreso)>0 && !usdtVinculadoAMovimiento(m.id);
+}
+function esSubcategoriaVentaUsdt(subcategoriaId){
+  return (nombreSubcategoria(subcategoriaId)||'').trim()==='Venta USDT';
+}
+// El sueldo de Franco se acredita unos días antes de fin de mes: para que en el Resumen cuente en el
+// mes al que en realidad corresponde (y no en el que se acredita), los últimos 3 días de cada mes se
+// consideran ya del mes siguiente a los efectos de "a qué mes pertenece el Sueldo".
+function mesEfectivoSueldo(fechaISO){
+  var m = (fechaISO||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if(!m) return (fechaISO||'').slice(0,7);
+  var y = parseInt(m[1],10), mes = parseInt(m[2],10), dia = parseInt(m[3],10);
+  var ultimoDiaMes = new Date(y, mes, 0).getDate();
+  if(dia <= ultimoDiaMes - 3) return m[1]+'-'+m[2];
+  var sig = new Date(y, mes, 1); // "mes" (1-indexado) usado como índice 0-indexado de Date = el mes siguiente
+  return sig.getFullYear()+'-'+pad2(sig.getMonth()+1);
 }
 // Cotización de venta de USDT en Binance P2P (ARS), vía CriptoYa (API pública, sin key, CORS abierto).
 // "bid" es lo que te pagan si vendés ahora — es lo que corresponde acá, no "ask" (precio de compra).
@@ -2705,12 +2720,31 @@ function renderResumen(){
   var movsReales = filtrados.filter(function(m){ return !esTipoCategoria(m.categoriaId, 'tec'); });
   var movsObra = movsReales.filter(function(m){ return esCategoriaObra(m.categoriaId); });
   var movsSinObra = movsReales.filter(function(m){ return !esCategoriaObra(m.categoriaId); });
-  var movsSueldo = movsReales.filter(function(m){ return esCategoriaSueldo(m.categoriaId); });
   var movsResto = movsSinObra.filter(function(m){ return !esCategoriaSueldo(m.categoriaId); });
 
   // "Total ingresos" = solo lo categorizado como Sueldo. "Total egresos" = neto (egreso-ingreso) del
   // resto de las categorías (todo menos TEC/Sueldo/Obra, que tienen su propio tratamiento). Obra sigue aparte.
-  var totalIngreso = movsSueldo.reduce(function(s,m){ return s + (Number(m.ingreso)||0); },0);
+  // El Sueldo (en pesos o en USDT) se filtra por mes aparte (no viene de "filtrados"): usa mesEfectivoSueldo
+  // en vez del mes calendario de la fecha, porque se acredita unos días antes de fin de mes y así ese pago
+  // ya cuenta para el mes al que corresponde, no para el mes en que se acreditó. Sueldo con subcategoría
+  // "Venta USDT" queda afuera: ya se contó como ingreso cuando se cargó el USDT, sumarlo de nuevo al
+  // venderlo duplicaría el mismo ingreso.
+  var movsSueldo = STATE.movimientos.filter(function(m){
+    if(!esCategoriaSueldo(m.categoriaId) || esSubcategoriaVentaUsdt(m.subcategoriaId)) return false;
+    if(f.centro.length && f.centro.indexOf(m.centroId)===-1) return false;
+    if(f.categoria.length && f.categoria.indexOf(m.categoriaId)===-1) return false;
+    if(f.mes.length && f.mes.indexOf(mesEfectivoSueldo(m.fecha))===-1) return false;
+    return true;
+  });
+  var usdtSueldo = STATE.usdtMovimientos.filter(function(u){
+    if(u.tipo!=='ingreso' || !esCategoriaSueldo(u.categoriaId)) return false;
+    if(f.centro.length && f.centro.indexOf(u.centroId||'')===-1) return false;
+    if(f.categoria.length && f.categoria.indexOf(u.categoriaId)===-1) return false;
+    if(f.mes.length && f.mes.indexOf(mesEfectivoSueldo(u.fecha))===-1) return false;
+    return true;
+  });
+  var totalIngreso = movsSueldo.reduce(function(s,m){ return s + (Number(m.ingreso)||0); },0)
+    + usdtSueldo.reduce(function(s,u){ return s + (Number(u.montoArs)||0); },0);
   var totalEgreso = movsResto.reduce(function(s,m){ return s + (Number(m.egreso)||0) - (Number(m.ingreso)||0); },0);
   var totalObra = movsObra.reduce(function(s,m){ return s + (Number(m.egreso)||0) - (Number(m.ingreso)||0); },0);
   var saldo = totalIngreso - totalEgreso - totalObra;
@@ -3164,19 +3198,34 @@ function campoUsdt(e){
   var esVenta = e.tipo === 'venta';
   var subOpciones = subcategoriasOrdenadas(STATE.subcategorias.filter(function(s){ return s.categoriaId === e.categoriaId; }))
     .map(function(s){ return '<option value="'+s.id+'" '+(e.subcategoriaId===s.id?'selected':'')+'>'+esc(s.nombre)+'</option>'; }).join('');
-  var camposVenta = esVenta ? ''+
-    '<div class="row" style="margin-top:10px">'+
-      '<div class="field"><label>Monto recibido (ARS)</label><input type="number" step="0.01" id="f-usdt-monto-ars" value="'+esc(e.montoArs)+'" style="width:140px"></div>'+
-      '<div class="field"><label>Centro de Costo destino</label><select id="f-usdt-centro"><option value="">Elegir...</option>'+
-        centrosOrdenados().map(function(c){ return '<option value="'+c.id+'" '+(e.centroId===c.id?'selected':'')+'>'+esc(c.codigo)+' · '+esc(c.nombre)+'</option>'; }).join('')+
-      '</select></div>'+
-      '<div class="field"><label>Categoría</label><select id="f-usdt-categoria"><option value="">Elegir...</option>'+
-        categoriasOrdenadas().map(function(c){ return '<option value="'+c.id+'" '+(e.categoriaId===c.id?'selected':'')+'>'+esc(c.nombre)+'</option>'; }).join('')+
-      '</select></div>'+
-      '<div class="field"><label>Subcategoría</label><select id="f-usdt-subcategoria"><option value="">—</option>'+subOpciones+'</select></div>'+
-    '</div>'+
-    '<div style="font-size:11px;color:var(--ink-soft);margin-top:8px">Al guardar se crea (o actualiza) automáticamente un ingreso en pesos en Movimientos, por el monto recibido, en el Centro de Costo y Categoría elegidos acá.</div>'
-    : '';
+  var categoriaSubHtml = ''+
+    '<div class="field"><label>Categoría'+(esVenta?'':' (opcional)')+'</label><select id="f-usdt-categoria"><option value="">'+(esVenta?'Elegir...':'Sin categoría')+'</option>'+
+      categoriasOrdenadas().map(function(c){ return '<option value="'+c.id+'" '+(e.categoriaId===c.id?'selected':'')+'>'+esc(c.nombre)+'</option>'; }).join('')+
+    '</select></div>'+
+    '<div class="field"><label>Subcategoría</label><select id="f-usdt-subcategoria"><option value="">—</option>'+subOpciones+'</select></div>';
+  var camposTipo;
+  if(esVenta){
+    camposTipo = ''+
+      '<div class="row" style="margin-top:10px">'+
+        '<div class="field"><label>Monto recibido (ARS)</label><input type="number" step="0.01" id="f-usdt-monto-ars" value="'+esc(e.montoArs)+'" style="width:140px"></div>'+
+        '<div class="field"><label>Centro de Costo destino</label><select id="f-usdt-centro"><option value="">Elegir...</option>'+
+          centrosOrdenados().map(function(c){ return '<option value="'+c.id+'" '+(e.centroId===c.id?'selected':'')+'>'+esc(c.codigo)+' · '+esc(c.nombre)+'</option>'; }).join('')+
+        '</select></div>'+
+        categoriaSubHtml+
+      '</div>'+
+      '<div style="font-size:11px;color:var(--ink-soft);margin-top:8px">Al guardar se crea (o actualiza) automáticamente un ingreso en pesos en Movimientos, por el monto recibido, en el Centro de Costo y Categoría elegidos acá.</div>';
+  } else {
+    var cantidadNum = parseFloat(e.cantidad)||0;
+    var sugerenciaCotizacion = STATE.usdtCotizacionBid && cantidadNum
+      ? '<button type="button" class="link" data-action="usar-cotizacion-usdt-ingreso" style="padding:0;font-size:11px;margin-top:4px">Usar cotización de hoy ($'+fmtMonto(STATE.usdtCotizacionBid)+'/USDT → $'+fmtMonto(cantidadNum*STATE.usdtCotizacionBid)+')</button>'
+      : '';
+    camposTipo = ''+
+      '<div class="row" style="margin-top:10px">'+
+        categoriaSubHtml+
+        '<div class="field"><label>Valor en pesos (referencial)</label><input type="number" step="0.01" id="f-usdt-monto-ars" value="'+esc(e.montoArs)+'" style="width:140px">'+sugerenciaCotizacion+'</div>'+
+      '</div>'+
+      '<div style="font-size:11px;color:var(--ink-soft);margin-top:8px">Esto no crea ningún movimiento en pesos ni afecta ningún Centro de Costo: solo sirve para que, poniéndole Categoría "Sueldo" y un valor en pesos (por ejemplo con la cotización del día en que lo cobraste), el Resumen lo cuente como ingreso real.</div>';
+  }
   return ''+
     (STATE.usdtFormMsg ? '<div class="msg err">'+esc(STATE.usdtFormMsg)+'</div>' : '')+
     '<div class="row">'+
@@ -3188,7 +3237,7 @@ function campoUsdt(e){
       '<div class="field"><label>Cantidad (USDT)</label><input type="number" step="0.00000001" min="0" id="f-usdt-cantidad" value="'+esc(e.cantidad)+'" style="width:150px"></div>'+
       '<div class="field"><label>Detalle (opcional)</label><input type="text" id="f-usdt-detalle" value="'+esc(e.detalle)+'" style="width:200px"></div>'+
     '</div>'+
-    camposVenta;
+    camposTipo;
 }
 function renderUsdt(){
   var saldo = calcularSaldoUsdt();
@@ -3225,9 +3274,10 @@ function renderUsdt(){
       '<td class="mono" data-label="Fecha">'+esc(fechaISOaDDMMAAAA(u.fecha)||u.fecha||'')+'</td>'+
       '<td data-label="Tipo">'+(esVenta?'🔴 Venta':'🟢 Ingreso')+'</td>'+
       '<td class="num mono" data-label="Cantidad">'+fmtCantidadUsdt(u.cantidad)+'</td>'+
-      '<td class="num mono" data-label="Monto ARS">'+(esVenta?fmtMonto(u.montoArs):'—')+'</td>'+
-      '<td class="num mono" data-label="Cotización">'+(esVenta && u.cotizacion?fmtMonto(u.cotizacion):'—')+'</td>'+
+      '<td class="num mono" data-label="Monto ARS">'+(u.montoArs?fmtMonto(u.montoArs):'—')+'</td>'+
+      '<td class="num mono" data-label="Cotización">'+(u.cotizacion?fmtMonto(u.cotizacion):'—')+'</td>'+
       '<td data-label="Centro">'+(esVenta?esc(nombreCentro(u.centroId).split(' · ')[0]):'—')+'</td>'+
+      '<td data-label="Categoría">'+(u.categoriaId?esc(nombreCategoria(u.categoriaId)):'—')+'</td>'+
       '<td data-label="Detalle">'+esc(u.detalle||'')+'</td>'+
       '<td class="actions-cell"><button class="icon-btn" data-action="edit-usdt" data-id="'+u.id+'" title="Editar" aria-label="Editar">✏️</button>'+
       '<button class="icon-btn icon-btn-danger" data-action="del-usdt" data-id="'+u.id+'" title="Borrar" aria-label="Borrar">🗑️</button></td>'+
@@ -3256,7 +3306,7 @@ function renderUsdt(){
   formHtml+
   '<div class="card">'+
     '<h3>Movimientos ('+lista.length+')</h3>'+
-    (lista.length ? '<table class="tabla-movil"><thead><tr><th>Fecha</th><th>Tipo</th><th class="num">Cantidad</th><th class="num">Monto ARS</th><th class="num">Cotización</th><th>Centro</th><th>Detalle</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>' : '<div class="empty">Todavía no cargaste ningún movimiento de USDT.</div>')+
+    (lista.length ? '<table class="tabla-movil"><thead><tr><th>Fecha</th><th>Tipo</th><th class="num">Cantidad</th><th class="num">Monto ARS</th><th class="num">Cotización</th><th>Centro</th><th>Categoría</th><th>Detalle</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>' : '<div class="empty">Todavía no cargaste ningún movimiento de USDT.</div>')+
   '</div>';
 }
 
@@ -4638,6 +4688,15 @@ async function handleAction(action, id){
 
   // ---- USDT ----
   if(action==='actualizar-cotizacion-usdt'){ await obtenerCotizacionUsdt(); return; }
+  if(action==='usar-cotizacion-usdt-ingreso'){
+    var draftCot = getUsdtFormValues();
+    var cantidadCot = parseFloat(draftCot.cantidad)||0;
+    if(cantidadCot>0 && STATE.usdtCotizacionBid){
+      draftCot.montoArs = String(Math.round(cantidadCot*STATE.usdtCotizacionBid*100)/100);
+    }
+    STATE.usdtDraft = draftCot;
+    render(); return;
+  }
   if(action==='edit-usdt'){ STATE.editing = {type:'usdt', id:id}; STATE.usdtFormMsg = null; render(); return; }
   if(action==='del-usdt'){
     var uBorrar = STATE.usdtMovimientos.find(function(x){return x.id===id;});
@@ -4672,8 +4731,8 @@ async function handleAction(action, id){
     }
     STATE.usdtFormMsg = null; STATE.dbError = null;
     var cantidadU = Math.abs(parseFloat(vU.cantidad))||0;
-    var montoArsU = esVentaU ? Math.abs(parseFloat(vU.montoArs))||0 : 0;
-    var cotizacionU = (esVentaU && cantidadU) ? montoArsU/cantidadU : 0;
+    var montoArsU = Math.abs(parseFloat(vU.montoArs))||0;
+    var cotizacionU = (cantidadU && montoArsU) ? montoArsU/cantidadU : 0;
     var detalleMovVinculado = (vU.detalle?vU.detalle+' — ':'')+'Venta '+fmtCantidadUsdt(cantidadU)+' USDT (cotización $'+fmtMonto(cotizacionU)+')';
 
     try{
@@ -4707,7 +4766,7 @@ async function handleAction(action, id){
         var usdtActualizado = {
           id:id, tipo:vU.tipo, fecha:vU.fecha, cantidad:cantidadU, detalle:vU.detalle,
           montoArs:montoArsU, cotizacion:cotizacionU,
-          centroId: esVentaU?vU.centroId:'', categoriaId: esVentaU?vU.categoriaId:'', subcategoriaId: esVentaU?vU.subcategoriaId:'',
+          centroId: esVentaU?vU.centroId:'', categoriaId: vU.categoriaId, subcategoriaId: vU.subcategoriaId,
           movimientoId: movimientoIdFinal
         };
         await dbUpdate('usdt_movimientos', id, toDbUsdt(usdtActualizado));
@@ -4728,7 +4787,7 @@ async function handleAction(action, id){
         var usdtNuevo = {
           id: uid(), tipo: vU.tipo, fecha: vU.fecha, cantidad: cantidadU, detalle: vU.detalle,
           montoArs: montoArsU, cotizacion: cotizacionU,
-          centroId: esVentaU?vU.centroId:'', categoriaId: esVentaU?vU.categoriaId:'', subcategoriaId: esVentaU?vU.subcategoriaId:'',
+          centroId: esVentaU?vU.centroId:'', categoriaId: vU.categoriaId, subcategoriaId: vU.subcategoriaId,
           movimientoId: movimientoIdNuevo
         };
         await dbInsert('usdt_movimientos', toDbUsdt(usdtNuevo));
