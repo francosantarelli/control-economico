@@ -50,7 +50,7 @@ function cargarReglas(){
   return seed;
 }
 
-var STATE = { centros: [], categorias: [], subcategorias: [], movimientos: [], vencimientos: [], gimnasioVisitas: [], usdtMovimientos: [], activeTab: 'movimientos', editing: null, ready:false,
+var STATE = { centros: [], categorias: [], subcategorias: [], movimientos: [], vencimientos: [], gimnasioVisitas: [], usdtMovimientos: [], deudas: [], activeTab: 'movimientos', editing: null, ready:false,
   importEntidad:'mp', importBanco:'nacion', importVencimiento:'', importTarjetaMarca:'', importRaw:'', importPreview:null, importPreviewExcel:null, importMsg:null,
   bulkCatMsg:null, bulkColorCatMsg:null, confirmState:null, subDeleteState:null, movFormMsg:null,
   filtros:{centro:[], categoria:[], subcategoria:[], mes:[], texto:'', soloIncompletos:false, soloTarjeta:false},
@@ -62,7 +62,8 @@ var STATE = { centros: [], categorias: [], subcategorias: [], movimientos: [], v
   movSeleccionados:[], bulkEditMovAbierto:false, bulkEditMovMsg:null, movPaginaActual:1, gruposAbiertos:{},
   tema: (function(){ try{ return localStorage.getItem('controlTema')==='oscuro' ? 'oscuro' : 'claro'; }catch(e){ return 'claro'; } })(),
   menuUsuarioAbierto:false, usdtFormMsg:null, usdtDraft:null,
-  usdtCotizacionBid:null, usdtCotizacionActualizada:null, usdtCotizacionError:null, usdtCotizacionCargando:false };
+  usdtCotizacionBid:null, usdtCotizacionActualizada:null, usdtCotizacionError:null, usdtCotizacionCargando:false,
+  deudaFormMsg:null, flujoVentana:'6m', flujoHorizonte:12 };
 var MOV_PAGE_SIZE = 50;
 
 // ===================== FILTROS MÚLTIPLES (selects convertidos a checkboxes) =====================
@@ -289,6 +290,8 @@ function toDbMovimiento(m){ return {id:m.id, fecha:m.fecha, centro_id:m.centroId
 function fromDbMovimiento(r){ return {id:r.id, fecha:r.fecha, centroId:r.centro_id||'', categoriaId:r.categoria_id||'', subcategoriaId:r.subcategoria_id||'', proveedor:r.proveedor||'', detalle:r.detalle||'', ingreso:Number(r.ingreso)||0, egreso:Number(r.egreso)||0, tarjeta:!!r.tarjeta, fechaConsumo:r.fecha_consumo||'', tarjetaMarca:r.tarjeta_marca||''}; }
 function toDbVencimiento(v){ return {id:v.id, concepto:v.concepto, fecha:v.fecha, monto:Number(v.monto)||0, centro_id:v.centroId||null, estado:v.estado||'pendiente'}; }
 function fromDbVencimiento(r){ return {id:r.id, concepto:r.concepto, fecha:r.fecha, monto:Number(r.monto)||0, centroId:r.centro_id||'', estado:r.estado||'pendiente'}; }
+function toDbDeuda(d){ return {id:d.id, concepto:d.concepto, saldo_pendiente:Number(d.saldoPendiente)||0, cuota_mensual:Number(d.cuotaMensual)||0, centro_id:d.centroId||null, estado:d.estado||'activa'}; }
+function fromDbDeuda(r){ return {id:r.id, concepto:r.concepto, saldoPendiente:Number(r.saldo_pendiente)||0, cuotaMensual:Number(r.cuota_mensual)||0, centroId:r.centro_id||'', estado:r.estado||'activa'}; }
 function fromDbGimnasioVisita(r){ return {id:r.id, persona:r.persona, fecha:r.fecha}; }
 function toDbUsdt(u){
   return {
@@ -365,6 +368,11 @@ async function cargarTodo(){
     var usdtMovimientos = await dbFetchAll('usdt_movimientos');
     STATE.usdtMovimientos = usdtMovimientos.map(fromDbUsdt);
   }catch(e){ STATE.usdtMovimientos = []; }
+  try{
+    // Idem: si todavía no corriste migracion_deudas.sql, arranca vacío en vez de romper la carga.
+    var deudas = await dbFetchAll('deudas');
+    STATE.deudas = deudas.map(fromDbDeuda);
+  }catch(e){ STATE.deudas = []; }
 }
 
 // ===================== AUTENTICACIÓN =====================
@@ -1209,6 +1217,7 @@ function renderInterno(){
     {id:'vencimientos', label:'Vencimientos', icono:'⏰'},
     {id:'saldos', label:'Saldos', icono:'🏦'},
     {id:'resumen', label:'Resumen', icono:'📊'},
+    {id:'flujo', label:'Flujo de Caja', icono:'📈'},
     {id:'usdt', label:'USDT', icono:'🪙'},
     {id:'gimnasio', label:'Gimnasio', icono:'💪'},
     {id:'abm', label:'ABM', icono:'⚙️'}
@@ -1252,6 +1261,7 @@ function renderInterno(){
     else if(STATE.activeTab==='vencimientos') contentHtml += renderVencimientos();
     else if(STATE.activeTab==='saldos') contentHtml += renderSaldos();
     else if(STATE.activeTab==='resumen') contentHtml += renderResumen();
+    else if(STATE.activeTab==='flujo') contentHtml += renderFlujoCaja();
     else if(STATE.activeTab==='usdt') contentHtml += renderUsdt();
     else if(STATE.activeTab==='gimnasio') contentHtml += renderGimnasio();
     else if(STATE.activeTab==='abm') contentHtml += renderABM();
@@ -2343,15 +2353,35 @@ function renderSaldos(){
   var cards = ''+
   '<div class="summary-cards">'+
     '<div class="summary-card"><div class="label">Saldo total</div><div class="value">'+fmtMonto(s.totalGeneral)+'</div></div>'+
-    '<div class="summary-card"><div class="label">Ana</div><div class="value">'+fmtMonto(s.totalAna)+'</div></div>'+
-    '<div class="summary-card"><div class="label">Franco</div><div class="value">'+fmtMonto(s.totalFranco)+'</div></div>'+
-    (s.hayOtros ? '<div class="summary-card"><div class="label">Otros</div><div class="value">'+fmtMonto(s.totalOtros)+'</div></div>' : '')+
   '</div>';
 
-  var rows = filas.map(function(f){
-    return '<tr><td class="mono" data-label="Código">'+esc(f.codigo)+'</td><td data-label="Nombre">'+esc(f.nombre)+'</td><td data-label="Titular">'+esc(f.titular)+'</td><td class="num mono" data-label="Saldo">'+fmtMonto(f.saldo)+'</td></tr>';
-  }).join('');
-  var filaSinCentro = saldoSinCentro !== 0 ? '<tr><td class="mono" data-label="Código">—</td><td data-label="Nombre">Movimientos sin Centro de Costo asignado</td><td data-label="Titular">—</td><td class="num mono" data-label="Saldo">'+fmtMonto(saldoSinCentro)+'</td></tr>' : '';
+  function grupoSaldos(titulo, total, filasGrupo, extraHtml){
+    if(!filasGrupo.length && !extraHtml) return '';
+    var items = filasGrupo.map(function(f){
+      return '<div class="saldo-item">'+
+        '<div class="saldo-item-encabezado">'+
+          '<div>'+renderChip(f.codigo, colorCentro(f.id), colorTextoCentro(f.id))+'<span class="saldo-item-nombre"> · '+esc(f.nombre)+'</span></div>'+
+          '<button type="button" class="icon-btn" data-action="ir-a-movimientos-centro" data-id="'+f.id+'" title="Ver movimientos de este Centro de Costo" aria-label="Ver movimientos">🧾</button>'+
+        '</div>'+
+        '<div class="saldo-item-monto">'+fmtMonto(f.saldo)+'</div>'+
+      '</div>';
+    }).join('');
+    return '<div class="saldos-grupo">'+
+      '<div class="saldos-grupo-encabezado"><div class="saldos-grupo-titulo">'+esc(titulo)+'</div><div class="saldos-grupo-total">'+fmtMonto(total)+'</div></div>'+
+      items+(extraHtml||'')+
+    '</div>';
+  }
+
+  var extraSinCentro = saldoSinCentro !== 0 ? ''+
+    '<div class="saldo-item">'+
+      '<div class="saldo-item-nombre">Movimientos sin Centro de Costo asignado</div>'+
+      '<div class="saldo-item-monto">'+fmtMonto(saldoSinCentro)+'</div>'+
+    '</div>' : '';
+
+  var gruposHtml = ''+
+    grupoSaldos('Franco', s.totalFranco, filas.filter(function(f){return f.titular==='Franco';}))+
+    grupoSaldos('Ana', s.totalAna, filas.filter(function(f){return f.titular==='Ana';}))+
+    grupoSaldos('Otros', s.totalOtros, filas.filter(function(f){return f.titular==='Otros';}), extraSinCentro);
 
   var tabla = '<div class="card">'+
     '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:4px">'+
@@ -2362,7 +2392,7 @@ function renderSaldos(){
       '</div>'+
     '</div>'+
     '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Parte del saldo inicial cargado en la categoría "Saldo Inicial" (0 si no tiene) y suma/resta todos los ingresos y egresos, sin excluir TEC ni Obra, para reflejar el saldo real de cada cuenta. Se recalcula solo con cada movimiento nuevo; usá "Recalcular" para traer también cambios hechos desde otra sesión. Los movimientos con fecha posterior a hoy se ven en Vencimientos (no en Movimientos) y no se incluyen en este cálculo.</div>'+
-    (filas.length ? '<table class="tabla-movil"><thead><tr><th>Código</th><th>Nombre</th><th>Titular</th><th class="num">Saldo</th></tr></thead><tbody>'+rows+filaSinCentro+'</tbody></table>' : '<div class="empty">Todavía no cargaste ningún Centro de Costo.</div>')+
+    (filas.length || saldoSinCentro!==0 ? '<div class="saldos-grupos">'+gruposHtml+'</div>' : '<div class="empty">Todavía no cargaste ningún Centro de Costo.</div>')+
   '</div>';
 
   return cards + tabla;
@@ -2719,6 +2749,209 @@ function renderResumen(){
     '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Ingresos menos egresos por categoría, mes a mes'+(f.centro.length?' (Centro de Costo: '+f.centro.map(function(cid){ return esc(nombreCentro(cid).split(' · ')[0]); }).join(', ')+')':'')+'. Verde = neto a favor, coral = neto en contra. No incluye TEC ni Sueldo. "Total (sin Obra)" excluye la categoría Obra del total; "Total" la incluye. Ignora el filtro de Mes/Categoría de arriba (usa el selector de rango de acá al lado).</div>'+
     renderGrillaMensual(movsCentro, STATE.grillaRango)+
   '</div>';
+}
+
+// ===================== FLUJO DE CAJA =====================
+// Capacidad de ahorro promedio: ingresos menos egresos (sin TEC ni Obra, igual que el
+// "Saldo" de Resumen) promediado sobre los últimos meses CERRADOS (no cuenta el mes en
+// curso, que suele estar incompleto y subestimaría/sobreestimaría el promedio).
+function capacidadAhorroPromedio(ventana){
+  var hoy = new Date();
+  var mesActualStr = hoy.getFullYear()+'-'+pad2(hoy.getMonth()+1);
+  var todosPasados = getMeses().filter(function(m){ return m < mesActualStr; }).sort(); // ascendente
+  var usados = ventana==='todo' ? todosPasados : todosPasados.slice(-parseInt(ventana,10));
+  if(!usados.length) return null;
+  var usadosSet = {};
+  usados.forEach(function(m){ usadosSet[m] = true; });
+  var totalesPorMes = {};
+  STATE.movimientos.forEach(function(m){
+    if(esTipoCategoria(m.categoriaId,'tec')) return;
+    if(esCategoriaObra(m.categoriaId)) return;
+    var mes = (m.fecha||'').slice(0,7);
+    if(!usadosSet[mes]) return;
+    totalesPorMes[mes] = (totalesPorMes[mes]||0) + (Number(m.ingreso)||0) - (Number(m.egreso)||0);
+  });
+  var suma = usados.reduce(function(s,m){ return s+(totalesPorMes[m]||0); },0);
+  return { promedio: suma/usados.length, meses: usados };
+}
+function mesesRestantesDeuda(d){
+  if(d.estado==='cancelada') return 0;
+  var cuota = Number(d.cuotaMensual)||0;
+  if(cuota<=0) return null;
+  return Math.max(0, Math.ceil((Number(d.saldoPendiente)||0) / cuota));
+}
+function fechaEstimadaCancelacion(d){
+  var n = mesesRestantesDeuda(d);
+  if(n===null) return '';
+  return sumarMeses(fechaHoyISO(), n);
+}
+// Simula mes a mes, para el horizonte pedido, cuánto se acumula de ahorro si se destina el
+// promedio histórico menos las cuotas de las deudas activas (cada una deja de "pesar" en
+// cuanto termina de pagarse, según su propia cuota y saldo pendiente).
+function simularProyeccionFlujo(ahorroPromedio, horizonteMeses){
+  var hoy = new Date();
+  var deudasSim = STATE.deudas.filter(function(d){ return d.estado!=='cancelada'; }).map(function(d){
+    return { saldo: Number(d.saldoPendiente)||0, cuota: Number(d.cuotaMensual)||0 };
+  });
+  var filas = [];
+  var acumulado = 0;
+  for(var i=1;i<=horizonteMeses;i++){
+    var cuotasMes = 0;
+    deudasSim.forEach(function(d){
+      if(d.saldo>0 && d.cuota>0){
+        var pago = Math.min(d.cuota, d.saldo);
+        cuotasMes += pago;
+        d.saldo -= pago;
+      }
+    });
+    var ahorroNeto = ahorroPromedio - cuotasMes;
+    acumulado += ahorroNeto;
+    filas.push({ mes: mesOffset(hoy, i), cuotasDeudas: cuotasMes, ahorroNeto: ahorroNeto, acumulado: acumulado });
+  }
+  return filas;
+}
+// Gráfico de línea simple (una serie), con eje de referencia en cero: para visualizar cómo
+// evoluciona el ahorro acumulado proyectado, que puede ir de negativo a positivo.
+function lineChart(meses, valores, width, height){
+  if(!meses.length) return '<div class="empty">No hay meses para proyectar.</div>';
+  var padding = 34;
+  var chartW = width - padding*2;
+  var chartH = height - padding*2;
+  var maxAbs = 1;
+  valores.forEach(function(v){ maxAbs = Math.max(maxAbs, Math.abs(v)); });
+  var n = meses.length;
+  var zeroY = padding + chartH/2;
+  var stepX = n>1 ? chartW/(n-1) : 0;
+  var puntos = valores.map(function(v,i){
+    var x = padding + (n>1 ? i*stepX : chartW/2);
+    var y = zeroY - (v/maxAbs)*(chartH/2);
+    return {x:x, y:y, v:v};
+  });
+  var pathD = puntos.map(function(p,i){ return (i===0?'M':'L')+p.x.toFixed(1)+' '+p.y.toFixed(1); }).join(' ');
+  var svg = '<line x1="'+padding+'" y1="'+zeroY+'" x2="'+(width-padding)+'" y2="'+zeroY+'" stroke="#C7D6CD" stroke-width="1" stroke-dasharray="3 3"></line>';
+  svg += '<path d="'+pathD+'" fill="none" stroke="#4E9D77" stroke-width="2"></path>';
+  puntos.forEach(function(p){ svg += '<circle cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="3.5" fill="'+(p.v>=0?'#4E9D77':'#D97B6C')+'"></circle>'; });
+  meses.forEach(function(m,i){
+    var x = padding + (n>1 ? i*stepX : chartW/2);
+    svg += '<text x="'+x+'" y="'+(height-12)+'" font-size="10" text-anchor="middle" fill="#7A8B83">'+esc(mesLabelCorto(m))+'</text>';
+  });
+  return '<svg viewBox="0 0 '+width+' '+height+'" width="100%" height="'+height+'" preserveAspectRatio="xMidYMid meet">'+svg+'</svg>';
+}
+function campoDeuda(d){
+  return '<div class="field"><label>Concepto</label><input type="text" id="f-deuda-concepto" value="'+esc(d.concepto)+'" style="width:220px" placeholder="Ej: Préstamo personal Banco X"></div>'+
+    '<div class="field"><label>Saldo pendiente</label><input type="number" step="0.01" id="f-deuda-saldo" value="'+esc(d.saldoPendiente)+'" style="width:150px"></div>'+
+    '<div class="field"><label>Cuota mensual</label><input type="number" step="0.01" id="f-deuda-cuota" value="'+esc(d.cuotaMensual)+'" style="width:150px"></div>'+
+    '<div class="field"><label>Centro de Costo (opcional)</label><select id="f-deuda-centro"><option value="">(sin asignar)</option>'+
+      centrosOrdenados().map(function(c){ return '<option value="'+c.id+'" '+(d.centroId===c.id?'selected':'')+'>'+esc(c.codigo)+' · '+esc(c.nombre)+'</option>'; }).join('') +
+    '</select></div>';
+}
+function renderFlujoCaja(){
+  var editing = STATE.editing && STATE.editing.type==='deuda' ? STATE.deudas.find(function(x){return x.id===STATE.editing.id;}) : null;
+
+  if(editing){
+    MODAL_HTML = '<div class="modal-overlay" data-modal-backdrop="edit"><div class="modal-card">'+
+      '<h2>Editar deuda</h2>'+
+      (STATE.deudaFormMsg ? '<div class="msg err">'+esc(STATE.deudaFormMsg)+'</div>' : '')+
+      '<div class="row">'+ campoDeuda(editing) +'</div>'+
+      '<div class="row" style="margin-top:14px">'+
+        '<button data-action="save-deuda" data-id="'+editing.id+'">Guardar cambios</button>'+
+        '<button class="secondary" data-action="cancel-edit">Cancelar</button>'+
+      '</div>'+
+    '</div></div>';
+  }
+
+  var formNuevaDeuda = editing ? '' : ''+
+  '<div class="card">'+
+    '<h2>Nueva deuda</h2>'+
+    (STATE.deudaFormMsg ? '<div class="msg err">'+esc(STATE.deudaFormMsg)+'</div>' : '')+
+    '<div class="row">'+ campoDeuda({concepto:'', saldoPendiente:'', cuotaMensual:'', centroId:''}) +
+      '<button data-action="save-deuda" data-id="">Agregar</button>'+
+    '</div>'+
+  '</div>';
+
+  var ventana = STATE.flujoVentana || '6m';
+  var horizonte = STATE.flujoHorizonte || 12;
+  var cap = capacidadAhorroPromedio(ventana);
+  var ahorroPromedio = cap ? cap.promedio : 0;
+
+  var deudasActivas = STATE.deudas.filter(function(d){ return d.estado!=='cancelada'; });
+  var totalCuotasActivas = deudasActivas.reduce(function(s,d){ return s+(Number(d.cuotaMensual)||0); },0);
+  var margen = ahorroPromedio - totalCuotasActivas;
+  var saldos = obtenerSaldos();
+
+  var proyeccion = cap ? simularProyeccionFlujo(ahorroPromedio, horizonte) : [];
+  var mesesProy = proyeccion.map(function(f){ return f.mes; });
+  var valoresAcumulado = proyeccion.map(function(f){ return f.acumulado; });
+
+  var configHtml = '<div class="card">'+
+    '<h3>Configuración</h3>'+
+    '<div class="row">'+
+      '<div class="field"><label>Ventana histórica para el promedio</label><select id="fc-ventana">'+
+        '<option value="3m" '+(ventana==='3m'?'selected':'')+'>Últimos 3 meses cerrados</option>'+
+        '<option value="6m" '+(ventana==='6m'?'selected':'')+'>Últimos 6 meses cerrados</option>'+
+        '<option value="12m" '+(ventana==='12m'?'selected':'')+'>Últimos 12 meses cerrados</option>'+
+        '<option value="todo" '+(ventana==='todo'?'selected':'')+'>Todo el histórico</option>'+
+      '</select></div>'+
+      '<div class="field"><label>Meses a proyectar</label><select id="fc-horizonte">'+
+        '<option value="6" '+(horizonte===6?'selected':'')+'>6 meses</option>'+
+        '<option value="12" '+(horizonte===12?'selected':'')+'>12 meses</option>'+
+        '<option value="24" '+(horizonte===24?'selected':'')+'>24 meses</option>'+
+      '</select></div>'+
+    '</div>'+
+  '</div>';
+
+  var summaryHtml = '<div class="summary-cards">'+
+    '<div class="summary-card"><div class="label">Capacidad de ahorro promedio / mes</div><div class="value '+(ahorroPromedio>=0?'ingreso':'egreso')+'">'+(cap?fmtMonto(ahorroPromedio):'—')+'</div></div>'+
+    '<div class="summary-card"><div class="label">Saldo actual total</div><div class="value">'+fmtMonto(saldos.totalGeneral)+'</div></div>'+
+    '<div class="summary-card"><div class="label">Cuotas de deudas activas / mes</div><div class="value egreso">'+fmtMonto(totalCuotasActivas)+'</div></div>'+
+    '<div class="summary-card"><div class="label">Margen libre / mes</div><div class="value '+(margen>=0?'ingreso':'egreso')+'">'+fmtMonto(margen)+'</div></div>'+
+  '</div>'+
+  (cap ? '<div style="font-size:11px;color:var(--ink-soft);margin:-10px 0 18px">Promedio calculado sobre '+cap.meses.length+' mes(es) cerrados: '+cap.meses.map(mesLabelCorto).join(', ')+'. Ingresos menos egresos, sin contar TEC ni Obra (igual criterio que el Saldo de Resumen).</div>' : '<div class="empty" style="margin:-6px 0 18px">Todavía no hay ningún mes cerrado con movimientos cargados para calcular un promedio (el mes en curso no cuenta).</div>')+
+  (cap && margen<0 ? '<div class="msg err" style="margin:-6px 0 18px">Las cuotas de las deudas activas superan la capacidad de ahorro promedio: con el ritmo actual no alcanzan para cubrirlas todas.</div>' : '');
+
+  var lista = STATE.deudas.slice().sort(function(a,b){
+    var pa = a.estado==='cancelada' ? 1 : 0, pb = b.estado==='cancelada' ? 1 : 0;
+    return pa-pb || (a.concepto||'').localeCompare(b.concepto||'', 'es', {sensitivity:'base'});
+  });
+  var filas = lista.map(function(d){
+    var mesesRest = mesesRestantesDeuda(d);
+    var fechaFin = fechaEstimadaCancelacion(d);
+    return '<tr>'+
+      '<td data-label="Concepto">'+esc(d.concepto)+'</td>'+
+      '<td class="num mono egreso" data-label="Saldo pendiente">'+fmtMonto(d.saldoPendiente)+'</td>'+
+      '<td class="num mono" data-label="Cuota mensual">'+fmtMonto(d.cuotaMensual)+'</td>'+
+      '<td class="mono" data-label="Centro">'+esc(d.centroId?nombreCentro(d.centroId).split(' · ')[0]:'—')+'</td>'+
+      '<td class="mono" data-label="Meses restantes">'+(d.estado==='cancelada'?'Cancelada':(mesesRest===null?'—':mesesRest+' mes(es)'))+'</td>'+
+      '<td class="mono" data-label="Cancelación estimada">'+(d.estado==='cancelada'||!fechaFin?'—':fechaISOaDDMMAAAA(fechaFin))+'</td>'+
+      '<td class="actions-cell">'+
+        (d.estado!=='cancelada' ? '<button class="link" data-action="pagar-cuota-deuda" data-id="'+d.id+'">registrar pago de cuota</button>' : '')+
+        '<button class="link" data-action="toggle-deuda-estado" data-id="'+d.id+'">'+(d.estado==='cancelada'?'reactivar':'marcar cancelada')+'</button>'+
+        '<button class="link" data-action="edit-deuda" data-id="'+d.id+'">editar</button>'+
+        '<button class="link" data-action="del-deuda" data-id="'+d.id+'">borrar</button>'+
+      '</td>'+
+    '</tr>';
+  }).join('');
+  var tablaDeudasHtml = '<div class="card"><h3>Deudas ('+lista.length+')</h3>'+
+    (lista.length ? '<div style="overflow-x:auto"><table class="tabla-movil"><thead><tr><th>Concepto</th><th class="num">Saldo pendiente</th><th class="num">Cuota mensual</th><th>Centro</th><th>Meses restantes</th><th>Cancelación estimada</th><th></th></tr></thead><tbody>'+filas+'</tbody></table></div>' : '<div class="empty">Todavía no cargaste ninguna deuda.</div>')+
+  '</div>';
+
+  var filasProy = proyeccion.map(function(f){
+    return '<tr>'+
+      '<td data-label="Mes">'+esc(mesLabelCorto(f.mes))+'</td>'+
+      '<td class="num mono ingreso" data-label="Ahorro base">'+fmtMonto(ahorroPromedio)+'</td>'+
+      '<td class="num mono egreso" data-label="Cuotas deudas">'+(f.cuotasDeudas?fmtMonto(f.cuotasDeudas):'—')+'</td>'+
+      '<td class="num mono '+(f.ahorroNeto>=0?'ingreso':'egreso')+'" data-label="Ahorro neto">'+fmtMonto(f.ahorroNeto)+'</td>'+
+      '<td class="num mono '+(f.acumulado>=0?'ingreso':'egreso')+'" style="font-weight:600" data-label="Acumulado">'+fmtMonto(f.acumulado)+'</td>'+
+    '</tr>';
+  }).join('');
+  var proyeccionHtml = '<div class="card">'+
+    '<h3>Proyección de ahorro acumulado (próximos '+horizonte+' meses)</h3>'+
+    '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Arranca en $0 y acumula cada mes la capacidad de ahorro promedio menos las cuotas de las deudas activas (que se dan de baja solas cuando terminan de pagarse). No incluye vencimientos ni cuotas de tarjeta ya cargados con fecha futura — esos compromisos puntuales se ven en la pestaña Vencimientos.</div>'+
+    (cap ? lineChart(mesesProy, valoresAcumulado, 640, 220) : '<div class="empty">Cargá al menos un mes cerrado de movimientos para poder proyectar.</div>')+
+    (cap ? '<div style="overflow-x:auto;margin-top:14px"><table class="tabla-movil"><thead><tr><th>Mes</th><th class="num">Ahorro base</th><th class="num">Cuotas deudas</th><th class="num">Ahorro neto</th><th class="num">Acumulado</th></tr></thead><tbody>'+filasProy+'</tbody></table></div>' : '')+
+  '</div>';
+
+  return configHtml + summaryHtml + formNuevaDeuda + tablaDeudasHtml + proyeccionHtml;
 }
 
 // ===================== GIMNASIO (BONUS TRACK: ANA VS FRANCO) =====================
@@ -3085,6 +3318,12 @@ function bindEvents(){
     });
   }
 
+  // Configuración de la pestaña Flujo de Caja (ventana histórica del promedio / horizonte a proyectar)
+  var fcVentana = document.getElementById('fc-ventana');
+  if(fcVentana){ fcVentana.addEventListener('change', function(){ STATE.flujoVentana = fcVentana.value; render(); }); }
+  var fcHorizonte = document.getElementById('fc-horizonte');
+  if(fcHorizonte){ fcHorizonte.addEventListener('change', function(){ STATE.flujoHorizonte = parseInt(fcHorizonte.value,10)||12; render(); }); }
+
   // Combobox del formulario de Movimiento (Centro/Categoría/Subcategoría/Centro Destino):
   // tipear filtra la lista; Enter o Tab confirman la opción resaltada (la primera por defecto).
   document.querySelectorAll('.combo-input').forEach(function(inp){
@@ -3365,6 +3604,13 @@ async function handleAction(action, id){
   if(action==='mov-pagina-anterior'){ STATE.movPaginaActual = Math.max(1, STATE.movPaginaActual-1); render(); return; }
   if(action==='mov-pagina-siguiente'){ STATE.movPaginaActual = STATE.movPaginaActual+1; render(); return; }
   if(action==='ir-a-vencimientos'){ STATE.activeTab = 'vencimientos'; render(); return; }
+  if(action==='ir-a-movimientos-centro'){
+    STATE.filtros.centro = id ? [id] : [];
+    STATE.movPaginaActual = 1;
+    STATE.activeTab = 'movimientos';
+    render();
+    return;
+  }
   if(action==='cancel-edit'){
     STATE.editing = null; STATE.nuevoMovAbierto = false; STATE.movDraftCentroDestinoId = '';
     STATE.comboAbierto = null; STATE.comboBusqueda = '';
@@ -4013,6 +4259,65 @@ async function handleAction(action, id){
       vm.estado = 'pagado';
       STATE.activeTab = 'movimientos'; STATE.editing = null;
     }catch(e){ STATE.dbError = 'No se pudo convertir el vencimiento en movimiento: '+(e.message||e); }
+    render(); return;
+  }
+  if(action==='edit-deuda'){ STATE.editing = {type:'deuda', id:id}; STATE.deudaFormMsg = null; render(); return; }
+  if(action==='del-deuda'){
+    STATE.confirmState = { message:'¿Borrar esta deuda?', action:'del-deuda-do', id:id };
+    render(); return;
+  }
+  if(action==='del-deuda-do'){
+    try{
+      await dbDelete('deudas', id);
+      STATE.deudas = STATE.deudas.filter(function(d){return d.id!==id;});
+    }catch(e){ STATE.dbError = 'No se pudo borrar la deuda: '+(e.message||e); }
+    render(); return;
+  }
+  if(action==='save-deuda'){
+    var conceptoD = document.getElementById('f-deuda-concepto').value.trim();
+    var saldoD = parseFloat(document.getElementById('f-deuda-saldo').value) || 0;
+    var cuotaD = parseFloat(document.getElementById('f-deuda-cuota').value) || 0;
+    var centroD = document.getElementById('f-deuda-centro').value;
+    if(!conceptoD || saldoD<=0 || cuotaD<=0){
+      STATE.deudaFormMsg = 'Completá concepto, saldo pendiente y cuota mensual (mayores a cero).';
+      render(); return;
+    }
+    STATE.deudaFormMsg = null; STATE.dbError = null;
+    try{
+      if(id){
+        var dEdit = STATE.deudas.find(function(x){return x.id===id;});
+        dEdit.concepto = conceptoD; dEdit.saldoPendiente = saldoD; dEdit.cuotaMensual = cuotaD; dEdit.centroId = centroD;
+        await dbUpdate('deudas', id, toDbDeuda(dEdit));
+      } else {
+        var nuevaD = {id:uid(), concepto:conceptoD, saldoPendiente:saldoD, cuotaMensual:cuotaD, centroId:centroD, estado:'activa'};
+        await dbInsert('deudas', toDbDeuda(nuevaD));
+        STATE.deudas.push(nuevaD);
+      }
+      STATE.editing = null;
+    }catch(e){ STATE.dbError = 'No se pudo guardar la deuda: '+(e.message||e); }
+    render(); return;
+  }
+  if(action==='toggle-deuda-estado'){
+    var dt = STATE.deudas.find(function(x){return x.id===id;});
+    if(!dt) return;
+    var nuevoEstadoD = (dt.estado==='cancelada') ? 'activa' : 'cancelada';
+    try{
+      await dbUpdate('deudas', id, {estado:nuevoEstadoD});
+      dt.estado = nuevoEstadoD;
+    }catch(e){ STATE.dbError = 'No se pudo actualizar el estado de la deuda: '+(e.message||e); }
+    render(); return;
+  }
+  if(action==='pagar-cuota-deuda'){
+    var dp = STATE.deudas.find(function(x){return x.id===id;});
+    if(!dp) return;
+    var nuevoSaldo = Math.max(0, (Number(dp.saldoPendiente)||0) - (Number(dp.cuotaMensual)||0));
+    var camposUpd = {saldo_pendiente: nuevoSaldo};
+    if(nuevoSaldo===0) camposUpd.estado = 'cancelada';
+    try{
+      await dbUpdate('deudas', id, camposUpd);
+      dp.saldoPendiente = nuevoSaldo;
+      if(nuevoSaldo===0) dp.estado = 'cancelada';
+    }catch(e){ STATE.dbError = 'No se pudo registrar el pago de la cuota: '+(e.message||e); }
     render(); return;
   }
   if(action==='bulk-add-vencimientos'){

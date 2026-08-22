@@ -254,6 +254,18 @@ tfoot td{ border-top:2px solid var(--accent); border-bottom:none; font-weight:60
 .summary-card .label{ font-size:11px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.03em; }
 .summary-card .value{ font-family:'Geist Mono',ui-monospace,Consolas,monospace; font-variant-numeric:tabular-nums; font-size:22px; margin-top:4px; }
 
+/* Saldos: columnas por titular, cada Centro de Costo en su propia tarjetita */
+.saldos-grupos{ display:flex; gap:20px; flex-wrap:wrap; align-items:flex-start; }
+.saldos-grupo{ flex:1 1 260px; min-width:240px; }
+.saldos-grupo-encabezado{ margin-bottom:10px; }
+.saldos-grupo-titulo{ font-size:12px; font-weight:600; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.04em; }
+.saldos-grupo-total{ font-family:'Geist Mono',ui-monospace,Consolas,monospace; font-variant-numeric:tabular-nums; font-size:20px; font-weight:600; margin-top:2px; }
+.saldo-item{ background:var(--paper); border:1px solid var(--rule); border-radius:8px; padding:12px 14px; margin-bottom:10px; }
+.saldo-item-encabezado{ display:flex; justify-content:space-between; align-items:flex-start; gap:8px; }
+.saldo-item-encabezado .icon-btn{ flex-shrink:0; margin-top:-4px; margin-right:-6px; }
+.saldo-item-nombre{ font-size:12px; color:var(--ink-soft); }
+.saldo-item-monto{ font-family:'Geist Mono',ui-monospace,Consolas,monospace; font-variant-numeric:tabular-nums; font-size:19px; font-weight:600; margin-top:6px; }
+
 .bar-row{ display:flex; align-items:center; gap:10px; padding:6px 0; border-bottom:1px solid var(--rule); }
 .bar-row .name{ width:180px; font-size:12px; flex-shrink:0; }
 .bar-track{ flex:1; background:var(--accent-soft); border-radius:3px; height:8px; overflow:hidden; }
