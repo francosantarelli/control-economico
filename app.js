@@ -54,16 +54,17 @@ var STATE = { centros: [], categorias: [], subcategorias: [], movimientos: [], v
   importEntidad:'mp', importBanco:'nacion', importVencimiento:'', importTarjetaMarca:'', importRaw:'', importPreview:null, importPreviewExcel:null, importMsg:null,
   bulkCatMsg:null, bulkColorCatMsg:null, confirmState:null, subDeleteState:null, movFormMsg:null,
   filtros:{centro:[], categoria:[], subcategoria:[], mes:[], texto:'', soloIncompletos:false, soloTarjeta:false},
-  resumenFiltros:{centro:[], categoria:[], mes:[], vista:'categoria'}, multiSelectAbierto:null, multiSelectBusqueda:'', abmSubTab:'categorias', grillaRango:'todo',
+  resumenFiltros:{centro:[], categoria:[], mes:[], vista:'categoria'}, multiSelectAbierto:null, multiSelectBusqueda:'', abmSubTab:'categorias', grillaRango:'actual',
   bulkVencMsg:null, vencFormMsg:null, dbError:null, saldosCache:null, saldosDirty:true, gimnasioMsg:null,
   usuarioEmail:null, efectivoAbierto:false, efectivoMsg:null, efectivoCategoriaId:'', efectivoDraft:null, backupMsg:null, backupPendiente:null, menuMovilAbierto:false, incompletosSnapshotIds:null,
+  usdtVentaMovId:null, usdtVentaMovMsg:null, usdtVentaMovCantidad:'',
   reglas: cargarReglas(), reglaFormMsg:null,
   nuevoMovAbierto:false, movDraftCentroDestinoId:'', comboAbierto:null, comboBusqueda:'', comboHighlight:0,
   movSeleccionados:[], bulkEditMovAbierto:false, bulkEditMovMsg:null, movPaginaActual:1, gruposAbiertos:{},
   tema: (function(){ try{ return localStorage.getItem('controlTema')==='oscuro' ? 'oscuro' : 'claro'; }catch(e){ return 'claro'; } })(),
   menuUsuarioAbierto:false, usdtFormMsg:null, usdtDraft:null,
   usdtCotizacionBid:null, usdtCotizacionActualizada:null, usdtCotizacionError:null, usdtCotizacionCargando:false,
-  deudaFormMsg:null, flujoVentana:'6m', flujoHorizonte:12 };
+  deudaFormMsg:null, flujoVentana:'6m', flujoHorizonte:12, filtrosMovAbiertos:false };
 var MOV_PAGE_SIZE = 50;
 
 // ===================== FILTROS MÚLTIPLES (selects convertidos a checkboxes) =====================
@@ -439,6 +440,15 @@ function calcularSaldoUsdt(){
     return s + (u.tipo==='ingreso' ? (Number(u.cantidad)||0) : -(Number(u.cantidad)||0));
   }, 0);
 }
+// Un movimiento en pesos cargado a mano con subcategoría "Venta USDT" (p. ej. desde Importar)
+// todavía no tiene su contraparte en usdt_movimientos: esto detecta esos casos para ofrecer
+// el ícono que genera el registro USDT vinculado, y evita ofrecerlo dos veces si ya existe.
+function usdtVinculadoAMovimiento(movId){
+  return STATE.usdtMovimientos.some(function(u){ return u.movimientoId===movId; });
+}
+function esVentaUsdtPendiente(m){
+  return (nombreSubcategoria(m.subcategoriaId)||'').trim()==='Venta USDT' && Number(m.ingreso)>0 && !usdtVinculadoAMovimiento(m.id);
+}
 // Cotización de venta de USDT en Binance P2P (ARS), vía CriptoYa (API pública, sin key, CORS abierto).
 // "bid" es lo que te pagan si vendés ahora — es lo que corresponde acá, no "ask" (precio de compra).
 async function obtenerCotizacionUsdt(){
@@ -487,6 +497,8 @@ function fechaHoyISO(){
   var dd = String(d.getDate()).padStart(2,'0');
   return yyyy+'-'+mm+'-'+dd;
 }
+// Mismo corte que el breakpoint mobile de style.css (@media max-width:640px).
+function esVistaMobile(){ return window.innerWidth <= 640; }
 function esMovimientoPendiente(m){
   return !!(m.fecha) && m.fecha > fechaHoyISO();
 }
@@ -1344,6 +1356,28 @@ function renderInterno(){
     '</div></div>';
   }
 
+  if(STATE.usdtVentaMovId){
+    var mUvm = STATE.movimientos.find(function(x){ return x.id===STATE.usdtVentaMovId; });
+    if(!mUvm){
+      STATE.usdtVentaMovId = null;
+    } else {
+      var cantidadUvmDraft = STATE.usdtVentaMovCantidad || '';
+      var cantidadUvmNum = parseFloat(cantidadUvmDraft);
+      var cotizacionUvmPreview = (cantidadUvmNum>0) ? (Number(mUvm.ingreso)/cantidadUvmNum) : 0;
+      MODAL_HTML = '<div class="modal-overlay" data-modal-backdrop="usdt-venta-mov"><div class="modal-card">'+
+        '<h2>🪙 Generar movimiento USDT</h2>'+
+        '<div style="margin-bottom:10px;font-size:13px;color:var(--ink-soft)">Vinculado al movimiento del '+esc(fechaISOaDDMMAAAA(mUvm.fecha)||mUvm.fecha)+' por '+fmtMonto(mUvm.ingreso)+(mUvm.proveedor?' ('+esc(mUvm.proveedor)+')':'')+'.</div>'+
+        (STATE.usdtVentaMovMsg ? '<div class="msg err">'+esc(STATE.usdtVentaMovMsg)+'</div>' : '')+
+        '<div class="field"><label>¿Cuántos USDT se vendieron?</label><input type="text" inputmode="decimal" id="uvm-cantidad" placeholder="0.00" value="'+esc(cantidadUvmDraft)+'" style="font-size:18px" autofocus></div>'+
+        (cotizacionUvmPreview ? '<div style="font-size:12px;color:var(--ink-soft);margin-top:6px">Cotización resultante: $'+fmtMonto(cotizacionUvmPreview)+' por USDT</div>' : '')+
+        '<div class="row" style="margin-top:14px">'+
+          '<button data-action="guardar-usdt-venta-mov">Guardar</button>'+
+          '<button class="secondary" data-action="cerrar-usdt-venta-mov">Cancelar</button>'+
+        '</div>'+
+      '</div></div>';
+    }
+  }
+
   var html = mobileTopbarHtml + '<div class="layout">'+sidebarHtml+'<div class="main-content">'+contentHtml+'</div></div>' + MODAL_HTML;
 
   app.innerHTML = html;
@@ -1760,7 +1794,9 @@ function renderMovimientos(){
       celdaCentro + celdaCategoria + celdaSubcategoria + celdaProveedor + celdaDetalle +
       '<td class="num ingreso" data-label="Ingreso">'+(Number(m.ingreso)?fmtMonto(m.ingreso):'')+'</td>'+
       '<td class="num egreso" data-label="Egreso">'+(Number(m.egreso)?fmtMonto(m.egreso):'')+'</td>'+
-      '<td class="actions-cell"><button class="icon-btn" data-action="edit-mov" data-id="'+m.id+'" title="Editar" aria-label="Editar">✏️</button>'+
+      '<td class="actions-cell">'+
+      (esVentaUsdtPendiente(m)?'<button class="icon-btn" data-action="abrir-usdt-venta-mov" data-id="'+m.id+'" title="Generar movimiento USDT" aria-label="Generar movimiento USDT">🪙</button>':'')+
+      '<button class="icon-btn" data-action="edit-mov" data-id="'+m.id+'" title="Editar" aria-label="Editar">✏️</button>'+
       '<button class="icon-btn icon-btn-danger" data-action="del-mov" data-id="'+m.id+'" title="Borrar" aria-label="Borrar">🗑️</button></td>'+
     '</tr>';
   }
@@ -1843,7 +1879,7 @@ function renderMovimientos(){
       '<div class="row" style="margin-top:10px">'+
         '<div class="field"><label>Fecha de consumo (opcional)</label><input type="date" id="f-mov-fecha-consumo" value="'+esc(e.fechaConsumo||'')+'"></div>'+
         '<div class="field"><label>Marca de tarjeta (opcional)</label><input type="text" id="f-mov-tarjeta-marca" autocomplete="off" placeholder="Visa, Mastercard, Amex..." value="'+esc(e.tarjetaMarca||'')+'" style="width:140px"></div>'+
-        '<div class="field"><label>Cantidad de cuotas</label><input type="number" min="1" step="1" id="f-mov-cuotas" value="'+cuotasNum+'" style="width:100px"></div>'+
+        '<div class="field"><label>Cantidad de cuotas</label><input type="text" inputmode="numeric" pattern="[0-9]*" id="f-mov-cuotas" value="'+cuotasNum+'" style="width:100px"></div>'+
         '<div class="field" style="flex:2 1 260px;justify-content:flex-end"><div style="font-size:11px;color:var(--ink-soft);padding-bottom:8px">'+textoAyudaCuotas+'</div></div>'+
       '</div>' : '';
     return ''+
@@ -1927,12 +1963,19 @@ function renderMovimientos(){
   '</div>' : '';
 
   var hayFiltrosActivosMov = f.centro.length || f.categoria.length || f.subcategoria.length || f.mes.length || f.texto || f.soloIncompletos || f.soloTarjeta;
+  // En mobile los filtros arrancan colapsados detrás de un ícono, para no ocupar toda la pantalla
+  // apenas se entra a Movimientos; en escritorio siempre van expandidos.
+  var filtrosColapsados = esVistaMobile() && !STATE.filtrosMovAbiertos;
   var filtersHtml = ''+
   '<div class="card card-filtros">'+
-    '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:10px">'+
-      '<h3 style="margin-bottom:0">Filtros</h3>'+
-      (hayFiltrosActivosMov ? '<button class="secondary" data-action="limpiar-filtros-mov" style="font-size:12px;padding:6px 12px">✕ Limpiar filtros</button>' : '')+
+    '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:'+(filtrosColapsados?'0':'10px')+'">'+
+      '<h3 style="margin-bottom:0">Filtros'+(filtrosColapsados && hayFiltrosActivosMov ? ' <span style="font-size:10px;font-weight:600;color:var(--accent);background:var(--accent-soft);border-radius:10px;padding:2px 8px;text-transform:none;letter-spacing:normal">activos</span>' : '')+'</h3>'+
+      '<div style="display:flex;align-items:center;gap:8px">'+
+        (hayFiltrosActivosMov && !filtrosColapsados ? '<button class="secondary" data-action="limpiar-filtros-mov" style="font-size:12px;padding:6px 12px">✕ Limpiar filtros</button>' : '')+
+        '<button class="secondary solo-mobile" data-action="toggle-filtros-mov" style="font-size:12px;padding:6px 12px" aria-label="'+(filtrosColapsados?'Mostrar filtros':'Ocultar filtros')+'">'+(filtrosColapsados?'🔍 Filtros':'✕ Ocultar')+'</button>'+
+      '</div>'+
     '</div>'+
+    (filtrosColapsados ? '' : ''+
     '<div class="filters">'+
       '<div class="field"><label>Centro de Costo</label>'+renderMultiSelect('ff-centro', centroOptions, f.centro)+'</div>'+
       '<div class="field"><label>Categoría</label>'+renderMultiSelect('ff-categoria', categoriaOptions, f.categoria)+'</div>'+
@@ -1946,7 +1989,7 @@ function renderMovimientos(){
         '<input type="checkbox" id="ff-solo-tarjeta" '+(f.soloTarjeta?'checked':'')+' style="width:auto"> 💳 Solo tarjeta'+
       '</label></div>'+
       (f.soloIncompletos ? '<div class="field"><label>&nbsp;</label><button class="secondary" data-action="refrescar-incompletos" style="font-size:12px;padding:6px 12px">🔄 Actualizar lista</button></div>' : '')+
-    '</div>'+
+    '</div>')+
   '</div>';
 
   var barraSeleccionHtml = seleccionados.length ? ''+
@@ -2542,8 +2585,16 @@ function mesesProximos(hoy, n){ // próximos n meses, sin incluir el actual (par
   for(var i=1;i<=n;i++) out.push(mesOffset(hoy, i));
   return out;
 }
+function mesesAlrededorDeHoy(hoy, atras, adelante){ // 'atras' meses antes del actual + el actual + 'adelante' meses después
+  var out = [];
+  for(var i=-atras;i<=adelante;i++) out.push(mesOffset(hoy, i));
+  return out;
+}
 function mesesParaRango(mesesDisponibles, rango){
   var hoy = new Date();
+  // "Mes actual": 10 meses en total. En escritorio el actual queda 4to (3 atrás + actual + 6
+  // adelante); en mobile, donde entra menos ancho, el actual va primero (actual + 9 adelante).
+  if(rango==='actual') return esVistaMobile() ? mesesAlrededorDeHoy(hoy, 0, 9) : mesesAlrededorDeHoy(hoy, 3, 6);
   if(rango==='3m') return mesesUltimos(hoy, 3);
   if(rango==='6m') return mesesUltimos(hoy, 6);
   if(rango==='12m') return mesesUltimos(hoy, 12);
@@ -2734,6 +2785,7 @@ function renderResumen(){
     '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:4px">'+
       '<h3 style="margin-bottom:0">Comparativa mensual por categoría</h3>'+
       '<div class="field" style="min-width:160px"><select id="rf-grilla-rango">'+
+        '<option value="actual" '+(STATE.grillaRango==='actual'?'selected':'')+'>Mes actual (centrado)</option>'+
         '<option value="todo" '+(STATE.grillaRango==='todo'?'selected':'')+'>Todo el histórico</option>'+
         '<option value="3m" '+(STATE.grillaRango==='3m'?'selected':'')+'>Últimos 3 meses</option>'+
         '<option value="6m" '+(STATE.grillaRango==='6m'?'selected':'')+'>Últimos 6 meses</option>'+
@@ -3234,7 +3286,7 @@ function bindEvents(){
     overlay.addEventListener('click', function(ev){
       if(ev.target !== overlay) return; // sólo si el click fue directo en el fondo, no en el contenido del modal
       var tipo = overlay.getAttribute('data-modal-backdrop');
-      var accion = tipo==='confirm' ? 'confirm-no' : (tipo==='subdelete' ? 'sub-delete-cancel' : (tipo==='efectivo' ? 'cerrar-efectivo' : 'cancel-edit'));
+      var accion = tipo==='confirm' ? 'confirm-no' : (tipo==='subdelete' ? 'sub-delete-cancel' : (tipo==='efectivo' ? 'cerrar-efectivo' : (tipo==='usdt-venta-mov' ? 'cerrar-usdt-venta-mov' : 'cancel-edit')));
       handleAction(accion);
     });
   });
@@ -3445,6 +3497,13 @@ function bindEvents(){
       var draft = getMovFormValues();
       draft.cuotas = movCuotasInput.value;
       STATE.movDraft = draft;
+      render();
+    });
+  }
+  var uvmCantidadInput = document.getElementById('uvm-cantidad');
+  if(uvmCantidadInput){
+    uvmCantidadInput.addEventListener('input', function(){
+      STATE.usdtVentaMovCantidad = uvmCantidadInput.value;
       render();
     });
   }
@@ -3925,6 +3984,7 @@ async function handleAction(action, id){
     STATE.movPaginaActual = 1;
     render(); return;
   }
+  if(action==='toggle-filtros-mov'){ STATE.filtrosMovAbiertos = !STATE.filtrosMovAbiertos; render(); return; }
 
   // ---- MENÚ MÓVIL ----
   if(action==='toggle-menu-movil'){ STATE.menuMovilAbierto = !STATE.menuMovilAbierto; render(); return; }
@@ -4657,6 +4717,49 @@ async function handleAction(action, id){
     }catch(e){ STATE.dbError = 'No se pudo guardar el movimiento de USDT: '+(e.message||e); }
     render(); return;
   }
+
+  // ---- USDT desde un movimiento existente con subcategoría "Venta USDT" ----
+  if(action==='abrir-usdt-venta-mov'){
+    STATE.usdtVentaMovId = id;
+    STATE.usdtVentaMovMsg = null;
+    STATE.usdtVentaMovCantidad = '';
+    render(); return;
+  }
+  if(action==='cerrar-usdt-venta-mov'){
+    STATE.usdtVentaMovId = null;
+    STATE.usdtVentaMovMsg = null;
+    STATE.usdtVentaMovCantidad = '';
+    render(); return;
+  }
+  if(action==='guardar-usdt-venta-mov'){
+    var mUvmG = STATE.movimientos.find(function(x){ return x.id===STATE.usdtVentaMovId; });
+    if(!mUvmG){ STATE.usdtVentaMovId = null; render(); return; }
+    var cantidadUvmInput = document.getElementById('uvm-cantidad').value;
+    var cantidadUvmG = Math.abs(parseFloat(cantidadUvmInput))||0;
+    if(!cantidadUvmG || cantidadUvmG<=0){
+      STATE.usdtVentaMovCantidad = cantidadUvmInput;
+      STATE.usdtVentaMovMsg = 'Ingresá una cantidad de USDT mayor a 0.';
+      render(); return;
+    }
+    STATE.usdtVentaMovMsg = null; STATE.dbError = null;
+    var montoArsUvm = Number(mUvmG.ingreso)||0;
+    var nuevoUsdtUvm = {
+      id: uid(), tipo:'venta', fecha: mUvmG.fecha, cantidad: cantidadUvmG, detalle: mUvmG.detalle||'',
+      montoArs: montoArsUvm, cotizacion: montoArsUvm/cantidadUvmG,
+      centroId: mUvmG.centroId||'', categoriaId: mUvmG.categoriaId||'', subcategoriaId: mUvmG.subcategoriaId||'',
+      movimientoId: mUvmG.id
+    };
+    try{
+      await dbInsert('usdt_movimientos', toDbUsdt(nuevoUsdtUvm));
+      STATE.usdtMovimientos.push(nuevoUsdtUvm);
+      STATE.usdtVentaMovId = null;
+      STATE.usdtVentaMovCantidad = '';
+    }catch(e){
+      STATE.usdtVentaMovCantidad = cantidadUvmInput;
+      STATE.dbError = 'No se pudo generar el movimiento de USDT: '+(e.message||e);
+    }
+    render(); return;
+  }
 }
 
 document.getElementById('btnLogin').addEventListener('click', intentarLogin);
@@ -4680,4 +4783,13 @@ document.addEventListener('click', function(ev){
   if(ev.target.closest && ev.target.closest('[data-user-menu-wrap]')) return;
   STATE.menuUsuarioAbierto = false;
   render();
+});
+
+// Re-renderizar al cruzar el breakpoint mobile (esVistaMobile() se recalcula recién en el próximo
+// render): así, si se rota el celular o se agranda/achica la ventana, el colapso de Filtros en
+// Movimientos y el armado de "Mes actual" en la Comparativa mensual se actualizan solos.
+var resizeTimeoutId = null;
+window.addEventListener('resize', function(){
+  clearTimeout(resizeTimeoutId);
+  resizeTimeoutId = setTimeout(function(){ if(STATE.ready) render(); }, 150);
 });

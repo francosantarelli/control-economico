@@ -34,16 +34,18 @@ describe('Resumen: selector de rango de la Comparativa mensual', () => {
     restore();
   });
 
-  it('"Todo el histórico" es el valor por defecto y no filtra por fecha', () => {
+  it('"Mes actual (centrado)" es el valor por defecto', () => {
     const win = loadApp();
     seedBase(win);
+    const restore = mockNow(win, '2026-07-15T12:00:00');
     win.STATE.movimientos = [
-      { id: 'm1', fecha: '2020-01-10', centroId: 'c-ef', categoriaId: 'cat-super', proveedor: 'Muy viejo', ingreso: 0, egreso: 100 }
+      { id: 'm-actual', fecha: '2026-07-10', centroId: 'c-ef', categoriaId: 'cat-super', proveedor: 'Actual', ingreso: 0, egreso: 100 }
     ];
     win.STATE.activeTab = 'resumen';
     win.render();
-    expect(win.STATE.grillaRango).toBe('todo');
+    expect(win.STATE.grillaRango).toBe('actual');
     const tablas = win.document.querySelectorAll('table');
-    expect(tablas[tablas.length - 1].querySelector('thead').textContent).toContain('Ene 20');
+    expect(tablas[tablas.length - 1].querySelector('thead').textContent).toContain('Jul 26'); // mes actual, centrado en la ventana
+    restore();
   });
 });
