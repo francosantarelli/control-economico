@@ -54,7 +54,7 @@ var STATE = { centros: [], categorias: [], subcategorias: [], movimientos: [], v
   importEntidad:'mp', importBanco:'nacion', importVencimiento:'', importTarjetaMarca:'', importRaw:'', importPreview:null, importPreviewExcel:null, importMsg:null,
   bulkCatMsg:null, bulkColorCatMsg:null, confirmState:null, subDeleteState:null, movFormMsg:null,
   filtros:{centro:[], categoria:[], subcategoria:[], mes:[], texto:'', soloIncompletos:false, soloTarjeta:false},
-  resumenFiltros:{centro:[], categoria:[], mes:[], vista:'categoria'}, multiSelectAbierto:null, multiSelectBusqueda:'', abmSubTab:'categorias', grillaRango:'actual',
+  resumenFiltros:{centro:[], categoria:[], mes:[fechaHoyISO().slice(0,7)], vista:'categoria'}, multiSelectAbierto:null, multiSelectBusqueda:'', abmSubTab:'categorias', grillaRango:'actual',
   bulkVencMsg:null, vencFormMsg:null, dbError:null, saldosCache:null, saldosDirty:true, gimnasioMsg:null,
   usuarioEmail:null, efectivoAbierto:false, efectivoMsg:null, efectivoCategoriaId:'', efectivoDraft:null, backupMsg:null, backupPendiente:null, menuMovilAbierto:false, incompletosSnapshotIds:null,
   usdtVentaMovId:null, usdtVentaMovMsg:null, usdtVentaMovCantidad:'',
@@ -2691,15 +2691,19 @@ function renderResumen(){
   var movsReales = filtrados.filter(function(m){ return !esTipoCategoria(m.categoriaId, 'tec'); });
   var movsObra = movsReales.filter(function(m){ return esCategoriaObra(m.categoriaId); });
   var movsSinObra = movsReales.filter(function(m){ return !esCategoriaObra(m.categoriaId); });
+  var movsSueldo = movsReales.filter(function(m){ return esCategoriaSueldo(m.categoriaId); });
+  var movsResto = movsSinObra.filter(function(m){ return !esCategoriaSueldo(m.categoriaId); });
 
-  var totalIngreso = movsSinObra.reduce(function(s,m){ return s + (Number(m.ingreso)||0); },0);
-  var totalEgreso = movsSinObra.reduce(function(s,m){ return s + (Number(m.egreso)||0); },0);
+  // "Total ingresos" = solo lo categorizado como Sueldo. "Total egresos" = neto (egreso-ingreso) del
+  // resto de las categorías (todo menos TEC/Sueldo/Obra, que tienen su propio tratamiento). Obra sigue aparte.
+  var totalIngreso = movsSueldo.reduce(function(s,m){ return s + (Number(m.ingreso)||0); },0);
+  var totalEgreso = movsResto.reduce(function(s,m){ return s + (Number(m.egreso)||0) - (Number(m.ingreso)||0); },0);
   var totalObra = movsObra.reduce(function(s,m){ return s + (Number(m.egreso)||0) - (Number(m.ingreso)||0); },0);
   var saldo = totalIngreso - totalEgreso - totalObra;
 
   // Desglose por categoría o por centro de costo, según STATE.resumenFiltros.vista: total neto (ingresos - egresos). No incluye Sueldo (queda afuera de esta comparación, como Obra).
   var porGrupo = {};
-  movsSinObra.filter(function(m){ return !esCategoriaSueldo(m.categoriaId); }).forEach(function(m){
+  movsResto.forEach(function(m){
     var key = f.vista === 'centro' ? (m.centroId||'') : (m.categoriaId||'');
     porGrupo[key] = (porGrupo[key]||0) + (Number(m.ingreso)||0) - (Number(m.egreso)||0);
   });
@@ -2732,13 +2736,18 @@ function renderResumen(){
   var leyenda = segmentos.filter(function(s){return s.value>0;}).map(function(s){
     return '<div style="display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:4px">'+
       '<span style="width:10px;height:10px;border-radius:2px;background:'+s.color+';display:inline-block;flex-shrink:0"></span>'+
-      '<span style="flex:1">'+esc(s.label)+'</span><span class="mono '+(s.montoReal>=0?'ingreso':'egreso')+'">'+fmtMonto(s.montoReal)+'</span></div>';
+      '<span>'+esc(s.label)+'</span><span class="mono '+(s.montoReal>=0?'ingreso':'egreso')+'">'+fmtMonto(s.montoReal)+'</span></div>';
   }).join('');
 
   // Tendencia mensual (Ingreso vs Egreso), respetando filtro de Centro/Categoría pero mostrando todos los meses disponibles
+  // (usa su propio set sin aplicar f.mes, porque "filtrados"/movsSinObra sí lo aplican y acá queremos ver todos los meses igual)
+  var movsRealesTrend = movsCentro.filter(function(m){
+    if(f.categoria.length && f.categoria.indexOf(m.categoriaId)===-1) return false;
+    return !esTipoCategoria(m.categoriaId, 'tec');
+  });
   var mesesTrend = meses.slice().sort();
   var dataPorMes = {};
-  movsSinObra.concat(movsObra).forEach(function(m){
+  movsRealesTrend.forEach(function(m){
     var mes = (m.fecha||'').slice(0,7);
     if(!mes) return;
     if(!dataPorMes[mes]) dataPorMes[mes] = {ingreso:0, egreso:0};
