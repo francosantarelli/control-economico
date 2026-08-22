@@ -1221,6 +1221,15 @@ function renderInterno(){
     focoPendiente = { id: focoActivo.id, start: focoActivo.selectionStart, end: focoActivo.selectionEnd };
   }
 
+  // Guardar el scroll de la lista del filtro múltiple abierto (si hay uno): al tildar una opción
+  // se re-renderiza todo el HTML y, sin esto, la lista vuelve a mostrarse desde arriba en vez de
+  // quedarse donde el usuario la había dejado (molesto si tildás varias opciones seguidas).
+  var multiSelectScrollTop = null;
+  if(STATE.multiSelectAbierto){
+    var msListPrevia = document.querySelector('[data-multiselect-wrap="'+STATE.multiSelectAbierto+'"] .multiselect-list');
+    if(msListPrevia) multiSelectScrollTop = msListPrevia.scrollTop;
+  }
+
   MODAL_HTML = '';
 
   var tabs = [
@@ -1391,6 +1400,11 @@ function renderInterno(){
         try{ elFoco.setSelectionRange(focoPendiente.start, focoPendiente.end); }catch(e){}
       }
     }
+  }
+
+  if(multiSelectScrollTop !== null){
+    var msListNueva = document.querySelector('[data-multiselect-wrap="'+STATE.multiSelectAbierto+'"] .multiselect-list');
+    if(msListNueva) msListNueva.scrollTop = multiSelectScrollTop;
   }
 }
 
