@@ -52,7 +52,7 @@ function cargarReglas(){
 
 var STATE = { centros: [], categorias: [], subcategorias: [], movimientos: [], vencimientos: [], gimnasioVisitas: [], usdtMovimientos: [], deudas: [], activeTab: 'movimientos', editing: null, ready:false,
   importEntidad:'mp', importBanco:'nacion', importVencimiento:'', importTarjetaMarca:'', importRaw:'', importPreview:null, importPreviewExcel:null, importMsg:null,
-  bulkCatMsg:null, bulkColorCatMsg:null, confirmState:null, subDeleteState:null, movFormMsg:null,
+  bulkCatMsg:null, bulkColorCatMsg:null, confirmState:null, subDeleteState:null, vencPagarState:null, movFormMsg:null,
   filtros:{centro:[], categoria:[], subcategoria:[], mes:[], texto:'', soloIncompletos:false, soloTarjeta:false},
   resumenFiltros:{centro:[], categoria:[], mes:[fechaHoyISO().slice(0,7)], vista:'categoria'}, multiSelectAbierto:null, multiSelectBusqueda:'', abmSubTab:'categorias', grillaRango:'actual',
   bulkVencMsg:null, vencFormMsg:null, dbError:null, saldosCache:null, saldosDirty:true, gimnasioMsg:null,
@@ -291,6 +291,15 @@ function toDbMovimiento(m){ return {id:m.id, fecha:m.fecha, centro_id:m.centroId
 function fromDbMovimiento(r){ return {id:r.id, fecha:r.fecha, centroId:r.centro_id||'', categoriaId:r.categoria_id||'', subcategoriaId:r.subcategoria_id||'', proveedor:r.proveedor||'', detalle:r.detalle||'', ingreso:Number(r.ingreso)||0, egreso:Number(r.egreso)||0, tarjeta:!!r.tarjeta, fechaConsumo:r.fecha_consumo||'', tarjetaMarca:r.tarjeta_marca||''}; }
 function toDbVencimiento(v){ return {id:v.id, concepto:v.concepto, fecha:v.fecha, monto:Number(v.monto)||0, centro_id:v.centroId||null, estado:v.estado||'pendiente'}; }
 function fromDbVencimiento(r){ return {id:r.id, concepto:r.concepto, fecha:r.fecha, monto:Number(r.monto)||0, centroId:r.centro_id||'', estado:r.estado||'pendiente'}; }
+async function crearMovimientoDesdeVencimiento(v){
+  var nuevoMov = {
+    id: uid(), fecha: v.fecha, centroId: v.centroId||'', categoriaId:'', subcategoriaId:'',
+    proveedor: v.concepto, detalle:'', ingreso:0, egreso: Number(v.monto)||0
+  };
+  await dbInsert('movimientos', toDbMovimiento(nuevoMov));
+  STATE.movimientos.push(nuevoMov);
+  STATE.saldosDirty = true;
+}
 function toDbDeuda(d){ return {id:d.id, concepto:d.concepto, saldo_pendiente:Number(d.saldoPendiente)||0, cuota_mensual:Number(d.cuotaMensual)||0, centro_id:d.centroId||null, estado:d.estado||'activa'}; }
 function fromDbDeuda(r){ return {id:r.id, concepto:r.concepto, saldoPendiente:Number(r.saldo_pendiente)||0, cuotaMensual:Number(r.cuota_mensual)||0, centroId:r.centro_id||'', estado:r.estado||'activa'}; }
 function fromDbGimnasioVisita(r){ return {id:r.id, persona:r.persona, fecha:r.fecha}; }
@@ -1314,6 +1323,20 @@ function renderInterno(){
     '</div></div>';
   }
 
+  if(STATE.vencPagarState){
+    var vps = STATE.vencimientos.find(function(x){return x.id===STATE.vencPagarState.id;});
+    if(vps){
+      MODAL_HTML = '<div class="modal-overlay" data-modal-backdrop="pagar-venc"><div class="modal-card">'+
+        '<div style="margin-bottom:16px">¿Marcar "'+esc(vps.concepto)+'" como pagado?</div>'+
+        '<div class="row" style="flex-direction:column;align-items:stretch;gap:8px">'+
+          '<button data-action="pagar-venc-con-mov" data-id="'+vps.id+'">Sí, y cargarlo como movimiento</button>'+
+          '<button class="secondary" data-action="pagar-venc-sin-mov" data-id="'+vps.id+'">Sí, sólo marcar pagado</button>'+
+          '<button class="secondary" data-action="cancel-pagar-venc">Cancelar</button>'+
+        '</div>'+
+      '</div></div>';
+    }
+  }
+
   if(STATE.subDeleteState){
     var sds = STATE.subDeleteState;
     var otrasSubs = subcategoriasOrdenadas(STATE.subcategorias.filter(function(s){ return s.categoriaId===sds.categoriaId && s.id!==sds.id; }));
@@ -2241,13 +2264,21 @@ function diasHasta(iso){
   return Math.round((f-hoy)/86400000);
 }
 
-function campoVenc(e){
-  return '<div class="field"><label>Concepto</label><input type="text" id="f-venc-concepto" value="'+esc(e.concepto)+'" style="width:220px" placeholder="Ej: Tarjeta Visa Santander"></div>'+
+function campoVenc(e, mostrarEstado){
+  var html = '<div class="field"><label>Concepto</label><input type="text" id="f-venc-concepto" value="'+esc(e.concepto)+'" style="width:220px" placeholder="Ej: Tarjeta Visa Santander"></div>'+
     '<div class="field"><label>Fecha de vencimiento</label><input type="date" id="f-venc-fecha" value="'+esc(e.fecha)+'"></div>'+
     '<div class="field"><label>Monto</label><input type="number" step="0.01" id="f-venc-monto" value="'+esc(e.monto)+'" style="width:130px"></div>'+
     '<div class="field"><label>Centro de Costo</label><select id="f-venc-centro"><option value="">(sin asignar)</option>'+
       centrosOrdenados().map(function(c){ return '<option value="'+c.id+'" '+(e.centroId===c.id?'selected':'')+'>'+esc(c.codigo)+' · '+esc(c.nombre)+'</option>'; }).join('') +
     '</select></div>';
+  if(mostrarEstado){
+    html += '<div class="field"><label>Estado</label><select id="f-venc-estado">'+
+        '<option value="pendiente"'+(e.estado!=='pagado'?' selected':'')+'>Pendiente</option>'+
+        '<option value="pagado"'+(e.estado==='pagado'?' selected':'')+'>Pagado</option>'+
+      '</select></div>'+
+      '<div class="field" style="align-self:flex-end;margin-bottom:8px"><label style="display:flex;align-items:center;gap:6px;font-weight:400"><input type="checkbox" id="f-venc-crear-mov" style="width:auto"> Cargar también como movimiento</label></div>';
+  }
+  return html;
 }
 function renderVencimientos(){
   var editing = STATE.editing && STATE.editing.type==='venc' ? STATE.vencimientos.find(function(x){return x.id===STATE.editing.id;}) : null;
@@ -2258,7 +2289,7 @@ function renderVencimientos(){
     MODAL_HTML = '<div class="modal-overlay" data-modal-backdrop="edit"><div class="modal-card">'+
       '<h2>Editar vencimiento</h2>'+
       (STATE.vencFormMsg ? '<div class="msg err">'+esc(STATE.vencFormMsg)+'</div>' : '')+
-      '<div class="row">'+ campoVenc(editing) +'</div>'+
+      '<div class="row">'+ campoVenc(editing, true) +'</div>'+
       '<div class="row" style="margin-top:14px">'+
         '<button data-action="save-venc" data-id="'+editing.id+'">Guardar cambios</button>'+
         '<button class="secondary" data-action="cancel-edit">Cancelar</button>'+
@@ -2284,7 +2315,7 @@ function renderVencimientos(){
     '<div class="row" style="margin-top:10px"><button data-action="bulk-add-vencimientos">Cargar todos</button></div>'+
   '</div>';
 
-  var lista = STATE.vencimientos.slice().sort(function(a,b){ return (a.fecha||'').localeCompare(b.fecha||''); });
+  var lista = STATE.vencimientos.filter(function(v){ return v.estado!=='pagado'; }).sort(function(a,b){ return (a.fecha||'').localeCompare(b.fecha||''); });
   var rows = lista.map(function(v){
     var dias = diasHasta(v.fecha);
     var diasTxt = dias===null ? '' : (dias<0 ? Math.abs(dias)+' día(s) vencido' : (dias===0 ? 'Vence hoy' : 'en '+dias+' día(s)'));
@@ -2292,12 +2323,11 @@ function renderVencimientos(){
     return '<tr>'+
       '<td data-label="Concepto">'+esc(v.concepto)+'</td>'+
       '<td class="mono" data-label="Fecha">'+esc(fechaISOaDDMMAAAA(v.fecha))+'</td>'+
-      '<td class="mono '+(v.estado==='pagado'?'':colorDias)+'" data-label="Estado">'+(v.estado==='pagado'?'Pagado':diasTxt)+'</td>'+
+      '<td class="mono '+colorDias+'" data-label="Estado">'+diasTxt+'</td>'+
       '<td class="mono" data-label="Centro">'+esc(v.centroId?nombreCentro(v.centroId).split(' · ')[0]:'—')+'</td>'+
       '<td class="num mono" data-label="Monto">'+fmtMonto(v.monto)+'</td>'+
       '<td class="actions-cell">'+
-        '<button class="link" data-action="toggle-venc-estado" data-id="'+v.id+'">'+(v.estado==='pagado'?'marcar pendiente':'marcar pagado')+'</button>'+
-        (v.estado!=='pagado' ? '<button class="link" data-action="venc-a-movimiento" data-id="'+v.id+'">cargar como movimiento</button>' : '')+
+        '<button class="link" data-action="pagar-venc" data-id="'+v.id+'">marcar pagado</button>'+
         '<button class="link" data-action="edit-venc" data-id="'+v.id+'">editar</button>'+
         '<button class="link" data-action="del-venc" data-id="'+v.id+'">borrar</button>'+
       '</td>'+
@@ -2307,6 +2337,26 @@ function renderVencimientos(){
   var tableHtml = '<div class="card"><h3>Vencimientos ('+lista.length+')</h3>'+
     (lista.length ? '<table class="tabla-movil"><thead><tr><th>Concepto</th><th>Fecha</th><th>Estado</th><th>Centro</th><th class="num">Monto</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>' : '<div class="empty">Todavía no cargaste ningún vencimiento.</div>')+
   '</div>';
+
+  var pagados = STATE.vencimientos.filter(function(v){ return v.estado==='pagado'; }).sort(function(a,b){ return (b.fecha||'').localeCompare(a.fecha||''); });
+  var rowsPagados = pagados.map(function(v){
+    return '<tr>'+
+      '<td data-label="Concepto">'+esc(v.concepto)+'</td>'+
+      '<td class="mono" data-label="Fecha">'+esc(fechaISOaDDMMAAAA(v.fecha))+'</td>'+
+      '<td class="mono" data-label="Centro">'+esc(v.centroId?nombreCentro(v.centroId).split(' · ')[0]:'—')+'</td>'+
+      '<td class="num mono" data-label="Monto">'+fmtMonto(v.monto)+'</td>'+
+      '<td class="actions-cell">'+
+        '<button class="link" data-action="toggle-venc-estado" data-id="'+v.id+'">marcar pendiente</button>'+
+        '<button class="link" data-action="del-venc" data-id="'+v.id+'">borrar</button>'+
+      '</td>'+
+    '</tr>';
+  }).join('');
+  var tablePagadosHtml = pagados.length ? '<div class="card">'+
+    '<details class="resumen-tarjeta" data-grupo-key="venc-pagados"'+(STATE.gruposAbiertos['venc-pagados']?' open':'')+'>'+
+      '<summary><span>Vencimientos pagados ('+pagados.length+')</span></summary>'+
+      '<div style="overflow-x:auto;margin-top:10px"><table class="tabla-movil"><thead><tr><th>Concepto</th><th>Fecha</th><th>Centro</th><th class="num">Monto</th><th></th></tr></thead><tbody>'+rowsPagados+'</tbody></table></div>'+
+    '</details>'+
+  '</div>' : '';
 
   // Movimientos ya cargados con fecha futura (p. ej. cuotas de tarjeta): no aparecen en Movimientos
   // hasta que llega su fecha, pero se pueden revisar/editar/borrar acá mientras tanto.
@@ -2372,7 +2422,7 @@ function renderVencimientos(){
     (!pendientesMov.length ? '<div class="empty">No hay movimientos con fecha futura.</div>' : '')+
   '</div>';
 
-  return formHtml + tablePendientesMovHtml + tableHtml;
+  return formHtml + tablePendientesMovHtml + tableHtml + tablePagadosHtml;
 }
 
 // ===================== SALDOS =====================
@@ -3359,7 +3409,7 @@ function bindEvents(){
     overlay.addEventListener('click', function(ev){
       if(ev.target !== overlay) return; // sólo si el click fue directo en el fondo, no en el contenido del modal
       var tipo = overlay.getAttribute('data-modal-backdrop');
-      var accion = tipo==='confirm' ? 'confirm-no' : (tipo==='subdelete' ? 'sub-delete-cancel' : (tipo==='efectivo' ? 'cerrar-efectivo' : (tipo==='usdt-venta-mov' ? 'cerrar-usdt-venta-mov' : 'cancel-edit')));
+      var accion = tipo==='confirm' ? 'confirm-no' : (tipo==='subdelete' ? 'sub-delete-cancel' : (tipo==='efectivo' ? 'cerrar-efectivo' : (tipo==='usdt-venta-mov' ? 'cerrar-usdt-venta-mov' : (tipo==='pagar-venc' ? 'cancel-pagar-venc' : 'cancel-edit'))));
       handleAction(accion);
     });
   });
@@ -4352,12 +4402,19 @@ async function handleAction(action, id){
       STATE.vencFormMsg = 'Completá al menos concepto y fecha de vencimiento.';
       render(); return;
     }
+    var estadoSel = document.getElementById('f-venc-estado');
+    var crearMovChk = document.getElementById('f-venc-crear-mov');
     STATE.vencFormMsg = null; STATE.dbError = null;
     try{
       if(id){
         var v = STATE.vencimientos.find(function(x){return x.id===id;});
+        var estadoAnterior = v.estado;
         v.concepto = concepto; v.fecha = fecha; v.monto = monto; v.centroId = centroId;
+        if(estadoSel) v.estado = estadoSel.value;
         await dbUpdate('vencimientos', id, toDbVencimiento(v));
+        if(estadoSel && estadoSel.value==='pagado' && estadoAnterior!=='pagado' && crearMovChk && crearMovChk.checked){
+          await crearMovimientoDesdeVencimiento(v);
+        }
       } else {
         var nuevoV = {id:uid(), concepto:concepto, fecha:fecha, monto:monto, centroId:centroId, estado:'pendiente'};
         await dbInsert('vencimientos', toDbVencimiento(nuevoV));
@@ -4377,20 +4434,27 @@ async function handleAction(action, id){
     }catch(e){ STATE.dbError = 'No se pudo actualizar el estado: '+(e.message||e); }
     render(); return;
   }
-  if(action==='venc-a-movimiento'){
+  if(action==='pagar-venc'){ STATE.vencPagarState = {id:id}; render(); return; }
+  if(action==='cancel-pagar-venc'){ STATE.vencPagarState = null; render(); return; }
+  if(action==='pagar-venc-sin-mov'){
+    var vps1 = STATE.vencimientos.find(function(x){return x.id===id;});
+    if(!vps1) return;
+    try{
+      await dbUpdate('vencimientos', id, {estado:'pagado'});
+      vps1.estado = 'pagado';
+      STATE.vencPagarState = null;
+    }catch(e){ STATE.dbError = 'No se pudo actualizar el estado: '+(e.message||e); }
+    render(); return;
+  }
+  if(action==='pagar-venc-con-mov' || action==='venc-a-movimiento'){
     var vm = STATE.vencimientos.find(function(x){return x.id===id;});
     if(!vm) return;
-    var nuevoMov = {
-      id: uid(), fecha: vm.fecha, centroId: vm.centroId||'', categoriaId:'', subcategoriaId:'',
-      proveedor: vm.concepto, detalle:'', ingreso:0, egreso: Number(vm.monto)||0
-    };
     try{
-      await dbInsert('movimientos', toDbMovimiento(nuevoMov));
+      await crearMovimientoDesdeVencimiento(vm);
       await dbUpdate('vencimientos', id, {estado:'pagado'});
-      STATE.movimientos.push(nuevoMov);
-      STATE.saldosDirty = true;
       vm.estado = 'pagado';
-      STATE.activeTab = 'movimientos'; STATE.editing = null;
+      STATE.vencPagarState = null;
+      if(action==='venc-a-movimiento'){ STATE.activeTab = 'movimientos'; STATE.editing = null; }
     }catch(e){ STATE.dbError = 'No se pudo convertir el vencimiento en movimiento: '+(e.message||e); }
     render(); return;
   }
