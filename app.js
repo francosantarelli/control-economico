@@ -2911,9 +2911,13 @@ function renderResumen(){
 }
 
 // ===================== FLUJO DE CAJA =====================
-// Capacidad de ahorro promedio: ingresos menos egresos (sin TEC ni Obra, igual que el
-// "Saldo" de Resumen) promediado sobre los últimos meses CERRADOS (no cuenta el mes en
-// curso, que suele estar incompleto y subestimaría/sobreestimaría el promedio).
+// Capacidad de ahorro promedio: misma lógica que el "Saldo" de Resumen (Total ingresos = solo
+// Sueldo, Total egresos = neto del resto de categorías sin TEC/Sueldo/Obra, Obra restada aparte),
+// promediada sobre los últimos meses CERRADOS (no cuenta el mes en curso, que suele estar
+// incompleto y subestimaría/sobreestimaría el promedio).
+// El Sueldo usa mesEfectivoSueldo (no el mes calendario de la fecha) y excluye los movimientos con
+// subcategoría "Venta USDT": ese ingreso ya se contó cuando se acreditó el USDT (más abajo), y
+// volver a sumarlo al venderlo duplicaría el mismo sueldo.
 function capacidadAhorroPromedio(ventana){
   var hoy = new Date();
   var mesActualStr = hoy.getFullYear()+'-'+pad2(hoy.getMonth()+1);
@@ -2922,15 +2926,35 @@ function capacidadAhorroPromedio(ventana){
   if(!usados.length) return null;
   var usadosSet = {};
   usados.forEach(function(m){ usadosSet[m] = true; });
-  var totalesPorMes = {};
+
+  var ingresoPorMes = {}, egresoPorMes = {}, obraPorMes = {};
   STATE.movimientos.forEach(function(m){
     if(esTipoCategoria(m.categoriaId,'tec')) return;
-    if(esCategoriaObra(m.categoriaId)) return;
+    if(esCategoriaSueldo(m.categoriaId)){
+      if(esSubcategoriaVentaUsdt(m.subcategoriaId)) return;
+      var mesSueldo = mesEfectivoSueldo(m.fecha);
+      if(!usadosSet[mesSueldo]) return;
+      ingresoPorMes[mesSueldo] = (ingresoPorMes[mesSueldo]||0) + (Number(m.ingreso)||0);
+      return;
+    }
     var mes = (m.fecha||'').slice(0,7);
     if(!usadosSet[mes]) return;
-    totalesPorMes[mes] = (totalesPorMes[mes]||0) + (Number(m.ingreso)||0) - (Number(m.egreso)||0);
+    if(esCategoriaObra(m.categoriaId)){
+      obraPorMes[mes] = (obraPorMes[mes]||0) + (Number(m.egreso)||0) - (Number(m.ingreso)||0);
+    } else {
+      egresoPorMes[mes] = (egresoPorMes[mes]||0) + (Number(m.egreso)||0) - (Number(m.ingreso)||0);
+    }
   });
-  var suma = usados.reduce(function(s,m){ return s+(totalesPorMes[m]||0); },0);
+  STATE.usdtMovimientos.forEach(function(u){
+    if(u.tipo!=='ingreso' || !esCategoriaSueldo(u.categoriaId)) return;
+    var mesSueldo = mesEfectivoSueldo(u.fecha);
+    if(!usadosSet[mesSueldo]) return;
+    ingresoPorMes[mesSueldo] = (ingresoPorMes[mesSueldo]||0) + (Number(u.montoArs)||0);
+  });
+
+  var suma = usados.reduce(function(s,mes){
+    return s + (ingresoPorMes[mes]||0) - (egresoPorMes[mes]||0) - (obraPorMes[mes]||0);
+  },0);
   return { promedio: suma/usados.length, meses: usados };
 }
 function mesesRestantesDeuda(d){
