@@ -34,14 +34,20 @@ describe('esVentaUsdtFacturable', () => {
     expect(win.esVentaUsdtFacturable(mov)).toBe(true);
   });
 
-  it('no es facturable si ya tiene una factura emitida', () => {
-    win.STATE.facturas = [{ id: 'f1', movimientoId: 'm1', estado: 'emitida' }];
+  it('no es facturable si ya tiene una factura emitida en producción', () => {
+    win.STATE.facturas = [{ id: 'f1', movimientoId: 'm1', estado: 'emitida', ambiente: 'produccion' }];
     const mov = { id: 'm1', subcategoriaId: 's1', ingreso: 50000 };
     expect(win.esVentaUsdtFacturable(mov)).toBe(false);
   });
 
   it('sigue siendo facturable si la única factura previa quedó en error (se puede reintentar)', () => {
-    win.STATE.facturas = [{ id: 'f1', movimientoId: 'm1', estado: 'error' }];
+    win.STATE.facturas = [{ id: 'f1', movimientoId: 'm1', estado: 'error', ambiente: 'produccion' }];
+    const mov = { id: 'm1', subcategoriaId: 's1', ingreso: 50000 };
+    expect(win.esVentaUsdtFacturable(mov)).toBe(true);
+  });
+
+  it('sigue siendo facturable si la única factura emitida fue una prueba en homologación', () => {
+    win.STATE.facturas = [{ id: 'f1', movimientoId: 'm1', estado: 'emitida', ambiente: 'homologacion' }];
     const mov = { id: 'm1', subcategoriaId: 's1', ingreso: 50000 };
     expect(win.esVentaUsdtFacturable(mov)).toBe(true);
   });

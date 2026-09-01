@@ -478,8 +478,10 @@ function esVentaUsdtPendiente(m){
 function esSubcategoriaVentaUsdt(subcategoriaId){
   return (nombreSubcategoria(subcategoriaId)||'').trim()==='Venta USDT';
 }
+// Solo cuenta lo emitido en producción: una prueba en homologación no debe mostrarse como
+// "ya facturado" ni contarse en el acumulado real de la categoría de Monotributo.
 function facturaEmitidaDeMovimiento(movId){
-  return STATE.facturas.find(function(f){ return f.movimientoId===movId && f.estado==='emitida'; }) || null;
+  return STATE.facturas.find(function(f){ return f.movimientoId===movId && f.estado==='emitida' && f.ambiente==='produccion'; }) || null;
 }
 function esVentaUsdtFacturable(m){
   return esSubcategoriaVentaUsdt(m.subcategoriaId) && Number(m.ingreso)>0 && !facturaEmitidaDeMovimiento(m.id);
@@ -3427,7 +3429,7 @@ function renderUsdt(){
         (STATE.usdtCotizacionError ? '<div style="color:var(--danger);margin-top:2px">'+esc(STATE.usdtCotizacionError)+'</div>' : '')+
       '</div>'+
     '</div>'+
-    (limiteCategoriaB()>0 ? '<div class="summary-card"><div class="label">Facturado a ARCA (últimos 12 meses)</div><div class="value">$'+fmtMonto(acumuladoFacturado12Meses(STATE.facturas, fechaHoyISO()))+' / $'+fmtMonto(limiteCategoriaB())+'</div></div>' : '')+
+    (limiteCategoriaB()>0 ? '<div class="summary-card"><div class="label">Facturado a ARCA (últimos 12 meses)</div><div class="value">$'+fmtMonto(acumuladoFacturado12Meses(STATE.facturas.filter(function(f){return f.ambiente==='produccion';}), fechaHoyISO()))+' / $'+fmtMonto(limiteCategoriaB())+'</div></div>' : '')+
   '</div>'+
   formHtml+
   '<div class="card">'+

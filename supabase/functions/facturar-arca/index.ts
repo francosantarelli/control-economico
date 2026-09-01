@@ -296,14 +296,20 @@ Deno.serve(async (req) => {
       return jsonRes(400, { factura: null, error: "Este movimiento no es una Venta USDT facturable" });
     }
 
+    // Filtrado por ambiente: una factura de prueba en homologación no debe bloquear la real en
+    // producción del mismo movimiento (ni viceversa) — cada ambiente lleva su propia idempotencia.
     const { data: existente } = await sb
-      .from("facturas").select("*").eq("movimiento_id", movimientoId).eq("estado", "emitida").maybeSingle();
+      .from("facturas").select("*").eq("movimiento_id", movimientoId).eq("estado", "emitida").eq("ambiente", ambiente).maybeSingle();
     if (existente) return jsonRes(200, { factura: existente, error: null });
 
+    // El acumulado SIEMPRE se calcula sobre facturas de producción, sin importar en qué ambiente
+    // se esté corriendo ahora: es el único número real a los efectos del límite de Monotributo. Si
+    // se calculara con el ambiente activo, facturas de prueba en homologación podrían inflar (o una
+    // corrida en homologación podría ignorar) el acumulado real.
     const hoy = hoyArgentinaISO();
     const desde = inicioVentana12Meses(hoy);
     const { data: emitidas } = await sb
-      .from("facturas").select("importe").eq("estado", "emitida").gte("fecha", desde).lte("fecha", hoy);
+      .from("facturas").select("importe").eq("estado", "emitida").eq("ambiente", "produccion").gte("fecha", desde).lte("fecha", hoy);
     const acumulado = (emitidas || []).reduce((s, f) => s + (Number(f.importe) || 0), 0);
     const { data: cfg } = await sb.from("configuracion").select("valor").eq("clave", "monotributo_limite_categoria_b").maybeSingle();
     const limite = cfg ? Number(cfg.valor) || 0 : 0;
