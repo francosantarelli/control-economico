@@ -11,28 +11,46 @@
 // el motivo real (límite superado, rechazo de ARCA) sin depender de cómo el SDK expone el body de
 // un status no-2xx.
 //
-// Secrets necesarios (`npx supabase secrets set NOMBRE=valor`, nunca en el código ni en el chat):
-//   ARCA_CUIT          — CUIT sin guiones
-//   ARCA_CERT_B64      — certificado (el emitido por ARCA, no el CSR) en base64 de una línea
-//   ARCA_KEY_B64       — clave privada SIN passphrase, en base64 de una línea
-//   ARCA_PUNTO_VENTA   — número de punto de venta habilitado para Web Services
-//   ARCA_AMBIENTE      — 'homologacion' | 'produccion' (arrancar en homologacion)
-//   ARCA_WSAA_URL      — opcional, default homologación
-//   ARCA_WSFE_URL      — opcional, default homologación
-//   ARCA_CONCEPTO      — opcional, default '2' (Servicios). Confirmar con tu contador si la venta
-//                        de USDT corresponde facturarla como Servicios (2) o Productos (1).
+// Secrets necesarios (`npx supabase secrets set NOMBRE=valor`, nunca en el código ni en el chat).
+// Homologación y producción son totalmente independientes (certificados, punto de venta y hasta
+// las URLs son distintas) — por eso cada uno tiene su propio secret, sufijado por ambiente, y
+// cambiar de uno a otro es solo tocar ARCA_AMBIENTE, sin perder ni pisar la configuración del otro:
+//   ARCA_CUIT                       — CUIT sin guiones (el mismo en los dos ambientes)
+//   ARCA_AMBIENTE                   — 'homologacion' | 'produccion' (arrancar en homologacion)
+//   ARCA_CERT_B64_HOMOLOGACION      — certificado de homologación (el emitido por ARCA, no el CSR)
+//   ARCA_KEY_B64_HOMOLOGACION       — clave privada de homologación, SIN passphrase
+//   ARCA_PUNTO_VENTA_HOMOLOGACION   — punto de venta (Web Services) de homologación
+//   ARCA_CERT_B64_PRODUCCION        — certificado de producción
+//   ARCA_KEY_B64_PRODUCCION         — clave privada de producción, SIN passphrase
+//   ARCA_PUNTO_VENTA_PRODUCCION     — punto de venta (Web Services) de producción
+//   ARCA_WSAA_URL_HOMOLOGACION / ARCA_WSFE_URL_HOMOLOGACION / ARCA_WSAA_URL_PRODUCCION /
+//   ARCA_WSFE_URL_PRODUCCION        — opcionales, ya traen el default correcto por ambiente
+//   ARCA_CONCEPTO                   — opcional, default '2' (Servicios). Confirmar con tu contador
+//                                      si la venta de USDT corresponde facturarla como Servicios
+//                                      (2) o Productos (1) — vale para los dos ambientes.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import forge from "npm:node-forge@1.3.1";
 
-const WSAA_URL_DEFAULT = "https://wsaahomo.afip.gov.ar/ws/services/LoginCms";
-const WSFE_URL_DEFAULT = "https://wswhomo.afip.gov.ar/wsfev1/service.asmx";
+const WSAA_URL_POR_AMBIENTE: Record<string, string> = {
+  homologacion: "https://wsaahomo.afip.gov.ar/ws/services/LoginCms",
+  produccion: "https://wsaa.afip.gov.ar/ws/services/LoginCms",
+};
+const WSFE_URL_POR_AMBIENTE: Record<string, string> = {
+  homologacion: "https://wswhomo.afip.gov.ar/wsfev1/service.asmx",
+  produccion: "https://servicios1.afip.gov.ar/wsfev1/service.asmx",
+};
 const CBTE_TIPO_POR_LETRA: Record<string, number> = { C: 11 };
 
 function env(nombre: string): string {
   const v = Deno.env.get(nombre);
   if (!v) throw new Error(`Falta el secret ${nombre}`);
   return v;
+}
+// Secrets que difieren entre homologación y producción: cada uno vive bajo su propio nombre
+// sufijado (ej. ARCA_CERT_B64_HOMOLOGACION / ARCA_CERT_B64_PRODUCCION).
+function envPorAmbiente(nombreBase: string, ambiente: string): string {
+  return env(`${nombreBase}_${ambiente === "produccion" ? "PRODUCCION" : "HOMOLOGACION"}`);
 }
 function pemDesdeBase64(b64: string): string {
   const decoded = new TextDecoder().decode(Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)));
@@ -259,11 +277,12 @@ Deno.serve(async (req) => {
   );
 
   const ambiente = Deno.env.get("ARCA_AMBIENTE") === "produccion" ? "produccion" : "homologacion";
-  const puntoVenta = parseInt(env("ARCA_PUNTO_VENTA"), 10);
+  const sufijoAmbiente = ambiente === "produccion" ? "PRODUCCION" : "HOMOLOGACION";
+  const puntoVenta = parseInt(envPorAmbiente("ARCA_PUNTO_VENTA", ambiente), 10);
   const cuit = env("ARCA_CUIT");
   const concepto = parseInt(Deno.env.get("ARCA_CONCEPTO") || "2", 10);
-  const wsaaUrl = Deno.env.get("ARCA_WSAA_URL") || WSAA_URL_DEFAULT;
-  const wsfeUrl = Deno.env.get("ARCA_WSFE_URL") || WSFE_URL_DEFAULT;
+  const wsaaUrl = Deno.env.get(`ARCA_WSAA_URL_${sufijoAmbiente}`) || WSAA_URL_POR_AMBIENTE[ambiente];
+  const wsfeUrl = Deno.env.get(`ARCA_WSFE_URL_${sufijoAmbiente}`) || WSFE_URL_POR_AMBIENTE[ambiente];
   const tipoComprobante = "C";
   const cbteTipo = CBTE_TIPO_POR_LETRA[tipoComprobante];
 
@@ -304,8 +323,8 @@ Deno.serve(async (req) => {
     if (errInsert || !filaPendiente) throw new Error("No se pudo reservar la factura: " + (errInsert?.message || ""));
 
     try {
-      const certPem = pemDesdeBase64(env("ARCA_CERT_B64"));
-      const keyPem = pemDesdeBase64(env("ARCA_KEY_B64"));
+      const certPem = pemDesdeBase64(envPorAmbiente("ARCA_CERT_B64", ambiente));
+      const keyPem = pemDesdeBase64(envPorAmbiente("ARCA_KEY_B64", ambiente));
       const { token, sign } = await obtenerTokenYSign(sb, ambiente, certPem, keyPem, wsaaUrl);
       const auth = { token, sign, cuit };
 
