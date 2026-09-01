@@ -7,10 +7,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..', '..');
 
 const rawHtml = readFileSync(path.join(ROOT, 'index.html'), 'utf8');
-// Sacamos el <script> externo del SDK de Supabase: no queremos que jsdom intente
-// pegarle a la red en cada test. Sin `window.supabase`, app.js deja `sb = null`
-// y arranca en modo "no se pudo cargar la librería" sin romper nada (ver initAuth()).
-const html = rawHtml.replace(/<script src="https:\/\/cdn\.jsdelivr\.net[^"]*"><\/script>/, '');
+// Sacamos los <script> externos (SDK de Supabase, librería de QR): no queremos que jsdom intente
+// pegarle a la red en cada test. Sin `window.supabase`, app.js deja `sb = null` y arranca en modo
+// "no se pudo cargar la librería" sin romper nada (ver initAuth()); sin `window.QRCode`, generar un
+// comprobante fallaría igual, pero eso no se testea acá (ver comentario en facturacion-arca.test.js).
+const html = rawHtml.replace(/<script src="https:\/\/cdn\.jsdelivr\.net[^"]*"><\/script>/g, '');
 const appJsSource = readFileSync(path.join(ROOT, 'app.js'), 'utf8');
 
 /**

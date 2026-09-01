@@ -70,3 +70,25 @@ describe('limiteCategoriaB', () => {
     expect(win.limiteCategoriaB()).toBe(0);
   });
 });
+
+// abrirComprobante en sí no se testea acá: depende de window.QRCode (cargado por CDN, sacado en
+// loadApp.js para no pegarle a la red en los tests) y de window.open/document.write. Lo que sí es
+// lógica pura y vale la pena testear es el payload que arma el contenido del QR.
+describe('armarPayloadQrFactura', () => {
+  it('arma el payload del QR con Consumidor Final fijo y el tipo de comprobante correcto', () => {
+    const factura = {
+      fecha: '2026-09-01', puntoVenta: 2, numero: 1, tipoComprobante: 'C',
+      importe: 635720, cae: '86350846763165',
+    };
+    expect(win.armarPayloadQrFactura(factura, '27357665278')).toEqual({
+      ver: 1, fecha: '2026-09-01', cuit: 27357665278, ptoVta: 2, tipoCmp: 11, nroCmp: 1,
+      importe: 635720, moneda: 'PES', ctz: 1, tipoDocRec: 99, nroDocRec: 0,
+      tipoCodAut: 'E', codAut: 86350846763165,
+    });
+  });
+
+  it('redondea el importe a dos decimales', () => {
+    const factura = { fecha: '2026-09-01', puntoVenta: 2, numero: 1, tipoComprobante: 'C', importe: 635720.456, cae: '1' };
+    expect(win.armarPayloadQrFactura(factura, '27357665278').importe).toBe(635720.46);
+  });
+});
