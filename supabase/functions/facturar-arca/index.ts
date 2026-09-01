@@ -158,10 +158,16 @@ async function fecompUltimoAutorizado(
   return parseInt(cbteNro, 10);
 }
 
+// <Err> son errores de formato de la llamada en sí; <Obs> son el motivo real de rechazo de UN
+// comprobante puntual (Resultado=R) — hay que buscar los dos, porque el de Obs es el que casi
+// siempre importa acá.
 function extraerErrores(xml: string): string | null {
-  const errs = [...xml.matchAll(/<(?:\w+:)?Err>[\s\S]*?<(?:\w+:)?Msg>([\s\S]*?)<\/(?:\w+:)?Msg>[\s\S]*?<\/(?:\w+:)?Err>/g)];
-  if (!errs.length) return null;
-  return errs.map((m) => m[1].trim()).join("; ");
+  const patrones = [
+    /<(?:\w+:)?Err>[\s\S]*?<(?:\w+:)?Msg>([\s\S]*?)<\/(?:\w+:)?Msg>[\s\S]*?<\/(?:\w+:)?Err>/g,
+    /<(?:\w+:)?Obs>[\s\S]*?<(?:\w+:)?Msg>([\s\S]*?)<\/(?:\w+:)?Msg>[\s\S]*?<\/(?:\w+:)?Obs>/g,
+  ];
+  const mensajes = patrones.flatMap((p) => [...xml.matchAll(p)].map((m) => m[1].trim()));
+  return mensajes.length ? mensajes.join("; ") : null;
 }
 
 async function fecaeSolicitar(
@@ -187,6 +193,7 @@ async function fecaeSolicitar(
           <ar:Concepto>${datos.concepto}</ar:Concepto>
           <ar:DocTipo>99</ar:DocTipo>
           <ar:DocNro>0</ar:DocNro>
+          <ar:CondicionIVAReceptorId>5</ar:CondicionIVAReceptorId><!-- 5 = Consumidor Final (catálogo de FEParamGetCondicionIvaReceptor, exigido desde RG 5616) -->
           <ar:CbteDesde>${datos.numero}</ar:CbteDesde>
           <ar:CbteHasta>${datos.numero}</ar:CbteHasta>
           <ar:CbteFch>${fch}</ar:CbteFch>
@@ -215,15 +222,26 @@ async function fecaeSolicitar(
   const caeFchVto = tag(detalle, "CAEFchVto"); // formato AAAAMMDD
   const errorMsg = extraerErrores(detalle) || extraerErrores(texto);
   if (resultado !== "A" || !cae) {
-    throw new Error(errorMsg || ("ARCA rechazó el comprobante. Respuesta: " + texto.slice(0, 800)));
+    throw new Error(errorMsg || ("ARCA rechazó el comprobante. Respuesta: " + texto.slice(0, 2000)));
   }
   const vto = caeFchVto ? `${caeFchVto.slice(0, 4)}-${caeFchVto.slice(4, 6)}-${caeFchVto.slice(6, 8)}` : null;
   return { cae, caeVencimiento: vto };
 }
 
+// Se invoca desde el browser (otro origen que el de supabase.co), así que hace falta responder el
+// preflight OPTIONS y mandar estos headers en toda respuesta — si no, el navegador bloquea la
+// llamada real antes de que salga, sin que el código de acá abajo llegue a correr.
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
 Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS_HEADERS });
+
   const jsonRes = (status: number, body: unknown) =>
-    new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+    new Response(JSON.stringify(body), { status, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } });
 
   let movimientoId: string;
   try {
