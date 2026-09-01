@@ -75,3 +75,35 @@ describe('gimnasio', () => {
       .toEqual({ id: 'g1', persona: 'franco', fecha: '2026-08-09' });
   });
 });
+
+describe('factura', () => {
+  it('fromDbFactura mapea una factura emitida con todos los campos', () => {
+    const row = {
+      id: 'f1', movimiento_id: 'm1', fecha: '2026-08-09', tipo_comprobante: 'C',
+      punto_venta: 4, numero: 123, importe: 50000, cae: '75312345678901',
+      cae_vencimiento: '2026-08-19', estado: 'emitida', error: null, ambiente: 'homologacion', detalle: '5 USDT a $10000',
+    };
+    expect(win.fromDbFactura(row)).toEqual({
+      id: 'f1', movimientoId: 'm1', fecha: '2026-08-09', tipoComprobante: 'C',
+      puntoVenta: 4, numero: 123, importe: 50000, cae: '75312345678901',
+      caeVencimiento: '2026-08-19', estado: 'emitida', error: '', ambiente: 'homologacion', detalle: '5 USDT a $10000',
+    });
+  });
+
+  it('fromDbFactura rellena con vacíos/defaults una factura en error sin CAE ni número', () => {
+    const row = { id: 'f1', movimiento_id: 'm1', fecha: '2026-08-09', importe: 50000, estado: 'error', error: 'Límite superado' };
+    const f = win.fromDbFactura(row);
+    expect(f.cae).toBe('');
+    expect(f.numero).toBeNull();
+    expect(f.tipoComprobante).toBe('C');
+    expect(f.ambiente).toBe('homologacion');
+    expect(f.error).toBe('Límite superado');
+  });
+});
+
+describe('configuracion', () => {
+  it('fromDbConfiguracion mapea clave/valor tal cual', () => {
+    expect(win.fromDbConfiguracion({ clave: 'monotributo_limite_categoria_b', valor: '1400000' }))
+      .toEqual({ clave: 'monotributo_limite_categoria_b', valor: '1400000' });
+  });
+});

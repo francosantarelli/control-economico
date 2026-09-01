@@ -50,7 +50,7 @@ function cargarReglas(){
   return seed;
 }
 
-var STATE = { centros: [], categorias: [], subcategorias: [], movimientos: [], vencimientos: [], gimnasioVisitas: [], usdtMovimientos: [], deudas: [], activeTab: 'movimientos', editing: null, ready:false,
+var STATE = { centros: [], categorias: [], subcategorias: [], movimientos: [], vencimientos: [], gimnasioVisitas: [], usdtMovimientos: [], deudas: [], facturas: [], configuracion: [], facturaLoadingId:null, activeTab: 'movimientos', editing: null, ready:false,
   importEntidad:'mp', importBanco:'nacion', importVencimiento:'', importTarjetaMarca:'', importRaw:'', importPreview:null, importPreviewExcel:null, importMsg:null,
   bulkCatMsg:null, bulkColorCatMsg:null, confirmState:null, subDeleteState:null, vencPagarState:null, movFormMsg:null,
   filtros:{centro:[], categoria:[], subcategoria:[], mes:[], texto:'', soloIncompletos:false, soloTarjeta:false},
@@ -322,6 +322,16 @@ function fromDbUsdt(r){
     movimientoId:r.movimiento_id||'', detalle:r.detalle||''
   };
 }
+// La Edge Function "facturar-arca" es quien inserta/actualiza filas de facturas; acá solo se leen.
+function fromDbFactura(r){
+  return {
+    id:r.id, movimientoId:r.movimiento_id||'', fecha:r.fecha, tipoComprobante:r.tipo_comprobante||'C',
+    puntoVenta:r.punto_venta||null, numero:r.numero||null, importe:Number(r.importe)||0,
+    cae:r.cae||'', caeVencimiento:r.cae_vencimiento||'', estado:r.estado||'pendiente',
+    error:r.error||'', ambiente:r.ambiente||'homologacion', detalle:r.detalle||''
+  };
+}
+function fromDbConfiguracion(r){ return {clave:r.clave, valor:r.valor}; }
 
 // ---- CRUD genérico contra Supabase ----
 async function dbFetchAll(table){
@@ -383,6 +393,13 @@ async function cargarTodo(){
     var deudas = await dbFetchAll('deudas');
     STATE.deudas = deudas.map(fromDbDeuda);
   }catch(e){ STATE.deudas = []; }
+  try{
+    // Idem: si todavía no corriste migracion_facturacion_arca.sql, arranca vacío en vez de romper la carga.
+    var facturas = await dbFetchAll('facturas');
+    STATE.facturas = facturas.map(fromDbFactura);
+    var configuracion = await dbFetchAll('configuracion');
+    STATE.configuracion = configuracion.map(fromDbConfiguracion);
+  }catch(e){ STATE.facturas = []; STATE.configuracion = []; }
 }
 
 // ===================== AUTENTICACIÓN =====================
@@ -460,6 +477,36 @@ function esVentaUsdtPendiente(m){
 }
 function esSubcategoriaVentaUsdt(subcategoriaId){
   return (nombreSubcategoria(subcategoriaId)||'').trim()==='Venta USDT';
+}
+function facturaEmitidaDeMovimiento(movId){
+  return STATE.facturas.find(function(f){ return f.movimientoId===movId && f.estado==='emitida'; }) || null;
+}
+function esVentaUsdtFacturable(m){
+  return esSubcategoriaVentaUsdt(m.subcategoriaId) && Number(m.ingreso)>0 && !facturaEmitidaDeMovimiento(m.id);
+}
+function configuracionValor(clave){
+  var row = STATE.configuracion.find(function(c){ return c.clave===clave; });
+  return row ? row.valor : null;
+}
+function limiteCategoriaB(){
+  var v = configuracionValor('monotributo_limite_categoria_b');
+  return v!=null ? (Number(v)||0) : 0;
+}
+// Inicio de la ventana de 12 meses móviles que termina en fechaRefISO (inclusive). Es el criterio
+// real de recategorización de Monotributo (acumulado rodante), no "mes calendario".
+function inicioVentana12Meses(fechaRefISO){
+  var m = (fechaRefISO||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if(!m) return '0000-00-00';
+  var y = parseInt(m[1],10), mes = parseInt(m[2],10), dia = parseInt(m[3],10);
+  var d = new Date(y, mes-1-12, dia);
+  return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate());
+}
+function acumuladoFacturado12Meses(facturas, fechaRefISO){
+  var desde = inicioVentana12Meses(fechaRefISO);
+  return facturas.reduce(function(s, f){
+    if(f.estado!=='emitida' || !f.fecha || f.fecha<desde || f.fecha>fechaRefISO) return s;
+    return s + (Number(f.importe)||0);
+  }, 0);
 }
 // El sueldo de Franco se acredita unos días antes de fin de mes: para que en el Resumen cuente en el
 // mes al que en realidad corresponde (y no en el que se acredita), los últimos 3 días de cada mes se
@@ -1316,9 +1363,10 @@ function renderInterno(){
   contentHtml += '<footer class="small">Los datos se guardan en la base de datos compartida: vos y quien tenga usuario ven y editan la misma información.</footer>';
 
   if(STATE.confirmState){
+    var csClaseSi = STATE.confirmState.destructivo===false ? '' : 'danger';
     MODAL_HTML = '<div class="modal-overlay" data-modal-backdrop="confirm"><div class="modal-card">'+
       '<div style="margin-bottom:16px">'+esc(STATE.confirmState.message)+'</div>'+
-      '<button class="danger" data-action="confirm-yes">Sí, borrar</button> '+
+      '<button'+(csClaseSi?' class="'+csClaseSi+'"':'')+' data-action="confirm-yes">'+esc(STATE.confirmState.textoConfirmar||'Sí, borrar')+'</button> '+
       '<button class="secondary" data-action="confirm-no">Cancelar</button>'+
     '</div></div>';
   }
@@ -1824,6 +1872,7 @@ function renderMovimientos(){
   function filaMovNormal(m){
     var faltan = camposFaltantes(m);
     var incompleto = faltan.length>0;
+    var facturaMov = facturaEmitidaDeMovimiento(m.id);
 
     var celdaCentro, celdaCategoria, celdaSubcategoria, celdaProveedor, celdaDetalle;
     if(f.soloIncompletos){
@@ -1848,6 +1897,8 @@ function renderMovimientos(){
       '<td class="num egreso" data-label="Egreso">'+(Number(m.egreso)?fmtMonto(m.egreso):'')+'</td>'+
       '<td class="actions-cell">'+
       (esVentaUsdtPendiente(m)?'<button class="icon-btn" data-action="abrir-usdt-venta-mov" data-id="'+m.id+'" title="Generar movimiento USDT" aria-label="Generar movimiento USDT">🪙</button>':'')+
+      (esVentaUsdtFacturable(m)?'<button class="icon-btn" data-action="facturar-mov" data-id="'+m.id+'" title="Facturar con ARCA" aria-label="Facturar con ARCA" '+(STATE.facturaLoadingId===m.id?'disabled':'')+'>🧾</button>':'')+
+      (facturaMov?'<span class="icon-btn" title="Facturado — CAE '+esc(facturaMov.cae)+'" aria-label="Facturado">✅</span>':'')+
       '<button class="icon-btn" data-action="edit-mov" data-id="'+m.id+'" title="Editar" aria-label="Editar">✏️</button>'+
       '<button class="icon-btn icon-btn-danger" data-action="del-mov" data-id="'+m.id+'" title="Borrar" aria-label="Borrar">🗑️</button></td>'+
     '</tr>';
@@ -3376,6 +3427,7 @@ function renderUsdt(){
         (STATE.usdtCotizacionError ? '<div style="color:var(--danger);margin-top:2px">'+esc(STATE.usdtCotizacionError)+'</div>' : '')+
       '</div>'+
     '</div>'+
+    (limiteCategoriaB()>0 ? '<div class="summary-card"><div class="label">Facturado a ARCA (últimos 12 meses)</div><div class="value">$'+fmtMonto(acumuladoFacturado12Meses(STATE.facturas, fechaHoyISO()))+' / $'+fmtMonto(limiteCategoriaB())+'</div></div>' : '')+
   '</div>'+
   formHtml+
   '<div class="card">'+
@@ -4771,6 +4823,36 @@ async function handleAction(action, id){
     }catch(e){
       STATE.gimnasioMsg = 'No se pudo borrar la visita: '+(e.message||e);
     }
+    render(); return;
+  }
+
+  // ---- FACTURACIÓN ARCA ----
+  if(action==='facturar-mov'){
+    var movAFacturar = STATE.movimientos.find(function(x){return x.id===id;});
+    if(!movAFacturar) return;
+    STATE.confirmState = {
+      message: '¿Emitir factura ARCA por $'+fmtMonto(movAFacturar.ingreso)+' a Consumidor Final?',
+      action: 'facturar-mov-do', id: id, destructivo: false, textoConfirmar: 'Sí, facturar'
+    };
+    render(); return;
+  }
+  if(action==='facturar-mov-do'){
+    STATE.facturaLoadingId = id;
+    STATE.dbError = null;
+    render();
+    try{
+      var resFactura = await sb.functions.invoke('facturar-arca', { body: { movimientoId: id } });
+      if(resFactura.error) throw resFactura.error;
+      var cuerpoFactura = resFactura.data || {};
+      if(cuerpoFactura.factura){
+        var facturaNueva = fromDbFactura(cuerpoFactura.factura);
+        STATE.facturas = STATE.facturas.filter(function(f){return f.id!==facturaNueva.id;}).concat([facturaNueva]);
+      }
+      if(cuerpoFactura.error) STATE.dbError = 'No se pudo emitir la factura: '+cuerpoFactura.error;
+    }catch(e){
+      STATE.dbError = 'No se pudo emitir la factura: '+(e.message||e);
+    }
+    STATE.facturaLoadingId = null;
     render(); return;
   }
 
