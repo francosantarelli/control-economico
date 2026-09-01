@@ -534,34 +534,38 @@ function abrirComprobante(factura){
   var razonSocial = configuracionValor('arca_razon_social') || '';
   var payload = armarPayloadQrFactura(factura, cuit);
   var textoQr = 'https://www.afip.gob.ar/fe/qr/?p='+btoa(JSON.stringify(payload));
-  window.QRCode.toDataURL(textoQr, function(err, dataUrl){
-    if(err){ STATE.dbError = 'No se pudo generar el QR del comprobante: '+(err.message||err); render(); return; }
-    var w = window.open('', '_blank');
-    if(!w) return;
-    w.document.write(
-      '<!doctype html><html><head><meta charset="utf-8"><title>Factura '+esc(factura.tipoComprobante)+' '+fmtPuntoVentaYNumero(factura.puntoVenta, factura.numero)+'</title>'+
-      '<style>body{font-family:Arial,sans-serif;max-width:640px;margin:24px auto;color:#111}'+
-      'h1{font-size:20px;border-bottom:2px solid #111;padding-bottom:8px}'+
-      '.fila{display:flex;justify-content:space-between;margin:6px 0}'+
-      '.total{font-size:22px;font-weight:bold;margin:16px 0}'+
-      'img{display:block;margin:16px 0}'+
-      'button{font-size:14px;padding:8px 16px;cursor:pointer}'+
-      '@media print{button{display:none}}</style></head><body>'+
-      '<h1>FACTURA '+esc(factura.tipoComprobante)+'</h1>'+
-      '<div class="fila"><span>'+esc(razonSocial)+'</span><span>CUIT '+esc(cuit)+'</span></div>'+
-      '<div class="fila"><span>Responsable Monotributo</span><span>Punto de Venta '+String(factura.puntoVenta).padStart(4,'0')+' — Nº '+String(factura.numero).padStart(8,'0')+'</span></div>'+
-      '<div class="fila"><span>Fecha de emisión: '+esc(factura.fecha)+'</span></div>'+
-      '<hr>'+
-      '<div class="fila"><span>Receptor</span><span>Consumidor Final</span></div>'+
-      '<div class="total">Importe total: $'+fmtMonto(factura.importe)+'</div>'+
-      '<div class="fila"><span>CAE</span><span>'+esc(factura.cae)+'</span></div>'+
-      '<div class="fila"><span>Vencimiento de CAE</span><span>'+esc(factura.caeVencimiento)+'</span></div>'+
-      '<img src="'+dataUrl+'" width="150" height="150" alt="QR AFIP">'+
-      '<button onclick="window.print()">Imprimir / Guardar como PDF</button>'+
-      '</body></html>'
-    );
-    w.document.close();
-  });
+  // API sincrónica de qrcode-generator (0 = detecta automáticamente la versión de QR según el
+  // largo del texto; 'M' = nivel de corrección de errores estándar).
+  var qr = window.qrcode(0, 'M');
+  qr.addData(textoQr);
+  qr.make();
+  var dataUrl = qr.createDataURL(6, 8);
+
+  var w = window.open('', '_blank');
+  if(!w) return;
+  w.document.write(
+    '<!doctype html><html><head><meta charset="utf-8"><title>Factura '+esc(factura.tipoComprobante)+' '+fmtPuntoVentaYNumero(factura.puntoVenta, factura.numero)+'</title>'+
+    '<style>body{font-family:Arial,sans-serif;max-width:640px;margin:24px auto;color:#111}'+
+    'h1{font-size:20px;border-bottom:2px solid #111;padding-bottom:8px}'+
+    '.fila{display:flex;justify-content:space-between;margin:6px 0}'+
+    '.total{font-size:22px;font-weight:bold;margin:16px 0}'+
+    'img{display:block;margin:16px 0}'+
+    'button{font-size:14px;padding:8px 16px;cursor:pointer}'+
+    '@media print{button{display:none}}</style></head><body>'+
+    '<h1>FACTURA '+esc(factura.tipoComprobante)+'</h1>'+
+    '<div class="fila"><span>'+esc(razonSocial)+'</span><span>CUIT '+esc(cuit)+'</span></div>'+
+    '<div class="fila"><span>Responsable Monotributo</span><span>Punto de Venta '+String(factura.puntoVenta).padStart(4,'0')+' — Nº '+String(factura.numero).padStart(8,'0')+'</span></div>'+
+    '<div class="fila"><span>Fecha de emisión: '+esc(factura.fecha)+'</span></div>'+
+    '<hr>'+
+    '<div class="fila"><span>Receptor</span><span>Consumidor Final</span></div>'+
+    '<div class="total">Importe total: $'+fmtMonto(factura.importe)+'</div>'+
+    '<div class="fila"><span>CAE</span><span>'+esc(factura.cae)+'</span></div>'+
+    '<div class="fila"><span>Vencimiento de CAE</span><span>'+esc(factura.caeVencimiento)+'</span></div>'+
+    '<img src="'+dataUrl+'" width="150" height="150" alt="QR AFIP">'+
+    '<button onclick="window.print()">Imprimir / Guardar como PDF</button>'+
+    '</body></html>'
+  );
+  w.document.close();
 }
 // El sueldo de Franco se acredita unos días antes de fin de mes: para que en el Resumen cuente en el
 // mes al que en realidad corresponde (y no en el que se acredita), los últimos 3 días de cada mes se
