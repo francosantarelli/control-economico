@@ -2249,6 +2249,7 @@ function renderImportar(){
       var dupTag = esDup ? ' <span title="Posible duplicado: mismo Centro, fecha y monto que otro movimiento. Revisá antes de importar." style="color:var(--danger)">⚠️</span>' : '';
       var provInput = '<input type="text" id="imp-prov-'+r.id+'" data-rowid="'+r.id+'" data-field="proveedor" value="'+esc(r.proveedor)+'" style="width:100%;min-width:110px;box-sizing:border-box">';
       var detInput = '<input type="text" id="imp-det-'+r.id+'" data-rowid="'+r.id+'" data-field="detalle" value="'+esc(r.detalle)+'" style="width:100%;min-width:110px;box-sizing:border-box">';
+      var cuotasInput = '<input type="text" id="imp-cuotas-'+r.id+'" data-rowid="'+r.id+'" data-field="cuotas" value="'+esc(r.cuotas||'')+'" style="width:100%;min-width:60px;box-sizing:border-box">';
       return '<tr'+(esDup?' class="fila-duplicada"':'')+'>'+
         '<td><input type="checkbox" data-rowid="'+r.id+'" data-field="incluir" '+(r.incluir?'checked':'')+'></td>'+
         '<td class="mono">'+esc(fechaISOaDDMMAAAA(r.fecha)||r.fecha)+dupTag+'</td>'+
@@ -2257,6 +2258,7 @@ function renderImportar(){
         '<td>'+subSel+'</td>'+
         '<td>'+provInput+'</td>'+
         '<td>'+detInput+'</td>'+
+        '<td>'+cuotasInput+'</td>'+
         '<td class="num ingreso">'+(r.monto>0?fmtMonto(r.monto):'')+'</td>'+
         '<td class="num egreso">'+(r.monto<0?fmtMonto(-r.monto):'')+'</td>'+
         '<td style="text-align:center"><input type="checkbox" data-rowid="'+r.id+'" data-field="guardarRegla" '+(r.guardarRegla?'checked':'')+' title="Guardar esta relación proveedor → categoría como regla para futuras importaciones"></td>'+
@@ -2278,7 +2280,7 @@ function renderImportar(){
     '<div class="card">'+
       '<h3>Previsualización ('+STATE.importPreview.length+' movimiento(s), '+incluidos+' seleccionado(s))</h3>'+
       (duplicados>0 ? '<div class="msg err">⚠️ '+duplicados+' fila(s) marcada(s) como posible duplicado (mismo Centro, fecha y monto que otro movimiento). Revisalas antes de confirmar.</div>' : '')+
-      '<table id="import-preview-table"><thead><tr><th></th><th>Fecha</th><th>Centro</th><th>Categoría</th><th>Subcategoría</th><th>Proveedor</th><th>Detalle</th><th class="num">Ingreso</th><th class="num">Egreso</th><th title="Guardar la relación proveedor → categoría como regla para futuras importaciones">Regla</th></tr></thead>'+
+      '<table id="import-preview-table"><thead><tr><th></th><th>Fecha</th><th>Centro</th><th>Categoría</th><th>Subcategoría</th><th>Proveedor</th><th>Detalle</th><th>Cuotas</th><th class="num">Ingreso</th><th class="num">Egreso</th><th title="Guardar la relación proveedor → categoría como regla para futuras importaciones">Regla</th></tr></thead>'+
       '<tbody>'+rows+'</tbody></table>'+
       '<div class="row" style="margin-top:14px">'+
         '<button data-action="confirm-import">Importar '+incluidos+' movimiento(s)</button>'+
