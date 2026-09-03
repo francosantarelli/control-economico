@@ -848,7 +848,7 @@ function parseTarjetaResumen(raw, vencimientoStr){
       fecha: fechaOut,
       fechaConsumo: fechaConsumo,
       proveedor: detalle,
-      tipo: cuota ? '('+cuota+')' : '',
+      tipo: 'fecha de consumo: '+fechaConsumoLegible(fechaConsumo)+(cuota ? ' ('+cuota+')' : ''),
       monto: monto,
       ingreso: monto>0 ? formatMonto(monto) : '',
       egreso: monto<0 ? formatMonto(monto) : ''
@@ -910,7 +910,7 @@ function parseTarjeta(raw, vencimientoStr){
       fecha: fechaOut,
       fechaConsumo: fechaConsumo,
       proveedor: detalle,
-      tipo: cuota ? '('+cuota+')' : '',
+      tipo: 'fecha de consumo: '+fechaConsumoLegible(fechaConsumo)+(cuota ? ' ('+cuota+')' : ''),
       monto: monto,
       ingreso: monto>0 ? formatMonto(monto) : '',
       egreso: monto<0 ? formatMonto(monto) : ''
@@ -920,6 +920,12 @@ function parseTarjeta(raw, vencimientoStr){
 }
 
 var MESES_ABR_MAP = {ene:'01',feb:'02',mar:'03',abr:'04',may:'05',jun:'06',jul:'07',ago:'08',sep:'09',set:'09',oct:'10',nov:'11',dic:'12'};
+
+// "dd-mm-aa" (como queda fechaConsumo en los parsers de tarjeta) -> "dd/mm/aaaa" para mostrar en Detalle.
+function fechaConsumoLegible(fechaCorta){
+  var m = (fechaCorta||'').match(/^(\d{2})-(\d{2})-(\d{2})$/);
+  return m ? (m[1]+'/'+m[2]+'/20'+m[3]) : '';
+}
 
 // Resumen de Tarjeta de Crédito Mercado Pago: cada fila trae su propia fecha (dd/mmm, sin año) y
 // puede venir en Pesos ($) o Dólares (US$). Las filas en dólares se descartan (no hay forma de
