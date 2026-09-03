@@ -784,79 +784,76 @@ function procesarTexto(raw, anio){
   return parseLines(step2, anio);
 }
 
-function parseTarjetaSantander(raw, vencimientoStr){
-  var lines = raw.split('\n')
-    .map(function(l){ return l.replace(/\r$/,'').replace(/^\s*\*\s*/, '').trim(); })
-    .filter(function(l){ return l.length>0; });
-
-  var reDateHeader = /^(\d{1,2})\s+de\s+([a-záéíóúñ]+)$/i;
-  var reDollarLine = /^\$$/;
-  var reAmount = /^-?\d{1,3}(?:\.\d{3})*,\d{2}-?$/;
-  var reUSD = /^U\$S$/i;
-  var reSubtotal = /^subtotal$/i;
-  var reOtros = /^otros conceptos$/i;
+// Resumen de tarjeta (Nación, Santander): mismo formato de línea entre los dos bancos una vez que
+// se pega el texto tal cual sale del resumen (no de la web de cada banco) —
+// "dd/mm/aa detalle...  [C.NN/MM]  comprobante  monto". Se descartan "SU PAGO EN PESOS" (el pago
+// del resumen, no un consumo) y cualquier línea que no arranque con fecha (el subtotal
+// "TOTAL TARJETA...", texto de planes de cuotas al pie, etc. quedan afuera solos). El importe real
+// de la línea es SIEMPRE el último número con forma de monto: filas de impuestos/percepciones
+// (IIBB, IVA RG 4240) traen otros números con esa misma forma en el medio del texto (ej.
+// "2,00%(0)") que no son el importe.
+function parseTarjetaResumen(raw, vencimientoStr){
+  var lines = raw.split('\n').map(function(l){ return l.replace(/\r$/,''); }).filter(function(l){ return l.trim().length>0; });
+  var reFecha = /^(\d{2})\/(\d{2})\/(\d{2})\s+(.*)$/;
+  // Los importes de línea en estos resúmenes NO llevan separador de miles ("13608,33", no
+  // "13.608,33") — a diferencia de subtotales como "TOTAL TARJETA" que sí lo llevan. El primer
+  // grupo de dígitos queda sin acotar (\d+, no \d{1,3}) para no truncar el número si el patrón de
+  // grupos de miles no aparece: con \d{1,3} un importe como "50003,02" hace backtrack y matchea
+  // solo "003,02", perdiendo el "50" de adelante.
+  var reMoney = /-?\d+(?:\.\d{3})*,\d{2}-?/g;
+  var reCuota = /C\.\s*(\d{1,2})\s*\/\s*(\d{1,2})/i;
+  var reUsdMonto = /USD\s*[\d.,]+/gi;
+  // Ojo: no se puede cerrar con \b después de "*" (no es un carácter de "palabra", así que \b no
+  // marca límite ahí) — se usa un lookahead de espacio/fin de texto en su lugar.
+  var reComprobante = /\b\d{4,7}[A-Z*](?=\s|$)/g;
 
   // vencimientoStr viene en formato ISO (yyyy-mm-dd) del input de fecha; se pasa a dd-mm-aa corto
   // porque el resto del pipeline de importación (fechaCortaAISO) espera ese formato en "fecha".
   var vf = (vencimientoStr||'').trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
   var fechaOut = vf ? (vf[3]+'-'+vf[2]+'-'+vf[1].slice(2)) : (vencimientoStr||'').trim();
-  var anioCortoVenc = vf ? vf[1].slice(2) : '';
 
   var rows = [];
-  var pendingName = [];
-  var fechaConsumoActual = '';
-  var i = 0;
-  while(i < lines.length){
-    var l = lines[i];
-    var mFechaHeader = l.match(reDateHeader);
-    if(mFechaHeader){
-      pendingName = [];
-      var mesCodHeader = MESES_ABR_MAP[mFechaHeader[2].toLowerCase().slice(0,3)];
-      fechaConsumoActual = mesCodHeader ? (mFechaHeader[1].padStart(2,'0')+'-'+mesCodHeader+'-'+anioCortoVenc) : '';
-      i++; continue;
-    }
-    if(reSubtotal.test(l)){
-      i++;
-      if(lines[i] && reDollarLine.test(lines[i])) i++;
-      if(lines[i] && reAmount.test(lines[i])) i++;
-      if(lines[i] && reUSD.test(lines[i])) i++;
-      if(lines[i] && reAmount.test(lines[i])) i++;
-      pendingName = [];
-      continue;
-    }
-    if(reOtros.test(l)){ pendingName = []; i++; continue; }
-    if(reDollarLine.test(l)){ i++; continue; }
-    if(reAmount.test(l)){
-      var detalle = pendingName.join(' ')
-        .replace(/\bCuota\s+\d+\s+de\s+\d+\b/i,'')
-        .replace(/\$\s*$/,'')
-        .replace(/\s+/g,' ')
-        .trim();
-      pendingName = [];
-      if(detalle){
-        var isNeg = /^-/.test(l) || /-$/.test(l);
-        var cleaned = l.replace(/-/g,'');
-        var val = parseMonto(cleaned);
-        if(val !== null && !isNaN(val)){
-          if(isNeg) val = -val;
-          var monto = -val;
-          rows.push({
-            fecha: fechaOut,
-            fechaConsumo: fechaConsumoActual,
-            proveedor: detalle,
-            tipo: '',
-            monto: monto,
-            ingreso: monto>0 ? formatMonto(monto) : '',
-            egreso: monto<0 ? formatMonto(monto) : ''
-          });
-        }
-      }
-      i++;
-      continue;
-    }
-    pendingName.push(l);
-    i++;
-  }
+  lines.forEach(function(line){
+    var fm = line.trim().match(reFecha);
+    if(!fm) return; // filtra headers, "TOTAL TARJETA", texto de planes de cuotas al pie, etc.
+    var fechaConsumo = fm[1]+'-'+fm[2]+'-'+fm[3];
+    var resto = fm[4];
+    if(/su pago/i.test(resto) || /pago en pesos/i.test(resto)) return;
+
+    var montos = resto.match(reMoney);
+    if(!montos || !montos.length) return;
+    var moneyTok = montos[montos.length-1];
+    var medio = resto.slice(0, resto.lastIndexOf(moneyTok));
+
+    var cuota = '';
+    var mc = medio.match(reCuota);
+    if(mc){ cuota = mc[1]+'/'+mc[2]; medio = medio.slice(0, mc.index) + medio.slice(mc.index + mc[0].length); }
+
+    var detalle = medio
+      .replace(reUsdMonto, ' ')
+      .replace(reComprobante, ' ')
+      .replace(/\$/g, ' ')
+      .replace(/\s+/g,' ')
+      .trim();
+    if(!detalle) return;
+
+    var isNeg = /^-/.test(moneyTok) || /-$/.test(moneyTok);
+    var cleaned = moneyTok.replace(/-/g,'');
+    var val = parseMonto(cleaned);
+    if(val === null || isNaN(val)) return;
+    if(isNeg) val = -val;
+    var monto = -val;
+
+    rows.push({
+      fecha: fechaOut,
+      fechaConsumo: fechaConsumo,
+      proveedor: detalle,
+      tipo: cuota ? '('+cuota+')' : '',
+      monto: monto,
+      ingreso: monto>0 ? formatMonto(monto) : '',
+      egreso: monto<0 ? formatMonto(monto) : ''
+    });
+  });
   return rows;
 }
 
@@ -889,7 +886,11 @@ function parseTarjeta(raw, vencimientoStr){
     if(moneyIdx === -1) return;
 
     var moneyTok = rest[moneyIdx];
-    var detalle = rest.slice(0, moneyIdx).filter(function(w){ return w !== '$'; }).join(' ')
+    var detalleCrudo = rest.slice(0, moneyIdx).filter(function(w){ return w !== '$'; }).join(' ');
+    var cuota = '';
+    var mCuota = detalleCrudo.match(/\bCuota\s+(\d+)\/(\d+)\b/i) || detalleCrudo.match(/\bC\.(\d+)\/(\d+)\b/i);
+    if(mCuota) cuota = mCuota[1]+'/'+mCuota[2];
+    var detalle = detalleCrudo
       .replace(/\bCuota\s+\d+\/\d+\b/i,'')
       .replace(/\bC\.\d+\/\d+\b/i,'')
       .replace(/\s+/g,' ')
@@ -909,7 +910,7 @@ function parseTarjeta(raw, vencimientoStr){
       fecha: fechaOut,
       fechaConsumo: fechaConsumo,
       proveedor: detalle,
-      tipo: '',
+      tipo: cuota ? '('+cuota+')' : '',
       monto: monto,
       ingreso: monto>0 ? formatMonto(monto) : '',
       egreso: monto<0 ? formatMonto(monto) : ''
@@ -1315,7 +1316,7 @@ function runParser(){
       var resMp = parseTarjetaMercadoPago(raw, anioMp, venc);
       return { rows: resMp.rows, error: null, omitidas: resMp.omitidas };
     }
-    var rows = (banco === 'santander') ? parseTarjetaSantander(raw, venc) : parseTarjeta(raw, venc);
+    var rows = (banco === 'santander' || banco === 'nacion') ? parseTarjetaResumen(raw, venc) : parseTarjeta(raw, venc);
     return { rows: rows, error: null };
   }
   if(entidad === 'excel') return { rows: [], error: null }; // se maneja aparte en el handler de preview-import
