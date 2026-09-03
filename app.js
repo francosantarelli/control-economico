@@ -2250,9 +2250,11 @@ function renderImportar(){
       var provInput = '<input type="text" id="imp-prov-'+r.id+'" data-rowid="'+r.id+'" data-field="proveedor" value="'+esc(r.proveedor)+'" style="width:100%;min-width:110px;box-sizing:border-box">';
       var detInput = '<input type="text" id="imp-det-'+r.id+'" data-rowid="'+r.id+'" data-field="detalle" value="'+esc(r.detalle)+'" style="width:100%;min-width:110px;box-sizing:border-box">';
       var cuotasInput = '<input type="text" id="imp-cuotas-'+r.id+'" data-rowid="'+r.id+'" data-field="cuotas" value="'+esc(r.cuotas||'')+'" style="width:100%;min-width:60px;box-sizing:border-box">';
+      var fechaConsumoInput = '<input type="date" id="imp-fc-'+r.id+'" data-rowid="'+r.id+'" data-field="fechaConsumo" value="'+esc(r.fechaConsumo||'')+'" style="width:100%;min-width:120px;box-sizing:border-box">';
       return '<tr'+(esDup?' class="fila-duplicada"':'')+'>'+
         '<td><input type="checkbox" data-rowid="'+r.id+'" data-field="incluir" '+(r.incluir?'checked':'')+'></td>'+
         '<td class="mono">'+esc(fechaISOaDDMMAAAA(r.fecha)||r.fecha)+dupTag+'</td>'+
+        '<td>'+fechaConsumoInput+'</td>'+
         '<td>'+centroSel+'</td>'+
         '<td>'+catSel+'</td>'+
         '<td>'+subSel+'</td>'+
@@ -2280,7 +2282,7 @@ function renderImportar(){
     '<div class="card">'+
       '<h3>Previsualización ('+STATE.importPreview.length+' movimiento(s), '+incluidos+' seleccionado(s))</h3>'+
       (duplicados>0 ? '<div class="msg err">⚠️ '+duplicados+' fila(s) marcada(s) como posible duplicado (mismo Centro, fecha y monto que otro movimiento). Revisalas antes de confirmar.</div>' : '')+
-      '<table id="import-preview-table"><thead><tr><th></th><th>Fecha</th><th>Centro</th><th>Categoría</th><th>Subcategoría</th><th>Proveedor</th><th>Detalle</th><th>Cuotas</th><th class="num">Ingreso</th><th class="num">Egreso</th><th title="Guardar la relación proveedor → categoría como regla para futuras importaciones">Regla</th></tr></thead>'+
+      '<table id="import-preview-table"><thead><tr><th></th><th>Fecha</th><th>Fecha de consumo</th><th>Centro</th><th>Categoría</th><th>Subcategoría</th><th>Proveedor</th><th>Detalle</th><th>Cuotas</th><th class="num">Ingreso</th><th class="num">Egreso</th><th title="Guardar la relación proveedor → categoría como regla para futuras importaciones">Regla</th></tr></thead>'+
       '<tbody>'+rows+'</tbody></table>'+
       '<div class="row" style="margin-top:14px">'+
         '<button data-action="confirm-import">Importar '+incluidos+' movimiento(s)</button>'+
