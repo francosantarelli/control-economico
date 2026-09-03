@@ -41,7 +41,7 @@ describe('movimiento', () => {
     const mov = {
       id: 'm1', fecha: '2026-08-09', centroId: 'c1', categoriaId: 'cat1', subcategoriaId: 's1',
       proveedor: 'Netflix', detalle: 'Suscripción mensual', ingreso: 0, egreso: 890,
-      tarjeta: true, fechaConsumo: '2026-08-01', tarjetaMarca: 'Visa',
+      tarjeta: true, fechaConsumo: '2026-08-01', tarjetaMarca: 'Visa', cuotas: '3/6',
     };
     expect(win.fromDbMovimiento(win.toDbMovimiento(mov))).toEqual(mov);
   });

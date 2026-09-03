@@ -89,13 +89,13 @@ describe('parseTarjetaResumen (Nación/Santander)', () => {
     ].join('\n');
     const rows = win.parseTarjetaResumen(raw, '2026-08-10');
     expect(rows).toEqual([
-      { fecha: '10-08-26', fechaConsumo: '04-04-26', proveedor: 'COMERCIO UNO', tipo: 'fecha de consumo: 04/04/2026 (05/06)', monto: -12345.67, ingreso: '', egreso: '12.345,67' },
-      { fecha: '10-08-26', fechaConsumo: '21-07-26', proveedor: 'COMERCIO DOS EJEMPLO', tipo: 'fecha de consumo: 21/07/2026 (02/09)', monto: -200000, ingreso: '', egreso: '200.000,00' },
-      { fecha: '10-08-26', fechaConsumo: '29-07-26', proveedor: 'COMERCIO TRES DE PRUEBA', tipo: 'fecha de consumo: 29/07/2026 (02/06)', monto: -60000, ingreso: '', egreso: '60.000,00' },
-      { fecha: '10-08-26', fechaConsumo: '15-08-26', proveedor: 'COMERCIO CUATRO', tipo: 'fecha de consumo: 15/08/2026 (01/03)', monto: -80000.50, ingreso: '', egreso: '80.000,50' },
-      { fecha: '10-08-26', fechaConsumo: '16-08-26', proveedor: 'COMERCIO CINCO SA', tipo: 'fecha de consumo: 16/08/2026', monto: -45678.90, ingreso: '', egreso: '45.678,90' },
-      { fecha: '10-08-26', fechaConsumo: '26-08-26', proveedor: 'TIENDA*ONLINE', tipo: 'fecha de consumo: 26/08/2026', monto: -99999.99, ingreso: '', egreso: '99.999,99' },
-      { fecha: '10-08-26', fechaConsumo: '27-08-26', proveedor: 'IMPUESTO DE SELLOS', tipo: 'fecha de consumo: 27/08/2026', monto: -6000, ingreso: '', egreso: '6.000,00' },
+      { fecha: '10-08-26', fechaConsumo: '04-04-26', proveedor: 'COMERCIO UNO', tipo: '', cuota: '05/06', monto: -12345.67, ingreso: '', egreso: '12.345,67' },
+      { fecha: '10-08-26', fechaConsumo: '21-07-26', proveedor: 'COMERCIO DOS EJEMPLO', tipo: '', cuota: '02/09', monto: -200000, ingreso: '', egreso: '200.000,00' },
+      { fecha: '10-08-26', fechaConsumo: '29-07-26', proveedor: 'COMERCIO TRES DE PRUEBA', tipo: '', cuota: '02/06', monto: -60000, ingreso: '', egreso: '60.000,00' },
+      { fecha: '10-08-26', fechaConsumo: '15-08-26', proveedor: 'COMERCIO CUATRO', tipo: '', cuota: '01/03', monto: -80000.50, ingreso: '', egreso: '80.000,50' },
+      { fecha: '10-08-26', fechaConsumo: '16-08-26', proveedor: 'COMERCIO CINCO SA', tipo: '', cuota: '', monto: -45678.90, ingreso: '', egreso: '45.678,90' },
+      { fecha: '10-08-26', fechaConsumo: '26-08-26', proveedor: 'TIENDA*ONLINE', tipo: '', cuota: '', monto: -99999.99, ingreso: '', egreso: '99.999,99' },
+      { fecha: '10-08-26', fechaConsumo: '27-08-26', proveedor: 'IMPUESTO DE SELLOS', tipo: '', cuota: '', monto: -6000, ingreso: '', egreso: '6.000,00' },
     ]);
   });
 
@@ -122,20 +122,20 @@ describe('parseTarjetaResumen (Nación/Santander)', () => {
     ].join('\n');
     const rows = win.parseTarjetaResumen(raw, '2026-08-25');
     expect(rows).toEqual([
-      { fecha: '25-08-26', fechaConsumo: '14-03-26', proveedor: 'TIENDA EJEMPLO WEB', tipo: 'fecha de consumo: 14/03/2026 (06/18)', monto: -15000.25, ingreso: '', egreso: '15.000,25' },
-      { fecha: '25-08-26', fechaConsumo: '16-03-26', proveedor: 'TIENDA EJEMPLO WEB', tipo: 'fecha de consumo: 16/03/2026 (06/18)', monto: -123456.78, ingreso: '', egreso: '123.456,78' },
-      { fecha: '25-08-26', fechaConsumo: '11-05-26', proveedor: 'COMERCIO HOGAR', tipo: 'fecha de consumo: 11/05/2026 (04/06)', monto: -8888.88, ingreso: '', egreso: '8.888,88' },
-      { fecha: '25-08-26', fechaConsumo: '06-06-26', proveedor: 'COMERCIO JUGUETES', tipo: 'fecha de consumo: 06/06/2026 (03/03)', monto: -25000, ingreso: '', egreso: '25.000,00' },
-      { fecha: '25-08-26', fechaConsumo: '25-06-26', proveedor: 'COMERCIO ROPA', tipo: 'fecha de consumo: 25/06/2026 (02/03)', monto: -31000, ingreso: '', egreso: '31.000,00' },
-      { fecha: '25-08-26', fechaConsumo: '23-07-26', proveedor: 'COMERCIO VARIOS SUC 100', tipo: 'fecha de consumo: 23/07/2026', monto: -150000, ingreso: '', egreso: '150.000,00' },
-      { fecha: '25-08-26', fechaConsumo: '28-07-26', proveedor: 'BILLETERA*SERVICIOVARIOS', tipo: 'fecha de consumo: 28/07/2026', monto: -77777.77, ingreso: '', egreso: '77.777,77' },
-      { fecha: '25-08-26', fechaConsumo: '08-08-26', proveedor: 'SERVICIO CLOUD SUBS', tipo: 'fecha de consumo: 08/08/2026', monto: -15, ingreso: '', egreso: '15,00' },
-      { fecha: '25-08-26', fechaConsumo: '12-08-26', proveedor: 'Musica Streaming', tipo: 'fecha de consumo: 12/08/2026', monto: -4999, ingreso: '', egreso: '4.999,00' },
-      { fecha: '25-08-26', fechaConsumo: '20-08-26', proveedor: 'IMPUESTO DE SELLOS', tipo: 'fecha de consumo: 20/08/2026', monto: -6500, ingreso: '', egreso: '6.500,00' },
-      { fecha: '25-08-26', fechaConsumo: '20-08-26', proveedor: 'IMPUESTO DE SELLOS P', tipo: 'fecha de consumo: 20/08/2026', monto: -400, ingreso: '', egreso: '400,00' },
-      { fecha: '25-08-26', fechaConsumo: '20-08-26', proveedor: 'IIBB PERCEP-BSAS 2,00%( 0)', tipo: 'fecha de consumo: 20/08/2026', monto: -120, ingreso: '', egreso: '120,00' },
-      { fecha: '25-08-26', fechaConsumo: '20-08-26', proveedor: 'IVA RG 4240 21%( 5000,00)', tipo: 'fecha de consumo: 20/08/2026', monto: -1050, ingreso: '', egreso: '1.050,00' },
-      { fecha: '25-08-26', fechaConsumo: '20-08-26', proveedor: 'DB.RG 5617 30% ( 30000,00 )', tipo: 'fecha de consumo: 20/08/2026', monto: -9000, ingreso: '', egreso: '9.000,00' },
+      { fecha: '25-08-26', fechaConsumo: '14-03-26', proveedor: 'TIENDA EJEMPLO WEB', tipo: '', cuota: '06/18', monto: -15000.25, ingreso: '', egreso: '15.000,25' },
+      { fecha: '25-08-26', fechaConsumo: '16-03-26', proveedor: 'TIENDA EJEMPLO WEB', tipo: '', cuota: '06/18', monto: -123456.78, ingreso: '', egreso: '123.456,78' },
+      { fecha: '25-08-26', fechaConsumo: '11-05-26', proveedor: 'COMERCIO HOGAR', tipo: '', cuota: '04/06', monto: -8888.88, ingreso: '', egreso: '8.888,88' },
+      { fecha: '25-08-26', fechaConsumo: '06-06-26', proveedor: 'COMERCIO JUGUETES', tipo: '', cuota: '03/03', monto: -25000, ingreso: '', egreso: '25.000,00' },
+      { fecha: '25-08-26', fechaConsumo: '25-06-26', proveedor: 'COMERCIO ROPA', tipo: '', cuota: '02/03', monto: -31000, ingreso: '', egreso: '31.000,00' },
+      { fecha: '25-08-26', fechaConsumo: '23-07-26', proveedor: 'COMERCIO VARIOS SUC 100', tipo: '', cuota: '', monto: -150000, ingreso: '', egreso: '150.000,00' },
+      { fecha: '25-08-26', fechaConsumo: '28-07-26', proveedor: 'BILLETERA*SERVICIOVARIOS', tipo: '', cuota: '', monto: -77777.77, ingreso: '', egreso: '77.777,77' },
+      { fecha: '25-08-26', fechaConsumo: '08-08-26', proveedor: 'SERVICIO CLOUD SUBS', tipo: '', cuota: '', monto: -15, ingreso: '', egreso: '15,00' },
+      { fecha: '25-08-26', fechaConsumo: '12-08-26', proveedor: 'Musica Streaming', tipo: '', cuota: '', monto: -4999, ingreso: '', egreso: '4.999,00' },
+      { fecha: '25-08-26', fechaConsumo: '20-08-26', proveedor: 'IMPUESTO DE SELLOS', tipo: '', cuota: '', monto: -6500, ingreso: '', egreso: '6.500,00' },
+      { fecha: '25-08-26', fechaConsumo: '20-08-26', proveedor: 'IMPUESTO DE SELLOS P', tipo: '', cuota: '', monto: -400, ingreso: '', egreso: '400,00' },
+      { fecha: '25-08-26', fechaConsumo: '20-08-26', proveedor: 'IIBB PERCEP-BSAS 2,00%( 0)', tipo: '', cuota: '', monto: -120, ingreso: '', egreso: '120,00' },
+      { fecha: '25-08-26', fechaConsumo: '20-08-26', proveedor: 'IVA RG 4240 21%( 5000,00)', tipo: '', cuota: '', monto: -1050, ingreso: '', egreso: '1.050,00' },
+      { fecha: '25-08-26', fechaConsumo: '20-08-26', proveedor: 'DB.RG 5617 30% ( 30000,00 )', tipo: '', cuota: '', monto: -9000, ingreso: '', egreso: '9.000,00' },
     ]);
   });
 });
@@ -146,7 +146,7 @@ describe('parseTarjeta (Provincia)', () => {
     const rows = win.parseTarjeta(raw, '2026-08-15');
     expect(rows).toEqual([{
       fecha: '15-08-26', fechaConsumo: '09-08-26', proveedor: 'SUPERMERCADO LA ANONIMA',
-      tipo: 'fecha de consumo: 09/08/2026', monto: -1234.56, ingreso: '', egreso: '1.234,56',
+      tipo: '', cuota: '', monto: -1234.56, ingreso: '', egreso: '1.234,56',
     }]);
   });
 
@@ -160,21 +160,21 @@ describe('parseTarjeta (Provincia)', () => {
     const rows = win.parseTarjeta(raw, '2026-08-15');
     expect(rows).toEqual([{
       fecha: '15-08-26', fechaConsumo: '11-07-26', proveedor: 'DEVOLUCION TIENDA',
-      tipo: 'fecha de consumo: 11/07/2026', monto: 500, ingreso: '500,00', egreso: '',
+      tipo: '', cuota: '', monto: 500, ingreso: '500,00', egreso: '',
     }]);
   });
 
-  it('agrega la fecha de consumo y, si hay, la cuota en "tipo" (formato "Cuota N/M" o "C.N/M")', () => {
+  it('preserva la cuota en el campo "cuota" en vez de descartarla (formato "Cuota N/M" o "C.N/M")', () => {
     const rawLargo = '12.08.26 123456 SUPERMERCADO LA ANONIMA Cuota 2/5 $1.234,56';
     expect(win.parseTarjeta(rawLargo, '2026-08-15')).toEqual([{
       fecha: '15-08-26', fechaConsumo: '12-08-26', proveedor: 'SUPERMERCADO LA ANONIMA',
-      tipo: 'fecha de consumo: 12/08/2026 (2/5)', monto: -1234.56, ingreso: '', egreso: '1.234,56',
+      tipo: '', cuota: '2/5', monto: -1234.56, ingreso: '', egreso: '1.234,56',
     }]);
 
     const rawCorto = '13.08.26 123456 NETFLIX.COM C.1/3 $890,00';
     expect(win.parseTarjeta(rawCorto, '2026-08-15')).toEqual([{
       fecha: '15-08-26', fechaConsumo: '13-08-26', proveedor: 'NETFLIX.COM',
-      tipo: 'fecha de consumo: 13/08/2026 (1/3)', monto: -890, ingreso: '', egreso: '890,00',
+      tipo: '', cuota: '1/3', monto: -890, ingreso: '', egreso: '890,00',
     }]);
   });
 });

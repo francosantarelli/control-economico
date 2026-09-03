@@ -117,8 +117,10 @@ describe('Movimientos: alta, edición y borrado', () => {
     const fechas = win.STATE.movimientos.map(m => m.fecha).sort();
     expect(fechas).toEqual(['2026-01-15', '2026-02-15', '2026-03-15']);
     win.STATE.movimientos.forEach(m => expect(m.egreso).toBe(90000));
-    const detalles = win.STATE.movimientos.sort((a, b) => a.fecha.localeCompare(b.fecha)).map(m => m.detalle);
-    expect(detalles).toEqual(['Heladera (1/3)', 'Heladera (2/3)', 'Heladera (3/3)']);
+    const ordenados = win.STATE.movimientos.sort((a, b) => a.fecha.localeCompare(b.fecha));
+    // El Detalle no se toca: la cuota queda en su propio campo, no como sufijo de texto.
+    expect(ordenados.map(m => m.detalle)).toEqual(['Heladera', 'Heladera', 'Heladera']);
+    expect(ordenados.map(m => m.cuotas)).toEqual(['1/3', '2/3', '3/3']);
   });
 
   it('permite guardar un movimiento a fecha futura sin Centro de Costo', async () => {

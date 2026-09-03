@@ -287,8 +287,8 @@ function toDbCategoria(c){ return {id:c.id, nombre:c.nombre, tipo:c.tipo||null, 
 function fromDbCategoria(r){ return {id:r.id, nombre:r.nombre, tipo:r.tipo||'', color:r.color||'', colorTexto:r.color_texto||''}; }
 function toDbSubcategoria(s){ return {id:s.id, categoria_id:s.categoriaId||null, nombre:s.nombre}; }
 function fromDbSubcategoria(r){ return {id:r.id, categoriaId:r.categoria_id||'', nombre:r.nombre}; }
-function toDbMovimiento(m){ return {id:m.id, fecha:m.fecha, centro_id:m.centroId||null, categoria_id:m.categoriaId||null, subcategoria_id:m.subcategoriaId||null, proveedor:m.proveedor||null, detalle:m.detalle||null, ingreso:Number(m.ingreso)||0, egreso:Number(m.egreso)||0, tarjeta:!!m.tarjeta, fecha_consumo:m.fechaConsumo||null, tarjeta_marca:m.tarjetaMarca||null}; }
-function fromDbMovimiento(r){ return {id:r.id, fecha:r.fecha, centroId:r.centro_id||'', categoriaId:r.categoria_id||'', subcategoriaId:r.subcategoria_id||'', proveedor:r.proveedor||'', detalle:r.detalle||'', ingreso:Number(r.ingreso)||0, egreso:Number(r.egreso)||0, tarjeta:!!r.tarjeta, fechaConsumo:r.fecha_consumo||'', tarjetaMarca:r.tarjeta_marca||''}; }
+function toDbMovimiento(m){ return {id:m.id, fecha:m.fecha, centro_id:m.centroId||null, categoria_id:m.categoriaId||null, subcategoria_id:m.subcategoriaId||null, proveedor:m.proveedor||null, detalle:m.detalle||null, ingreso:Number(m.ingreso)||0, egreso:Number(m.egreso)||0, tarjeta:!!m.tarjeta, fecha_consumo:m.fechaConsumo||null, tarjeta_marca:m.tarjetaMarca||null, cuotas:m.cuotas||null}; }
+function fromDbMovimiento(r){ return {id:r.id, fecha:r.fecha, centroId:r.centro_id||'', categoriaId:r.categoria_id||'', subcategoriaId:r.subcategoria_id||'', proveedor:r.proveedor||'', detalle:r.detalle||'', ingreso:Number(r.ingreso)||0, egreso:Number(r.egreso)||0, tarjeta:!!r.tarjeta, fechaConsumo:r.fecha_consumo||'', tarjetaMarca:r.tarjeta_marca||'', cuotas:r.cuotas||''}; }
 function toDbVencimiento(v){ return {id:v.id, concepto:v.concepto, fecha:v.fecha, monto:Number(v.monto)||0, centro_id:v.centroId||null, estado:v.estado||'pendiente'}; }
 function fromDbVencimiento(r){ return {id:r.id, concepto:r.concepto, fecha:r.fecha, monto:Number(r.monto)||0, centroId:r.centro_id||'', estado:r.estado||'pendiente'}; }
 async function crearMovimientoDesdeVencimiento(v){
@@ -848,7 +848,8 @@ function parseTarjetaResumen(raw, vencimientoStr){
       fecha: fechaOut,
       fechaConsumo: fechaConsumo,
       proveedor: detalle,
-      tipo: 'fecha de consumo: '+fechaConsumoLegible(fechaConsumo)+(cuota ? ' ('+cuota+')' : ''),
+      tipo: '',
+      cuota: cuota,
       monto: monto,
       ingreso: monto>0 ? formatMonto(monto) : '',
       egreso: monto<0 ? formatMonto(monto) : ''
@@ -910,7 +911,8 @@ function parseTarjeta(raw, vencimientoStr){
       fecha: fechaOut,
       fechaConsumo: fechaConsumo,
       proveedor: detalle,
-      tipo: 'fecha de consumo: '+fechaConsumoLegible(fechaConsumo)+(cuota ? ' ('+cuota+')' : ''),
+      tipo: '',
+      cuota: cuota,
       monto: monto,
       ingreso: monto>0 ? formatMonto(monto) : '',
       egreso: monto<0 ? formatMonto(monto) : ''
@@ -920,12 +922,6 @@ function parseTarjeta(raw, vencimientoStr){
 }
 
 var MESES_ABR_MAP = {ene:'01',feb:'02',mar:'03',abr:'04',may:'05',jun:'06',jul:'07',ago:'08',sep:'09',set:'09',oct:'10',nov:'11',dic:'12'};
-
-// "dd-mm-aa" (como queda fechaConsumo en los parsers de tarjeta) -> "dd/mm/aaaa" para mostrar en Detalle.
-function fechaConsumoLegible(fechaCorta){
-  var m = (fechaCorta||'').match(/^(\d{2})-(\d{2})-(\d{2})$/);
-  return m ? (m[1]+'/'+m[2]+'/20'+m[3]) : '';
-}
 
 // Resumen de Tarjeta de Crédito Mercado Pago: cada fila trae su propia fecha (dd/mmm, sin año) y
 // puede venir en Pesos ($) o Dólares (US$). Las filas en dólares se descartan (no hay forma de
@@ -1979,7 +1975,7 @@ function renderMovimientos(){
     return '<tr class="fila-detalle-tarjeta'+(incompleto?' fila-incompleta':'')+'"'+tituloFila+'>'+
       '<td data-label=""><input type="checkbox" class="chk-select-mov" data-mov-id="'+m.id+'" '+(seleccionados.indexOf(m.id)!==-1?'checked':'')+'></td>'+
       '<td class="mono" data-label="Fecha de consumo">'+(incompleto?'⚠️ ':'')+esc(m.fechaConsumo?fechaISOaDDMMAAAA(m.fechaConsumo):'—')+'</td>'+
-      '<td class="mono" data-label="Centro" style="color:var(--ink-soft)">↳</td>'+
+      '<td class="mono" data-label="Cuotas" style="color:var(--ink-soft)">'+(m.cuotas?esc(m.cuotas):'↳')+'</td>'+
       celdas.categoria + celdas.subcategoria + celdas.proveedor + celdas.detalle +
       '<td class="num ingreso" data-label="Ingreso">'+(Number(m.ingreso)?fmtMonto(m.ingreso):'')+'</td>'+
       '<td class="num egreso" data-label="Egreso">'+(Number(m.egreso)?fmtMonto(m.egreso):'')+'</td>'+
@@ -2017,9 +2013,9 @@ function renderMovimientos(){
     proveedor: editing.proveedor, detalle: editing.detalle,
     tipo: Number(editing.ingreso) > 0 ? 'ingreso' : 'egreso',
     monto: Number(editing.ingreso) > 0 ? editing.ingreso : editing.egreso,
-    tarjeta: !!editing.tarjeta, fechaConsumo: editing.fechaConsumo||'', tarjetaMarca: editing.tarjetaMarca||'', cuotas:1
+    tarjeta: !!editing.tarjeta, fechaConsumo: editing.fechaConsumo||'', tarjetaMarca: editing.tarjetaMarca||'', cuotas:1, cuotasInfo: editing.cuotas||''
   } : null;
-  var e = STATE.movDraft || editingNormalizado || {fecha:'', centroId:'', categoriaId:'', subcategoriaId:'', proveedor:'', detalle:'', tipo:'egreso', monto:'', tarjeta:false, fechaConsumo:'', tarjetaMarca:'', cuotas:1};
+  var e = STATE.movDraft || editingNormalizado || {fecha:'', centroId:'', categoriaId:'', subcategoriaId:'', proveedor:'', detalle:'', tipo:'egreso', monto:'', tarjeta:false, fechaConsumo:'', tarjetaMarca:'', cuotas:1, cuotasInfo:''};
   var subOptionsArr = subcategoriasOrdenadas(STATE.subcategorias.filter(function(s){ return s.categoriaId === e.categoriaId; }))
     .map(function(s){ return {value:s.id, label:s.nombre}; });
 
@@ -2048,6 +2044,7 @@ function renderMovimientos(){
       '<div class="row" style="margin-top:10px">'+
         '<div class="field"><label>Fecha de consumo (opcional)</label><input type="date" id="f-mov-fecha-consumo" value="'+esc(e.fechaConsumo||'')+'"></div>'+
         '<div class="field"><label>Marca de tarjeta (opcional)</label><input type="text" id="f-mov-tarjeta-marca" autocomplete="off" placeholder="Visa, Mastercard, Amex..." value="'+esc(e.tarjetaMarca||'')+'" style="width:140px"></div>'+
+        '<div class="field"><label>Cuotas (opcional)</label><input type="text" autocomplete="off" placeholder="ej. 5/6" id="f-mov-cuotas-info" value="'+esc(e.cuotasInfo||'')+'" style="width:100px"></div>'+
         '<div class="field"><label>Cantidad de cuotas</label><input type="text" inputmode="numeric" pattern="[0-9]*" id="f-mov-cuotas" value="'+cuotasNum+'" style="width:100px"></div>'+
         '<div class="field" style="flex:2 1 260px;justify-content:flex-end"><div style="font-size:11px;color:var(--ink-soft);padding-bottom:8px">'+textoAyudaCuotas+'</div></div>'+
       '</div>' : '';
@@ -3917,7 +3914,8 @@ function getMovFormValues(){
     tarjeta: (document.getElementById('f-mov-tarjeta')||{}).checked || false,
     fechaConsumo: (document.getElementById('f-mov-fecha-consumo')||{}).value || '',
     tarjetaMarca: (document.getElementById('f-mov-tarjeta-marca')||{}).value || '',
-    cuotas: (document.getElementById('f-mov-cuotas')||{}).value || 1
+    cuotas: (document.getElementById('f-mov-cuotas')||{}).value || 1,
+    cuotasInfo: (document.getElementById('f-mov-cuotas-info')||{}).value || ''
   };
 }
 
@@ -4447,22 +4445,23 @@ async function handleAction(action, id){
       egreso: v.tipo==='egreso' ? monto : 0,
       tarjeta: !!v.tarjeta,
       fechaConsumo: v.tarjeta ? (v.fechaConsumo||'') : '',
-      tarjetaMarca: v.tarjeta ? (v.tarjetaMarca||'').trim() : ''
+      tarjetaMarca: v.tarjeta ? (v.tarjetaMarca||'').trim() : '',
+      cuotas: v.tarjeta ? (v.cuotasInfo||'').trim() : ''
     };
     // Compra en cuotas con tarjeta: la Fecha cargada es el vencimiento de la 1ª cuota;
-    // las siguientes caen un mes después cada una, con el mismo monto (no se divide).
+    // las siguientes caen un mes después cada una, con el mismo monto (no se divide). El Detalle no
+    // se toca — cada movimiento generado lleva su número de cuota en el campo Cuotas ("N/Total"),
+    // pisando lo que hubiera en el campo Cuotas del formulario (el generador manda si está activo).
     // La Fecha de consumo (si se cargó) es la misma para todas las cuotas: la compra se hizo una sola vez.
     // Al editar un movimiento ya cargado también se puede sumar cuotas: el movimiento editado
     // queda como la 1ª cuota y se crean nuevos movimientos para las cuotas restantes.
     var cuotasTotal = v.tarjeta ? Math.max(1, parseInt(v.cuotas,10)||1) : 1;
-    var detalleBase = v.detalle||'';
-    function detalleConSufijo(numeroCuota){
-      if(cuotasTotal<=1) return detalleBase;
-      return detalleBase + ' ('+numeroCuota+'/'+cuotasTotal+')';
+    function etiquetaCuota(numeroCuota){
+      return cuotasTotal>1 ? (numeroCuota+'/'+cuotasTotal) : mov.cuotas;
     }
     try{
       if(id){
-        var movEditado = Object.assign({}, mov, { detalle: detalleConSufijo(1) });
+        var movEditado = Object.assign({}, mov, { cuotas: etiquetaCuota(1) });
         await dbUpdate('movimientos', id, toDbMovimiento(Object.assign({id:id}, movEditado)));
         var idx = STATE.movimientos.findIndex(function(m){return m.id===id;});
         if(idx>-1) STATE.movimientos[idx] = Object.assign({id:id}, movEditado);
@@ -4484,7 +4483,7 @@ async function handleAction(action, id){
           var loteRestante = [];
           for(var cj=1; cj<cuotasTotal; cj++){
             var fechaCuotaJ = sumarMeses(v.fecha, cj);
-            loteRestante.push(Object.assign({id:uid()}, mov, { fecha: fechaCuotaJ, detalle: detalleConSufijo(cj+1) }));
+            loteRestante.push(Object.assign({id:uid()}, mov, { fecha: fechaCuotaJ, cuotas: etiquetaCuota(cj+1) }));
           }
           await dbInsert('movimientos', loteRestante.map(toDbMovimiento));
           STATE.movimientos.push.apply(STATE.movimientos, loteRestante);
@@ -4494,7 +4493,7 @@ async function handleAction(action, id){
         for(var ci=0; ci<cuotasTotal; ci++){ fechasCuotas.push(ci===0 ? v.fecha : sumarMeses(v.fecha, ci)); }
         var nuevosLote = [];
         fechasCuotas.forEach(function(fechaCuota, i){
-          var base = Object.assign({}, mov, { fecha: fechaCuota, detalle: detalleConSufijo(i+1) });
+          var base = Object.assign({}, mov, { fecha: fechaCuota, cuotas: etiquetaCuota(i+1) });
           if(esTecMov && centroDestino){
             // crear el movimiento de origen + el espejo automático en el centro destino, con tipo contrario
             var nuevoM = Object.assign({id:uid()}, base);
@@ -4725,7 +4724,7 @@ async function handleAction(action, id){
     var tarjetaMarcaLote = (STATE.importEntidad==='tarjeta') ? (STATE.importTarjetaMarca||'').trim() : '';
     STATE.importPreview = res.rows.map(function(r){
       var sugerido = aplicarReglaAFila(r.proveedor);
-      return { id:uid(), fecha: fechaCortaAISO(r.fecha), fechaConsumo: r.fechaConsumo ? fechaCortaAISO(r.fechaConsumo) : '', tarjetaMarca: tarjetaMarcaLote, proveedor: r.proveedor||'', detalle: r.tipo||'', monto: r.monto,
+      return { id:uid(), fecha: fechaCortaAISO(r.fecha), fechaConsumo: r.fechaConsumo ? fechaCortaAISO(r.fechaConsumo) : '', tarjetaMarca: tarjetaMarcaLote, cuotas: r.cuota||'', proveedor: r.proveedor||'', detalle: r.tipo||'', monto: r.monto,
         centroId: defaultCentroId||'', categoriaId: sugerido.categoriaId, subcategoriaId: sugerido.subcategoriaId, incluir:true, guardarRegla:false };
     });
     STATE.importMsg = defaultCentroId ? null : {type:'err', text:'No encontré un Centro de Costo con el código esperado para esta entidad. Asigná uno por fila abajo, o cargalo primero en ABM → Centros de Costo.'};
@@ -4825,7 +4824,8 @@ async function handleAction(action, id){
         egreso: r.monto<0 ? -r.monto : 0,
         tarjeta: esTarjeta,
         fechaConsumo: r.fechaConsumo || '',
-        tarjetaMarca: r.tarjetaMarca || ''
+        tarjetaMarca: r.tarjetaMarca || '',
+        cuotas: r.cuotas || ''
       };
     });
     try{
