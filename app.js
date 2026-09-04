@@ -409,7 +409,15 @@ async function mostrarApp(){
   try{
     await cargarTodo();
   }catch(e){
-    STATE.dbError = 'No se pudo cargar la información desde la base de datos: ' + (e.message||e);
+    // A veces la carga falla por un desfasaje transitorio de reloj contra el token recién emitido
+    // (ej. "JWT issued at future") justo al loguearse — un reintento a los pocos segundos casi
+    // siempre alcanza, sin que haga falta que el usuario le dé F5 a mano.
+    await new Promise(function(r){ setTimeout(r, 1500); });
+    try{
+      await cargarTodo();
+    }catch(e2){
+      STATE.dbError = 'No se pudo cargar la información desde la base de datos: ' + (e2.message||e2);
+    }
   }
   STATE.saldosDirty = true;
   STATE.ready = true;
