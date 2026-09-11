@@ -2663,7 +2663,7 @@ function esCategoriaSueldo(categoriaId){
   return !!cat && cat.nombre.trim().toLowerCase() === 'sueldo';
 }
 
-var PALETA_DONUT = ['#4E9D77','#A8D8BE','#D97B6C','#F0C48A','#8FBFE0','#C3AEDB','#E3C08D','#7FC4B8','#F2A6A6','#B7D89A'];
+var PALETA_DONUT = ['#2F9E6E','#A8D8BE','#E0654B','#F0C48A','#8FBFE0','#C3AEDB','#E3C08D','#7FC4B8','#F2A6A6','#B7D89A'];
 
 // ===================== CHIPS (Centro de Costo / Categoría) =====================
 // El color se elige a mano desde el ABM (campo "Color") y se guarda en centros.color /
@@ -2706,7 +2706,7 @@ function colorTextoParaFondo(hex){
 }
 function renderChip(texto, color, colorTexto){
   if(!texto) return '—';
-  var bg = color || '#E3ECE6';
+  var bg = color || '#E1EEE7';
   return '<span class="chip" style="background:'+esc(bg)+';color:'+esc(colorTexto||colorTextoParaFondo(bg))+'">'+esc(texto)+'</span>';
 }
 
@@ -2754,9 +2754,9 @@ function trendChart(meses, dataPorMes, width, height){
     var xBase = padding + i*groupW + groupW/2;
     var hIngreso = (d.ingreso/max)*chartH;
     var hEgreso = (d.egreso/max)*chartH;
-    svg += '<rect x="'+(xBase-barW-1.5)+'" y="'+(padding+chartH-hIngreso)+'" width="'+barW+'" height="'+hIngreso+'" fill="#4E9D77" rx="3"></rect>';
-    svg += '<rect x="'+(xBase+1.5)+'" y="'+(padding+chartH-hEgreso)+'" width="'+barW+'" height="'+hEgreso+'" fill="#D97B6C" rx="3"></rect>';
-    svg += '<text x="'+xBase+'" y="'+(height-12)+'" font-size="10" text-anchor="middle" fill="#7A8B83">'+esc(mesLabelCorto(m))+'</text>';
+    svg += '<rect x="'+(xBase-barW-1.5)+'" y="'+(padding+chartH-hIngreso)+'" width="'+barW+'" height="'+hIngreso+'" fill="#2F9E6E" rx="3"></rect>';
+    svg += '<rect x="'+(xBase+1.5)+'" y="'+(padding+chartH-hEgreso)+'" width="'+barW+'" height="'+hEgreso+'" fill="#E0654B" rx="3"></rect>';
+    svg += '<text x="'+xBase+'" y="'+(height-12)+'" font-size="10" text-anchor="middle" fill="#71857A">'+esc(mesLabelCorto(m))+'</text>';
   });
   return '<svg viewBox="0 0 '+width+' '+height+'" width="100%" height="'+height+'" preserveAspectRatio="xMidYMid meet">'+svg+'</svg>';
 }
@@ -2958,7 +2958,7 @@ function renderResumen(){
   // Donut: top 8 + "Otros" (no incluye Obra, que ya tiene su propia tarjeta aparte). Usa el valor absoluto para el tamaño de cada porción (una torta no puede tener porciones negativas), pero muestra el monto real (con signo) en la leyenda.
   var segmentos = lista.slice(0,8).map(function(x,i){ return {label:x.nombre, value:Math.abs(x.monto), montoReal:x.monto, color:PALETA_DONUT[i%PALETA_DONUT.length]}; });
   var restoMonto = lista.slice(8).reduce(function(s,x){return s+x.monto;},0);
-  if(restoMonto!==0) segmentos.push({label:'Otros', value:Math.abs(restoMonto), montoReal:restoMonto, color:'#E3ECE6'});
+  if(restoMonto!==0) segmentos.push({label:'Otros', value:Math.abs(restoMonto), montoReal:restoMonto, color:'#E1EEE7'});
   var donutSvg = donutChart(segmentos, 160);
   var leyenda = segmentos.filter(function(s){return s.value>0;}).map(function(s){
     return '<div style="display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:4px">'+
@@ -3141,11 +3141,11 @@ function lineChart(meses, valores, width, height){
   });
   var pathD = puntos.map(function(p,i){ return (i===0?'M':'L')+p.x.toFixed(1)+' '+p.y.toFixed(1); }).join(' ');
   var svg = '<line x1="'+padding+'" y1="'+zeroY+'" x2="'+(width-padding)+'" y2="'+zeroY+'" stroke="#C7D6CD" stroke-width="1" stroke-dasharray="3 3"></line>';
-  svg += '<path d="'+pathD+'" fill="none" stroke="#4E9D77" stroke-width="2"></path>';
-  puntos.forEach(function(p){ svg += '<circle cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="3.5" fill="'+(p.v>=0?'#4E9D77':'#D97B6C')+'"></circle>'; });
+  svg += '<path d="'+pathD+'" fill="none" stroke="#2F9E6E" stroke-width="2"></path>';
+  puntos.forEach(function(p){ svg += '<circle cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="3.5" fill="'+(p.v>=0?'#2F9E6E':'#E0654B')+'"></circle>'; });
   meses.forEach(function(m,i){
     var x = padding + (n>1 ? i*stepX : chartW/2);
-    svg += '<text x="'+x+'" y="'+(height-12)+'" font-size="10" text-anchor="middle" fill="#7A8B83">'+esc(mesLabelCorto(m))+'</text>';
+    svg += '<text x="'+x+'" y="'+(height-12)+'" font-size="10" text-anchor="middle" fill="#71857A">'+esc(mesLabelCorto(m))+'</text>';
   });
   return '<svg viewBox="0 0 '+width+' '+height+'" width="100%" height="'+height+'" preserveAspectRatio="xMidYMid meet">'+svg+'</svg>';
 }

@@ -1,17 +1,17 @@
 @import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap');
 
 :root{
-  --bg:#F5FAF6;
+  --bg:#F3FAF6;
   --paper:#FFFFFF;
-  --ink:#33413B;
-  --ink-soft:#7A8B83;
-  --accent:#4E9D77;
-  --accent-soft:#DCF2E4;
-  --rule:#E3ECE6;
-  --danger:#D97B6C;
-  --danger-soft:#FBEAE6;
-  --warning:#B8863E;
-  --warning-soft:#F7EEDC;
+  --ink:#26362F;
+  --ink-soft:#71857A;
+  --accent:#2F9E6E;
+  --accent-soft:#D7F3E4;
+  --rule:#E1EEE7;
+  --danger:#E0654B;
+  --danger-soft:#FCE4DD;
+  --warning:#D9A441;
+  --warning-soft:#F7EFDC;
 
   /* Mapeo de Bootstrap 5.3 sobre nuestra propia paleta (no el azul/índigo por defecto). Como estas
      variables apuntan a var(--accent) etc. en vez de a valores fijos, heredan el modo oscuro gratis
@@ -25,13 +25,13 @@
   --bs-link-color: var(--accent);
   --bs-link-hover-color: var(--accent);
   --bs-primary: var(--accent);
-  --bs-primary-rgb: 78, 157, 119;
+  --bs-primary-rgb: 47, 158, 110;
   --bs-success: var(--accent);
-  --bs-success-rgb: 78, 157, 119;
+  --bs-success-rgb: 47, 158, 110;
   --bs-danger: var(--danger);
-  --bs-danger-rgb: 217, 123, 108;
+  --bs-danger-rgb: 224, 101, 75;
   --bs-warning: var(--warning);
-  --bs-warning-rgb: 184, 134, 62;
+  --bs-warning-rgb: 217, 164, 65;
   --bs-card-bg: var(--paper);
   --bs-card-border-color: var(--rule);
   --bs-border-radius: 10px;
@@ -43,17 +43,17 @@
   --paper:#1E2721;
   --ink:#E7EFE9;
   --ink-soft:#8FA599;
-  --accent:#4E9D77;
-  --accent-soft:#20362A;
-  --rule:#2F3B34;
-  --danger:#D97B6C;
-  --danger-soft:#3A241F;
-  --warning:#D9AB5C;
-  --warning-soft:#3A311D;
+  --accent:#2F9E6E;
+  --accent-soft:#1D3A2B;
+  --rule:#2C3B33;
+  --danger:#E0654B;
+  --danger-soft:#3D2621;
+  --warning:#E6BB5C;
+  --warning-soft:#3D3320;
   /* --bs-warning-rgb es un triplete RGB estático (Bootstrap la usa para rgba() en focus rings, alerts,
      etc.) — no se puede derivar de --warning en CSS puro, así que se redefine acá para que el modo
      oscuro no quede con el rgb del amarillo claro. El resto de los --bs-*-rgb no cambian entre temas. */
-  --bs-warning-rgb: 217, 171, 92;
+  --bs-warning-rgb: 230, 187, 92;
 }
 :root[data-theme="oscuro"] #tabla-movimientos tr.fila-incompleta:hover,
 :root[data-theme="oscuro"] tr.fila-duplicada:hover{ background:#4A2E28; }
