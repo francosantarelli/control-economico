@@ -2464,7 +2464,7 @@ function renderVencimientos(){
   }).join('');
 
   var tableHtml = '<div class="card"><h3>Vencimientos ('+lista.length+')</h3>'+
-    (lista.length ? '<table class="tabla-movil"><thead><tr><th>Concepto</th><th>Fecha</th><th>Estado</th><th>Centro</th><th class="num">Monto</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>' : '<div class="empty">Todavía no cargaste ningún vencimiento.</div>')+
+    (lista.length ? '<table class="table tabla-movil"><thead><tr><th>Concepto</th><th>Fecha</th><th>Estado</th><th>Centro</th><th class="num">Monto</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>' : '<div class="empty">Todavía no cargaste ningún vencimiento.</div>')+
   '</div>';
 
   var pagados = STATE.vencimientos.filter(function(v){ return v.estado==='pagado'; }).sort(function(a,b){ return (b.fecha||'').localeCompare(a.fecha||''); });
@@ -2483,7 +2483,7 @@ function renderVencimientos(){
   var tablePagadosHtml = pagados.length ? '<div class="card">'+
     '<details class="resumen-tarjeta" data-grupo-key="venc-pagados"'+(STATE.gruposAbiertos['venc-pagados']?' open':'')+'>'+
       '<summary><span>Vencimientos pagados ('+pagados.length+')</span></summary>'+
-      '<div style="overflow-x:auto;margin-top:10px"><table class="tabla-movil"><thead><tr><th>Concepto</th><th>Fecha</th><th>Centro</th><th class="num">Monto</th><th></th></tr></thead><tbody>'+rowsPagados+'</tbody></table></div>'+
+      '<div style="overflow-x:auto;margin-top:10px"><table class="table tabla-movil"><thead><tr><th>Concepto</th><th>Fecha</th><th>Centro</th><th class="num">Monto</th><th></th></tr></thead><tbody>'+rowsPagados+'</tbody></table></div>'+
     '</details>'+
   '</div>' : '';
 
@@ -2536,7 +2536,7 @@ function renderVencimientos(){
         '<span style="font-size:12px;color:var(--ink-soft)">'+g.movs.length+' movimiento(s)</span>'+
         '<span class="mono egreso" style="margin-left:auto;font-weight:600">'+fmtMonto(g.total)+'</span>'+
       '</summary>'+
-      '<div style="overflow-x:auto;margin-top:10px"><table class="tabla-movil"><thead><tr><th>Fecha</th><th>Vence</th><th>Centro</th><th>Categoría</th><th>Proveedor</th><th>Detalle</th><th class="num">Ingreso</th><th class="num">Egreso</th><th></th></tr></thead><tbody>'+filasGrupo+'</tbody></table></div>'+
+      '<div style="overflow-x:auto;margin-top:10px"><table class="table tabla-movil"><thead><tr><th>Fecha</th><th>Vence</th><th>Centro</th><th>Categoría</th><th>Proveedor</th><th>Detalle</th><th class="num">Ingreso</th><th class="num">Egreso</th><th></th></tr></thead><tbody>'+filasGrupo+'</tbody></table></div>'+
     '</details>';
   }).join('');
 
@@ -2546,7 +2546,7 @@ function renderVencimientos(){
     (gruposTarjetaHtml ? gruposTarjetaHtml : '')+
     (pendientesOtros.length ? ''+
       (gruposTarjetaHtml ? '<div style="font-size:11px;color:var(--ink-soft);margin:14px 0 8px;text-transform:uppercase;letter-spacing:.04em">Otros movimientos pendientes</div>' : '')+
-      '<table class="tabla-movil"><thead><tr><th>Fecha</th><th>Vence</th><th>Centro</th><th>Categoría</th><th>Proveedor</th><th>Detalle</th><th class="num">Ingreso</th><th class="num">Egreso</th><th></th></tr></thead><tbody>'+rowsPendientesOtros+'</tbody></table>'
+      '<table class="table tabla-movil"><thead><tr><th>Fecha</th><th>Vence</th><th>Centro</th><th>Categoría</th><th>Proveedor</th><th>Detalle</th><th class="num">Ingreso</th><th class="num">Egreso</th><th></th></tr></thead><tbody>'+rowsPendientesOtros+'</tbody></table>'
       : '')+
     (!pendientesMov.length ? '<div class="empty">No hay movimientos con fecha futura.</div>' : '')+
   '</div>';
@@ -3244,7 +3244,7 @@ function renderFlujoCaja(){
     '</tr>';
   }).join('');
   var tablaDeudasHtml = '<div class="card"><h3>Deudas ('+lista.length+')</h3>'+
-    (lista.length ? '<div style="overflow-x:auto"><table class="tabla-movil"><thead><tr><th>Concepto</th><th class="num">Saldo pendiente</th><th class="num">Cuota mensual</th><th>Centro</th><th>Meses restantes</th><th>Cancelación estimada</th><th></th></tr></thead><tbody>'+filas+'</tbody></table></div>' : '<div class="empty">Todavía no cargaste ninguna deuda.</div>')+
+    (lista.length ? '<div style="overflow-x:auto"><table class="table tabla-movil"><thead><tr><th>Concepto</th><th class="num">Saldo pendiente</th><th class="num">Cuota mensual</th><th>Centro</th><th>Meses restantes</th><th>Cancelación estimada</th><th></th></tr></thead><tbody>'+filas+'</tbody></table></div>' : '<div class="empty">Todavía no cargaste ninguna deuda.</div>')+
   '</div>';
 
   var filasProy = proyeccion.map(function(f){
@@ -3260,7 +3260,7 @@ function renderFlujoCaja(){
     '<h3>Proyección de ahorro acumulado (próximos '+horizonte+' meses)</h3>'+
     '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Arranca en $0 y acumula cada mes la capacidad de ahorro promedio menos las cuotas de las deudas activas (que se dan de baja solas cuando terminan de pagarse). No incluye vencimientos ni cuotas de tarjeta ya cargados con fecha futura — esos compromisos puntuales se ven en la pestaña Vencimientos.</div>'+
     (cap ? lineChart(mesesProy, valoresAcumulado, 640, 220) : '<div class="empty">Cargá al menos un mes cerrado de movimientos para poder proyectar.</div>')+
-    (cap ? '<div style="overflow-x:auto;margin-top:14px"><table class="tabla-movil"><thead><tr><th>Mes</th><th class="num">Ahorro base</th><th class="num">Cuotas deudas</th><th class="num">Ahorro neto</th><th class="num">Acumulado</th></tr></thead><tbody>'+filasProy+'</tbody></table></div>' : '')+
+    (cap ? '<div style="overflow-x:auto;margin-top:14px"><table class="table tabla-movil"><thead><tr><th>Mes</th><th class="num">Ahorro base</th><th class="num">Cuotas deudas</th><th class="num">Ahorro neto</th><th class="num">Acumulado</th></tr></thead><tbody>'+filasProy+'</tbody></table></div>' : '')+
   '</div>';
 
   return configHtml + summaryHtml + formNuevaDeuda + tablaDeudasHtml + proyeccionHtml;
@@ -3371,7 +3371,7 @@ function gimnasioTablaHistorial(semanas){
       '<td data-label="Ganador">'+ganadorLabel+'</td>'+
     '</tr>';
   }).join('');
-  return '<table class="tabla-movil"><thead><tr><th>Semana</th><th class="num">Ana</th><th class="num">Franco</th><th>Ganador</th></tr></thead><tbody>'+filas+'</tbody></table>';
+  return '<table class="table tabla-movil"><thead><tr><th>Semana</th><th class="num">Ana</th><th class="num">Franco</th><th>Ganador</th></tr></thead><tbody>'+filas+'</tbody></table>';
 }
 function gimnasioListaUltimasVisitas(){
   var lista = STATE.gimnasioVisitas.slice().sort(function(a,b){ return b.fecha.localeCompare(a.fecha); }).slice(0,10);
@@ -3510,7 +3510,7 @@ function renderUsdt(){
   formHtml+
   '<div class="card">'+
     '<h3>Movimientos ('+lista.length+')</h3>'+
-    (lista.length ? '<table class="tabla-movil"><thead><tr><th>Fecha</th><th>Tipo</th><th class="num">Cantidad</th><th class="num">Monto ARS</th><th class="num">Cotización</th><th>Centro</th><th>Categoría</th><th>Detalle</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>' : '<div class="empty">Todavía no cargaste ningún movimiento de USDT.</div>')+
+    (lista.length ? '<table class="table tabla-movil"><thead><tr><th>Fecha</th><th>Tipo</th><th class="num">Cantidad</th><th class="num">Monto ARS</th><th class="num">Cotización</th><th>Centro</th><th>Categoría</th><th>Detalle</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>' : '<div class="empty">Todavía no cargaste ningún movimiento de USDT.</div>')+
   '</div>';
 }
 

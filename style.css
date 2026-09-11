@@ -248,6 +248,10 @@ button.icon-btn:hover{ background:var(--accent-soft); opacity:1; }
 button.icon-btn.icon-btn-danger:hover{ background:var(--danger-soft); }
 
 table{ width:100%; border-collapse:collapse; font-size:13px; }
+/* Bootstrap fija --bs-table-bg directo en .table (hereda de --bs-body-bg por defecto, el verde
+   pálido de fondo de página) — como una regla que apunta al propio elemento siempre gana sobre lo
+   heredado desde :root, hay que pisarla acá para que las tablas se vean con el blanco de la card. */
+.table{ --bs-table-bg: var(--paper); --bs-table-color: var(--ink); }
 th{
   text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.03em;
   color:var(--ink-soft); border-bottom:1px solid var(--accent); padding:7px 8px; font-weight:600;
