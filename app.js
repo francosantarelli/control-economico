@@ -2619,6 +2619,17 @@ function obtenerSaldos(){
   }
   return STATE.saldosCache;
 }
+// Detecta la entidad a partir del nombre del Centro de Costo (texto libre en ABM) para mostrar
+// su logo en Saldos. Mercado Pago todavía no tiene un isologo propio disponible, usa badge de color.
+function logoEntidadHtml(nombre){
+  var n = (nombre||'').toLowerCase().replace(/á/g,'a').replace(/é/g,'e').replace(/í/g,'i').replace(/ó/g,'o').replace(/ú/g,'u').replace(/ñ/g,'n');
+  var base = '/control-economico/assets/logos/';
+  if(n.indexOf('santander')>-1) return '<img class="entidad-logo" src="'+base+'santander.svg" alt="Santander" title="Santander">';
+  if(n.indexOf('nacion')>-1) return '<img class="entidad-logo" src="'+base+'nacion.svg" alt="Banco Nación" title="Banco Nación">';
+  if(n.indexOf('provincia')>-1) return '<img class="entidad-logo" src="'+base+'provincia.svg" alt="Banco Provincia" title="Banco Provincia">';
+  if(n.indexOf('mercado pago')>-1 || n.indexOf('mercadopago')>-1) return '<span class="entidad-badge" title="Mercado Pago">MP</span>';
+  return '';
+}
 function renderSaldos(){
   var s = obtenerSaldos();
   var filas = s.filas, saldoSinCentro = s.saldoSinCentro;
@@ -2635,7 +2646,7 @@ function renderSaldos(){
     var items = filasGrupo.map(function(f){
       return '<div class="saldo-item">'+
         '<div class="saldo-item-encabezado">'+
-          '<div>'+renderChip(f.codigo, colorCentro(f.id), colorTextoCentro(f.id))+'<span class="saldo-item-nombre"> · '+esc(f.nombre)+'</span></div>'+
+          '<div style="display:flex;align-items:center;gap:8px;min-width:0">'+logoEntidadHtml(f.nombre)+renderChip(f.codigo, colorCentro(f.id), colorTextoCentro(f.id))+'<span class="saldo-item-nombre"> · '+esc(f.nombre)+'</span></div>'+
           '<button type="button" class="icon-btn" data-action="ir-a-movimientos-centro" data-id="'+f.id+'" title="Ver movimientos de este Centro de Costo" aria-label="Ver movimientos"><i class="bi bi-receipt"></i></button>'+
         '</div>'+
         '<div class="saldo-item-monto">'+fmtMonto(f.saldo)+'</div>'+
