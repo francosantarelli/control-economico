@@ -34,7 +34,7 @@ describe('Resumen: selector de rango de la Comparativa mensual', () => {
     restore();
   });
 
-  it('"Mes actual (centrado)" es el valor por defecto', () => {
+  it('"Últimos 3 meses" es el valor por defecto', () => {
     const win = loadApp();
     seedBase(win);
     const restore = mockNow(win, '2026-07-15T12:00:00');
@@ -43,9 +43,12 @@ describe('Resumen: selector de rango de la Comparativa mensual', () => {
     ];
     win.STATE.activeTab = 'resumen';
     win.render();
-    expect(win.STATE.grillaRango).toBe('actual');
+    expect(win.STATE.grillaRango).toBe('3m');
     const tablas = win.document.querySelectorAll('table');
-    expect(tablas[tablas.length - 1].querySelector('thead').textContent).toContain('Jul 26'); // mes actual, centrado en la ventana
+    const encabezado = tablas[tablas.length - 1].querySelector('thead').textContent;
+    expect(encabezado).toContain('May 26');
+    expect(encabezado).toContain('Jun 26');
+    expect(encabezado).toContain('Jul 26'); // últimos 3 meses terminando en el actual, lo incluye
     restore();
   });
 });
