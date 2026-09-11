@@ -2631,10 +2631,10 @@ function obtenerSaldos(){
   }
   return STATE.saldosCache;
 }
-// Logo/badge de la entidad de un Centro de Costo, para Saldos y ABM. Usa el campo explícito
-// `entidad` (elegido en ABM); si todavía no está cargado, adivina por el nombre como fallback
-// para no dejar en blanco los centros viejos. Mercado Pago e ICBC no tienen isologo propio
-// limpio disponible en Wikimedia Commons: Mercado Pago usa un badge de color de marca.
+// Logo de la entidad de un Centro de Costo, para Saldos y ABM. Usa el campo explícito `entidad`
+// (elegido en ABM); si todavía no está cargado, adivina por el nombre como fallback para no dejar
+// en blanco los centros viejos. Va en un chip blanco porque los logos vienen pensados para fondo
+// claro (se ven mal sueltos sobre el tema oscuro).
 function logoEntidadHtml(centro){
   var e = (centro.entidad||'').toLowerCase();
   if(!e){
@@ -2645,13 +2645,10 @@ function logoEntidadHtml(centro){
     else if(n.indexOf('icbc')>-1) e = 'icbc';
     else if(n.indexOf('mercado pago')>-1 || n.indexOf('mercadopago')>-1) e = 'mercadopago';
   }
-  var base = '/control-economico/assets/logos/';
-  if(e==='santander') return '<img class="entidad-logo" src="'+base+'santander.svg" alt="Santander" title="Santander">';
-  if(e==='nacion') return '<img class="entidad-logo" src="'+base+'nacion.svg" alt="Banco Nación" title="Banco Nación">';
-  if(e==='provincia') return '<img class="entidad-logo" src="'+base+'provincia.svg" alt="Banco Provincia" title="Banco Provincia">';
-  if(e==='icbc') return '<img class="entidad-logo" src="'+base+'icbc.svg" alt="ICBC" title="ICBC">';
-  if(e==='mercadopago') return '<span class="entidad-badge" title="Mercado Pago">MP</span>';
-  return '';
+  var archivo = {santander:'santander.svg', nacion:'nacion.svg', provincia:'provincia.svg', icbc:'icbc.svg', mercadopago:'mercadopago.webp'}[e];
+  var nombreEntidad = {santander:'Santander', nacion:'Banco Nación', provincia:'Banco Provincia', icbc:'ICBC', mercadopago:'Mercado Pago'}[e];
+  if(!archivo) return '';
+  return '<span class="entidad-logo-wrap"><img class="entidad-logo" src="/control-economico/assets/logos/'+archivo+'" alt="'+nombreEntidad+'" title="'+nombreEntidad+'"></span>';
 }
 function renderSaldos(){
   var s = obtenerSaldos();
