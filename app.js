@@ -58,7 +58,7 @@ var STATE = { centros: [], categorias: [], subcategorias: [], movimientos: [], v
   bulkVencMsg:null, vencFormMsg:null, dbError:null, saldosCache:null, saldosDirty:true, gimnasioMsg:null,
   usuarioEmail:null, efectivoAbierto:false, efectivoMsg:null, efectivoCategoriaId:'', efectivoDraft:null, backupMsg:null, backupPendiente:null, menuMovilAbierto:false, incompletosSnapshotIds:null,
   usdtVentaMovId:null, usdtVentaMovMsg:null, usdtVentaMovCantidad:'',
-  reglas: cargarReglas(), reglaFormMsg:null,
+  reglas: cargarReglas(), reglaFormMsg:null, reglasPaginaActual:1,
   nuevoMovAbierto:false, movDraftCentroDestinoId:'', comboAbierto:null, comboBusqueda:'', comboHighlight:0,
   movSeleccionados:[], bulkEditMovAbierto:false, bulkEditMovMsg:null, movPaginaActual:1, gruposAbiertos:{},
   tema: (function(){ try{ return localStorage.getItem('controlTema')==='oscuro' ? 'oscuro' : 'claro'; }catch(e){ return 'claro'; } })(),
@@ -66,6 +66,7 @@ var STATE = { centros: [], categorias: [], subcategorias: [], movimientos: [], v
   usdtCotizacionBid:null, usdtCotizacionActualizada:null, usdtCotizacionError:null, usdtCotizacionCargando:false,
   deudaFormMsg:null, flujoVentana:'6m', flujoHorizonte:12, filtrosMovAbiertos:false };
 var MOV_PAGE_SIZE = 50;
+var REGLAS_PAGE_SIZE = 15;
 
 // ===================== FILTROS MÚLTIPLES (selects convertidos a checkboxes) =====================
 var MULTISELECT_MAP = {
@@ -1627,6 +1628,7 @@ function renderABM(){
     {id:'categorias', label:'Categorías'},
     {id:'subcategorias', label:'Subcategorías'},
     {id:'centros', label:'Centros de Costo'},
+    {id:'reglas', label:'Reglas de categorización'},
     {id:'backup', label:'Backup'}
   ];
   var html = '<div class="subtabs">';
@@ -1637,10 +1639,57 @@ function renderABM(){
 
   if(STATE.abmSubTab === 'subcategorias') html += renderSubcategorias();
   else if(STATE.abmSubTab === 'centros') html += renderCentros();
+  else if(STATE.abmSubTab === 'reglas') html += renderReglas();
   else if(STATE.abmSubTab === 'backup') html += renderBackup();
   else html += renderCategorias();
 
   return html;
+}
+
+// Reglas de categorización: proveedor -> categoría/subcategoría sugeridas al previsualizar una
+// importación (ver Importar). Viven en ABM porque son dato de configuración igual que Centros/
+// Categorías, no una acción puntual de importar — se guardan en este navegador, no en la base
+// compartida (ver REGLAS_STORAGE_KEY).
+function renderReglas(){
+  var reglasOrdenadas = (STATE.reglas||[]).slice().sort(function(a,b){ return (a.proveedor||'').localeCompare(b.proveedor||'', 'es', {sensitivity:'base'}); });
+  var totalPaginasReglas = Math.max(1, Math.ceil(reglasOrdenadas.length / REGLAS_PAGE_SIZE));
+  if(STATE.reglasPaginaActual > totalPaginasReglas) STATE.reglasPaginaActual = totalPaginasReglas;
+  if(STATE.reglasPaginaActual < 1) STATE.reglasPaginaActual = 1;
+  var inicioPaginaReglas = (STATE.reglasPaginaActual-1) * REGLAS_PAGE_SIZE;
+  var reglasPagina = reglasOrdenadas.slice(inicioPaginaReglas, inicioPaginaReglas + REGLAS_PAGE_SIZE);
+
+  var filasReglas = reglasPagina.map(function(r){
+    return '<tr><td>'+esc(r.proveedor)+'</td><td>'+esc(r.categoria)+'</td><td>'+esc(r.subcategoria||'—')+'</td>'+
+      '<td><button class="secondary" data-action="borrar-regla" data-id="'+r.id+'" title="Borrar regla" style="padding:2px 8px">✕</button></td></tr>';
+  }).join('');
+  var categoriaOptsRegla = categoriasOrdenadas().map(function(c){ return '<option value="'+c.id+'">'+esc(c.nombre)+'</option>'; }).join('');
+
+  var paginadorReglas = totalPaginasReglas>1 ? ''+
+    '<div class="fields-row" style="margin-top:10px;align-items:center">'+
+      '<button class="secondary" data-action="reglas-pagina-anterior" style="font-size:12px;padding:6px 12px"'+(STATE.reglasPaginaActual<=1?' disabled':'')+'>« Anterior</button>'+
+      '<span style="font-size:12px;color:var(--ink-soft)">Página '+STATE.reglasPaginaActual+' de '+totalPaginasReglas+'</span>'+
+      '<button class="secondary" data-action="reglas-pagina-siguiente" style="font-size:12px;padding:6px 12px"'+(STATE.reglasPaginaActual>=totalPaginasReglas?' disabled':'')+'>Siguiente »</button>'+
+    '</div>' : '';
+
+  return ''+
+  '<div class="card">'+
+    '<h2>Nueva regla</h2>'+
+    '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Al previsualizar una importación (pestaña Importar), si el proveedor de una fila coincide (parcialmente, sin importar mayúsculas) con el texto de una regla, se precargan su Categoría y Subcategoría. También se crean solas al tildar "Guardar como regla" en una fila de la previsualización.</div>'+
+    (STATE.reglaFormMsg ? '<div class="msg err">'+esc(STATE.reglaFormMsg)+'</div>' : '')+
+    '<div class="fields-row">'+
+      '<div class="field"><label>Proveedor (texto parcial)</label><input type="text" id="regla-proveedor" placeholder="Ej: Barrientos"></div>'+
+      '<div class="field"><label>Categoría</label><select id="regla-categoria"><option value="">Elegir...</option>'+categoriaOptsRegla+'</select></div>'+
+      '<div class="field"><label>Subcategoría (opcional)</label><input type="text" id="regla-subcategoria" placeholder="Ej: Limpieza"></div>'+
+      '<div class="field" style="justify-content:flex-end"><button data-action="agregar-regla">Agregar regla</button></div>'+
+    '</div>'+
+  '</div>'+
+  '<div class="card">'+
+    '<h3>Reglas guardadas ('+reglasOrdenadas.length+')</h3>'+
+    (reglasOrdenadas.length ? ''+
+      '<div style="overflow-x:auto"><table class="table"><thead><tr><th>Proveedor</th><th>Categoría</th><th>Subcategoría</th><th></th></tr></thead>'+
+      '<tbody>'+filasReglas+'</tbody></table></div>'+paginadorReglas
+      : '<div class="empty">Todavía no hay reglas guardadas.</div>')+
+  '</div>';
 }
 
 function renderBackup(){
@@ -2361,28 +2410,11 @@ function renderImportar(){
     '</div>';
   }
 
-  var reglasOrdenadas = (STATE.reglas||[]).slice().sort(function(a,b){ return (a.proveedor||'').localeCompare(b.proveedor||'', 'es', {sensitivity:'base'}); });
-  var filasReglas = reglasOrdenadas.map(function(r){
-    return '<tr><td>'+esc(r.proveedor)+'</td><td>'+esc(r.categoria)+'</td><td>'+esc(r.subcategoria||'—')+'</td>'+
-      '<td><button class="secondary" data-action="borrar-regla" data-id="'+r.id+'" title="Borrar regla" style="padding:2px 8px">✕</button></td></tr>';
-  }).join('');
-  var categoriaOptsRegla = categoriasOrdenadas().map(function(c){ return '<option value="'+c.id+'">'+esc(c.nombre)+'</option>'; }).join('');
-
+  var cantidadReglas = (STATE.reglas||[]).length;
   var reglasHtml = ''+
-  '<div class="card">'+
-    '<h3>Reglas de categorización</h3>'+
-    '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Al previsualizar una importación, si el proveedor de una fila coincide (parcialmente, sin importar mayúsculas) con el texto de una regla, se precargan su Categoría y Subcategoría. Se guardan en este navegador, no en la base de datos compartida.</div>'+
-    (STATE.reglaFormMsg ? '<div class="msg err">'+esc(STATE.reglaFormMsg)+'</div>' : '')+
-    '<div class="fields-row" style="margin-bottom:10px">'+
-      '<div class="field"><label>Proveedor (texto parcial)</label><input type="text" id="regla-proveedor" placeholder="Ej: Barrientos"></div>'+
-      '<div class="field"><label>Categoría</label><select id="regla-categoria"><option value="">Elegir...</option>'+categoriaOptsRegla+'</select></div>'+
-      '<div class="field"><label>Subcategoría (opcional)</label><input type="text" id="regla-subcategoria" placeholder="Ej: Limpieza"></div>'+
-      '<div class="field" style="justify-content:flex-end"><button data-action="agregar-regla">Agregar regla</button></div>'+
-    '</div>'+
-    (reglasOrdenadas.length ? ''+
-      '<div style="overflow-x:auto"><table class="table"><thead><tr><th>Proveedor</th><th>Categoría</th><th>Subcategoría</th><th></th></tr></thead>'+
-      '<tbody>'+filasReglas+'</tbody></table></div>'
-      : '<div class="empty">Todavía no hay reglas guardadas.</div>')+
+  '<div class="card" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">'+
+    '<div style="font-size:12px;color:var(--ink-soft)">'+cantidadReglas+' regla(s) de categorización guardada(s) — al previsualizar, si el proveedor de una fila coincide con una regla se precargan Categoría y Subcategoría.</div>'+
+    '<button type="button" class="secondary" data-action="ir-a-reglas" style="font-size:12px;padding:6px 12px">Administrar reglas (ABM)</button>'+
   '</div>';
 
   return formHtml + previewHtml + previewExcelHtml + reglasHtml;
@@ -3963,6 +3995,14 @@ async function handleAction(action, id){
     render();
     return;
   }
+  if(action==='ir-a-reglas'){
+    STATE.activeTab = 'abm';
+    STATE.abmSubTab = 'reglas';
+    render();
+    return;
+  }
+  if(action==='reglas-pagina-anterior'){ STATE.reglasPaginaActual = Math.max(1, STATE.reglasPaginaActual-1); render(); return; }
+  if(action==='reglas-pagina-siguiente'){ STATE.reglasPaginaActual = STATE.reglasPaginaActual+1; render(); return; }
   if(action==='cancel-edit'){
     STATE.editing = null; STATE.nuevoMovAbierto = false; STATE.movDraftCentroDestinoId = '';
     STATE.comboAbierto = null; STATE.comboBusqueda = '';
