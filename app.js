@@ -1602,7 +1602,7 @@ function renderCentros(){
   return formNuevoCentro +
   '<div class="card">'+
     '<h3>Centros de costo cargados</h3>'+
-    (STATE.centros.length ? '<table class="tabla-movil"><thead><tr><th>Código</th><th>Nombre</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>' : '<div class="empty">Todavía no cargaste ningún centro de costo.</div>')+
+    (STATE.centros.length ? '<table class="table tabla-movil"><thead><tr><th>Código</th><th>Nombre</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>' : '<div class="empty">Todavía no cargaste ningún centro de costo.</div>')+
   '</div>';
 }
 
@@ -1717,7 +1717,7 @@ function renderCategorias(){
   '</div>'+
   '<div class="card">'+
     '<h3>Categorías cargadas</h3>'+
-    (STATE.categorias.length ? '<table class="tabla-movil"><thead><tr><th>Nombre</th><th>Tipo</th><th>Subcategorías</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>' : '<div class="empty">Todavía no cargaste ninguna categoría.</div>')+
+    (STATE.categorias.length ? '<table class="table tabla-movil"><thead><tr><th>Nombre</th><th>Tipo</th><th>Subcategorías</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>' : '<div class="empty">Todavía no cargaste ninguna categoría.</div>')+
   '</div>';
 }
 
@@ -1766,7 +1766,7 @@ function renderSubcategorias(){
   return formNuevaSub +
   '<div class="card">'+
     '<h3>Subcategorías cargadas</h3>'+
-    (STATE.subcategorias.length ? '<table class="tabla-movil"><thead><tr><th>Categoría</th><th>Subcategoría</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>' : '<div class="empty">Todavía no cargaste ninguna subcategoría.</div>')+
+    (STATE.subcategorias.length ? '<table class="table tabla-movil"><thead><tr><th>Categoría</th><th>Subcategoría</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>' : '<div class="empty">Todavía no cargaste ninguna subcategoría.</div>')+
   '</div>';
 
   // Nota: si hay editing, seteamos el select después en bindEvents (post-render) porque innerHTML no respeta "selected" con reflow directo en todos los navegadores.
