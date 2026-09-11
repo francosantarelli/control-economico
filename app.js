@@ -62,7 +62,7 @@ var STATE = { centros: [], categorias: [], subcategorias: [], movimientos: [], v
   nuevoMovAbierto:false, movDraftCentroDestinoId:'', comboAbierto:null, comboBusqueda:'', comboHighlight:0,
   movSeleccionados:[], bulkEditMovAbierto:false, bulkEditMovMsg:null, movPaginaActual:1, gruposAbiertos:{},
   tema: (function(){ try{ return localStorage.getItem('controlTema')==='oscuro' ? 'oscuro' : 'claro'; }catch(e){ return 'claro'; } })(),
-  menuUsuarioAbierto:false, usdtFormMsg:null, usdtDraft:null,
+  menuUsuarioAbierto:false, usdtFormMsg:null, usdtDraft:null, usdtIngresoOpcionalesAbierto:false,
   usdtCotizacionBid:null, usdtCotizacionActualizada:null, usdtCotizacionError:null, usdtCotizacionCargando:false,
   deudaFormMsg:null, flujoVentana:'6m', flujoHorizonte:12, filtrosMovAbiertos:false };
 var MOV_PAGE_SIZE = 50;
@@ -3478,12 +3478,17 @@ function campoUsdt(e){
     var sugerenciaCotizacion = STATE.usdtCotizacionBid && cantidadNum
       ? '<button type="button" class="link" data-action="usar-cotizacion-usdt-ingreso" style="padding:0;font-size:11px;margin-top:4px">Usar cotización de hoy ($'+fmtMonto(STATE.usdtCotizacionBid)+'/USDT → $'+fmtMonto(cantidadNum*STATE.usdtCotizacionBid)+')</button>'
       : '';
-    camposTipo = ''+
+    // Estos 3 campos solo importan si además querés que este ingreso cuente como ingreso real en
+    // pesos en el Resumen (caso puntual, ej. un sueldo cobrado en USDT) -- para el caso común
+    // (guardar la tenencia de USDT y nada más) son ruido, así que quedan colapsados por default.
+    var mostrarOpcionalesIngreso = STATE.usdtIngresoOpcionalesAbierto || !!e.categoriaId || !!e.montoArs;
+    camposTipo = mostrarOpcionalesIngreso ? ''+
       '<div class="fields-row" style="margin-top:10px">'+
         categoriaSubHtml+
         '<div class="field"><label>Valor en pesos (referencial)</label><input type="number" step="0.01" id="f-usdt-monto-ars" value="'+esc(e.montoArs)+'" style="width:140px">'+sugerenciaCotizacion+'</div>'+
       '</div>'+
-      '<div style="font-size:11px;color:var(--ink-soft);margin-top:8px">Esto no crea ningún movimiento en pesos ni afecta ningún Centro de Costo: solo sirve para que, poniéndole Categoría "Sueldo" y un valor en pesos (por ejemplo con la cotización del día en que lo cobraste), el Resumen lo cuente como ingreso real.</div>';
+      '<div style="font-size:11px;color:var(--ink-soft);margin-top:8px">Esto no crea ningún movimiento en pesos ni afecta ningún Centro de Costo: solo sirve para que, poniéndole Categoría "Sueldo" y un valor en pesos (por ejemplo con la cotización del día en que lo cobraste), el Resumen lo cuente como ingreso real.</div>'
+      : '<button type="button" class="link" data-action="toggle-usdt-opcionales" style="padding:6px 0;font-size:12px;margin-top:4px"><i class="bi bi-plus-circle"></i> ¿Este ingreso cuenta como ingreso real en pesos? (Categoría, valor de referencia)</button>';
   }
   return ''+
     (STATE.usdtFormMsg ? '<div class="msg err">'+esc(STATE.usdtFormMsg)+'</div>' : '')+
@@ -3635,7 +3640,7 @@ function bindEvents(){
   document.querySelectorAll('.tab').forEach(function(t){
     t.addEventListener('click', function(){
       var tabId = t.getAttribute('data-tab');
-      STATE.activeTab = tabId; STATE.editing = null; STATE.movDraft = null; STATE.usdtDraft = null; STATE.usdtFormMsg = null; STATE.nuevoMovAbierto = false; STATE.menuMovilAbierto = false; STATE.multiSelectAbierto = null; STATE.bulkEditMovAbierto = false; STATE.movSeleccionados = [];
+      STATE.activeTab = tabId; STATE.editing = null; STATE.movDraft = null; STATE.usdtDraft = null; STATE.usdtFormMsg = null; STATE.usdtIngresoOpcionalesAbierto = false; STATE.nuevoMovAbierto = false; STATE.menuMovilAbierto = false; STATE.multiSelectAbierto = null; STATE.bulkEditMovAbierto = false; STATE.movSeleccionados = [];
       render();
       // Primera vez que se entra a USDT en esta sesión: traer la cotización sola, sin que haya que tocar "Actualizar".
       if(tabId==='usdt' && STATE.usdtCotizacionBid===null && !STATE.usdtCotizacionCargando) obtenerCotizacionUsdt();
@@ -5024,6 +5029,12 @@ async function handleAction(action, id){
     render(); return;
   }
   if(action==='edit-usdt'){ STATE.editing = {type:'usdt', id:id}; STATE.usdtFormMsg = null; render(); return; }
+  if(action==='toggle-usdt-opcionales'){
+    var draftOpc = getUsdtFormValues();
+    STATE.usdtDraft = draftOpc;
+    STATE.usdtIngresoOpcionalesAbierto = true;
+    render(); return;
+  }
   if(action==='del-usdt'){
     var uBorrar = STATE.usdtMovimientos.find(function(x){return x.id===id;});
     var avisoVinculado = (uBorrar && uBorrar.movimientoId) ? ' Esto también borra el movimiento en pesos vinculado en Movimientos.' : '';
@@ -5122,6 +5133,7 @@ async function handleAction(action, id){
       }
       STATE.editing = null;
       STATE.usdtDraft = null;
+      STATE.usdtIngresoOpcionalesAbierto = false;
     }catch(e){ STATE.dbError = 'No se pudo guardar el movimiento de USDT: '+(e.message||e); }
     render(); return;
   }
