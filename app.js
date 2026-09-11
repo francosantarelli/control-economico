@@ -52,7 +52,7 @@ function cargarReglas(){
 
 var STATE = { centros: [], categorias: [], subcategorias: [], movimientos: [], vencimientos: [], gimnasioVisitas: [], usdtMovimientos: [], deudas: [], facturas: [], configuracion: [], facturaLoadingId:null, activeTab: 'movimientos', editing: null, ready:false,
   importEntidad:'mp', importBanco:'nacion', importVencimiento:'', importTarjetaMarca:'', importRaw:'', importPreview:null, importPreviewExcel:null, importMsg:null,
-  bulkCatMsg:null, bulkColorCatMsg:null, confirmState:null, subDeleteState:null, vencPagarState:null, movFormMsg:null,
+  bulkCatMsg:null, bulkColorCatMsg:null, confirmState:null, subDeleteState:null, vencPagarState:null, movFormMsg:null, movFieldErrors:null,
   filtros:{centro:[], categoria:[], subcategoria:[], mes:[], texto:'', soloIncompletos:false, soloTarjeta:false},
   resumenFiltros:{centro:[], categoria:[], mes:[fechaHoyISO().slice(0,7)], vista:'categoria'}, multiSelectAbierto:null, multiSelectBusqueda:'', abmSubTab:'categorias', grillaRango:'actual',
   bulkVencMsg:null, vencFormMsg:null, dbError:null, saldosCache:null, saldosDirty:true, gimnasioMsg:null,
@@ -2055,16 +2055,19 @@ function renderMovimientos(){
         '<div class="field"><label>Cuotas (opcional)</label><input type="text" autocomplete="off" placeholder="ej. 5/6" id="f-mov-cuotas-info" value="'+esc(e.cuotasInfo||'')+'" style="width:100px"></div>'+
         '<div class="field"><label>Cantidad de cuotas</label><input type="text" inputmode="numeric" pattern="[0-9]*" id="f-mov-cuotas" value="'+cuotasNum+'" style="width:100px"></div>'+
         '<div class="field" style="flex:2 1 260px;justify-content:flex-end"><div style="font-size:11px;color:var(--ink-soft);padding-bottom:8px">'+textoAyudaCuotas+'</div></div>'+
-      '</div>' : '';
+      '</div>'+
+      '<div class="info-box warning">📌 <strong>Pendiente:</strong> este consumo va a figurar como pendiente hasta la Fecha de arriba (el vencimiento del resumen en que se paga).</div>' : '';
+    function claseCampo(nombre){ return 'field'+(STATE.movFieldErrors && STATE.movFieldErrors[nombre] ? ' invalid' : ''); }
+    function msgCampo(nombre){ return (STATE.movFieldErrors && STATE.movFieldErrors[nombre]) ? '<div class="field-error">'+esc(STATE.movFieldErrors[nombre])+'</div>' : ''; }
     return ''+
       (STATE.movFormMsg ? '<div class="msg err">'+esc(STATE.movFormMsg)+'</div>' : '')+
       '<div class="row">'+
-        '<div class="field"><label>Fecha</label><input type="date" id="f-mov-fecha" value="'+esc(e.fecha)+'"></div>'+
-        '<div class="field"><label>Centro de Costo'+((e.fecha && e.fecha>fechaHoyISO())?' (opcional, fecha futura)':'')+'</label>'+
-          renderCombo('mov-centro', 'f-mov-centro', [comboOpcionVacia()].concat(centrosOrdenados().map(function(c){ return {value:c.id, label:c.codigo+' · '+c.nombre}; })), e.centroId, 'Elegir...')+
+        '<div class="'+claseCampo('fecha')+'"><label>Fecha</label><input type="date" id="f-mov-fecha" value="'+esc(e.fecha)+'">'+msgCampo('fecha')+'</div>'+
+        '<div class="'+claseCampo('centroId')+'"><label>Centro de Costo'+((e.fecha && e.fecha>fechaHoyISO())?' (opcional, fecha futura)':'')+'</label>'+
+          renderCombo('mov-centro', 'f-mov-centro', [comboOpcionVacia()].concat(centrosOrdenados().map(function(c){ return {value:c.id, label:c.codigo+' · '+c.nombre}; })), e.centroId, 'Elegir...')+msgCampo('centroId')+
         '</div>'+
-        '<div class="field"><label>Categoría</label>'+
-          renderCombo('mov-categoria', 'f-mov-categoria', [comboOpcionVacia()].concat(categoriasOrdenadas().map(function(c){ return {value:c.id, label:c.nombre}; })), e.categoriaId, 'Elegir...')+
+        '<div class="'+claseCampo('categoriaId')+'"><label>Categoría</label>'+
+          renderCombo('mov-categoria', 'f-mov-categoria', [comboOpcionVacia()].concat(categoriasOrdenadas().map(function(c){ return {value:c.id, label:c.nombre}; })), e.categoriaId, 'Elegir...')+msgCampo('categoriaId')+
         '</div>'+
         '<div class="field"><label>Subcategoría</label>'+
           renderCombo('mov-subcategoria', 'f-mov-subcategoria', [comboOpcionVacia()].concat(subOptionsArr), e.subcategoriaId, 'Elegir o crear...')+
@@ -2072,13 +2075,13 @@ function renderMovimientos(){
       '</div>'+
       campoDestino+
       '<div class="row" style="margin-top:10px">'+
-        '<div class="field"><label>Proveedor</label><input type="text" id="f-mov-proveedor" value="'+esc(e.proveedor)+'" style="width:200px"></div>'+
+        '<div class="'+claseCampo('proveedor')+'"><label>Proveedor</label><input type="text" id="f-mov-proveedor" value="'+esc(e.proveedor)+'" style="width:200px">'+msgCampo('proveedor')+'</div>'+
         '<div class="field"><label>Detalle</label><input type="text" id="f-mov-detalle" value="'+esc(e.detalle)+'" style="width:200px"></div>'+
         '<div class="field"><label>Tipo</label><select id="f-mov-tipo">'+
           '<option value="egreso" '+(e.tipo==='egreso'?'selected':'')+'>Egreso</option>'+
           '<option value="ingreso" '+(e.tipo==='ingreso'?'selected':'')+'>Ingreso</option>'+
         '</select></div>'+
-        '<div class="field"><label>Monto</label><input type="number" step="0.01" id="f-mov-monto" value="'+esc(e.monto)+'" style="width:120px"></div>'+
+        '<div class="'+claseCampo('monto')+'"><label>Monto</label><input type="number" step="0.01" id="f-mov-monto" value="'+esc(e.monto)+'" style="width:120px">'+msgCampo('monto')+'</div>'+
         '<div class="field"><label>&nbsp;</label><label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:normal;white-space:nowrap;padding:7px 0">'+
           '<input type="checkbox" id="f-mov-tarjeta" '+(e.tarjeta?'checked':'')+' style="width:auto"> 💳 Pagado con tarjeta de crédito'+
         '</label></div>'+
@@ -3949,11 +3952,11 @@ async function handleAction(action, id){
     STATE.editing = null; STATE.nuevoMovAbierto = false; STATE.movDraftCentroDestinoId = '';
     STATE.comboAbierto = null; STATE.comboBusqueda = '';
     STATE.bulkEditMovAbierto = false; STATE.bulkEditMovMsg = null;
-    STATE.usdtFormMsg = null;
+    STATE.usdtFormMsg = null; STATE.movFieldErrors = null;
     render(); return;
   }
   if(action==='abrir-nuevo-mov'){
-    STATE.nuevoMovAbierto = true; STATE.movFormMsg = null; STATE.movDraftCentroDestinoId = '';
+    STATE.nuevoMovAbierto = true; STATE.movFormMsg = null; STATE.movFieldErrors = null; STATE.movDraftCentroDestinoId = '';
     STATE.comboAbierto = null; STATE.comboBusqueda = ''; STATE.menuMovilAbierto = false;
     STATE.bulkEditMovAbierto = false;
     render(); return;
@@ -4411,7 +4414,7 @@ async function handleAction(action, id){
     render(); return;
   }
   if(action==='edit-mov'){
-    STATE.editing = {type:'mov', id:id}; STATE.movFormMsg = null; STATE.movDraftCentroDestinoId = '';
+    STATE.editing = {type:'mov', id:id}; STATE.movFormMsg = null; STATE.movFieldErrors = null; STATE.movDraftCentroDestinoId = '';
     STATE.bulkEditMovAbierto = false;
     render(); return;
   }
@@ -4432,12 +4435,18 @@ async function handleAction(action, id){
     var v = getMovFormValues();
     STATE.movDraft = v; // conservar lo tipeado si la validación falla más abajo
     var esFechaFutura = !!v.fecha && v.fecha > fechaHoyISO();
-    if(!v.fecha || (!v.centroId && !esFechaFutura) || !v.categoriaId || !v.proveedor || !v.monto){
-      STATE.movFormMsg = esFechaFutura
-        ? 'Completá al menos: fecha, categoría, proveedor y monto.'
-        : 'Completá al menos: fecha, centro de costo, categoría, proveedor y monto.';
+    var errores = {};
+    if(!v.fecha) errores.fecha = 'La fecha es obligatoria.';
+    if(!v.centroId && !esFechaFutura) errores.centroId = 'Seleccioná un centro de costo.';
+    if(!v.categoriaId) errores.categoriaId = 'Seleccioná una categoría.';
+    if(!v.proveedor) errores.proveedor = 'El proveedor es obligatorio.';
+    if(!v.monto) errores.monto = 'Ingresá un monto válido.';
+    if(Object.keys(errores).length){
+      STATE.movFieldErrors = errores;
+      STATE.movFormMsg = null;
       render(); return;
     }
+    STATE.movFieldErrors = null;
     var catElegida = STATE.categorias.find(function(c){return c.id===v.categoriaId;});
     var esTecMov = catElegida && catElegida.tipo === 'tec';
     var centroDestinoEl = document.getElementById('f-mov-centro-destino');

@@ -35,7 +35,9 @@ describe('Movimientos: alta, edición y borrado', () => {
   it('valida campos obligatorios y no inserta nada si faltan', async () => {
     llenarFormMov(win, { fecha: '2026-07-10', proveedor: 'Coto' }); // sin centro/categoría/monto
     await win.handleAction('save-mov');
-    expect(win.STATE.movFormMsg).toMatch(/completá/i);
+    expect(win.STATE.movFieldErrors.centroId).toBeTruthy();
+    expect(win.STATE.movFieldErrors.categoriaId).toBeTruthy();
+    expect(win.STATE.movFieldErrors.monto).toBeTruthy();
     expect(sbMock.calls.length).toBe(0);
     expect(win.STATE.nuevoMovAbierto).toBe(true); // el modal sigue abierto
   });

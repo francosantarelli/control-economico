@@ -10,6 +10,8 @@
   --rule:#E3ECE6;
   --danger:#D97B6C;
   --danger-soft:#FBEAE6;
+  --warning:#B8863E;
+  --warning-soft:#F7EEDC;
 }
 :root[data-theme="oscuro"]{
   --bg:#141B17;
@@ -21,6 +23,8 @@
   --rule:#2F3B34;
   --danger:#D97B6C;
   --danger-soft:#3A241F;
+  --warning:#D9AB5C;
+  --warning-soft:#3A311D;
 }
 :root[data-theme="oscuro"] #tabla-movimientos tr.fila-incompleta:hover,
 :root[data-theme="oscuro"] tr.fila-duplicada:hover{ background:#4A2E28; }
@@ -246,6 +250,12 @@ tfoot td{ border-top:2px solid var(--accent); border-bottom:none; font-weight:60
 .msg{ font-size:12px; padding:8px 10px; border-radius:4px; margin-bottom:12px; }
 .msg.ok{ background:var(--accent-soft); color:var(--accent); }
 .msg.err{ background:var(--danger-soft); color:var(--danger); }
+
+.field.invalid input:not([type=checkbox]), .field.invalid select, .field.invalid .combo-input{ border-color:var(--danger); }
+.field-error{ font-size:11px; color:var(--danger); }
+
+.info-box{ font-size:12px; padding:8px 10px; border-radius:4px; margin-top:10px; }
+.info-box.warning{ background:var(--warning-soft); color:var(--warning); }
 
 .filters{ display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
 .actions-cell{ white-space:nowrap; }
