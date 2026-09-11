@@ -88,7 +88,7 @@ h1,h2,h3{ font-family:'Geist',sans-serif; font-weight:600; margin:0; }
    el emoji en la franja angosta de escritorio; ahora el riel es ancho y muestra el nombre siempre). */
 .masthead{
   display:flex; align-items:center; gap:10px;
-  border-bottom:2px solid var(--accent); padding-bottom:14px; margin-bottom:16px; text-align:left;
+  padding-bottom:14px; margin-bottom:16px; text-align:left;
 }
 .masthead h1{ display:block; font-size:17px; }
 .masthead .tagline{ display:none; }
