@@ -2903,23 +2903,16 @@ function renderGrillaMensual(movs, rango){
     '</table></div>';
 }
 
-function renderResumen(){
-  var f = STATE.resumenFiltros || {centro:[], categoria:[], mes:[], vista:'categoria'};
-
-  var centroOptions = centrosOrdenados().map(function(c){ return {value:c.id, label:c.codigo}; });
-  var categoriaOptions = categoriasOrdenadas().map(function(c){ return {value:c.id, label:c.nombre}; });
-  var meses = getMeses();
-  var mesOptions = meses.map(function(m){ return {value:m, label:mesLabelCorto(m)}; });
-
+// Calcula los 4 totales de Resumen (ingresos/egresos/obra/saldo) para una combinación de filtros
+// de Centro/Categoría/Mes. Extraído de renderResumen() para poder llamarlo dos veces: una con los
+// filtros vigentes y otra con el mes anterior, y así mostrar la comparación en las KPI cards.
+function calcularTotalesResumenKpis(centroArr, categoriaArr, mesArr){
   var filtrados = STATE.movimientos.filter(function(m){
-    if(f.centro.length && f.centro.indexOf(m.centroId)===-1) return false;
-    if(f.categoria.length && f.categoria.indexOf(m.categoriaId)===-1) return false;
-    if(f.mes.length && f.mes.indexOf((m.fecha||'').slice(0,7))===-1) return false;
+    if(centroArr.length && centroArr.indexOf(m.centroId)===-1) return false;
+    if(categoriaArr.length && categoriaArr.indexOf(m.categoriaId)===-1) return false;
+    if(mesArr.length && mesArr.indexOf((m.fecha||'').slice(0,7))===-1) return false;
     return true;
   });
-
-  var movsCentro = STATE.movimientos.filter(function(m){ return !f.centro.length || f.centro.indexOf(m.centroId)!==-1; });
-
   var movsReales = filtrados.filter(function(m){ return !esTipoCategoria(m.categoriaId, 'tec'); });
   var movsObra = movsReales.filter(function(m){ return esCategoriaObra(m.categoriaId); });
   var movsSinObra = movsReales.filter(function(m){ return !esCategoriaObra(m.categoriaId); });
@@ -2934,16 +2927,16 @@ function renderResumen(){
   // venderlo duplicaría el mismo ingreso.
   var movsSueldo = STATE.movimientos.filter(function(m){
     if(!esCategoriaSueldo(m.categoriaId) || esSubcategoriaVentaUsdt(m.subcategoriaId)) return false;
-    if(f.centro.length && f.centro.indexOf(m.centroId)===-1) return false;
-    if(f.categoria.length && f.categoria.indexOf(m.categoriaId)===-1) return false;
-    if(f.mes.length && f.mes.indexOf(mesEfectivoSueldo(m.fecha))===-1) return false;
+    if(centroArr.length && centroArr.indexOf(m.centroId)===-1) return false;
+    if(categoriaArr.length && categoriaArr.indexOf(m.categoriaId)===-1) return false;
+    if(mesArr.length && mesArr.indexOf(mesEfectivoSueldo(m.fecha))===-1) return false;
     return true;
   });
   var usdtSueldo = STATE.usdtMovimientos.filter(function(u){
     if(u.tipo!=='ingreso' || !esCategoriaSueldo(u.categoriaId)) return false;
-    if(f.centro.length && f.centro.indexOf(u.centroId||'')===-1) return false;
-    if(f.categoria.length && f.categoria.indexOf(u.categoriaId)===-1) return false;
-    if(f.mes.length && f.mes.indexOf(mesEfectivoSueldo(u.fecha))===-1) return false;
+    if(centroArr.length && centroArr.indexOf(u.centroId||'')===-1) return false;
+    if(categoriaArr.length && categoriaArr.indexOf(u.categoriaId)===-1) return false;
+    if(mesArr.length && mesArr.indexOf(mesEfectivoSueldo(u.fecha))===-1) return false;
     return true;
   });
   var totalIngreso = movsSueldo.reduce(function(s,m){ return s + (Number(m.ingreso)||0); },0)
@@ -2951,23 +2944,92 @@ function renderResumen(){
   var totalEgreso = movsResto.reduce(function(s,m){ return s + (Number(m.egreso)||0) - (Number(m.ingreso)||0); },0);
   var totalObra = movsObra.reduce(function(s,m){ return s + (Number(m.egreso)||0) - (Number(m.ingreso)||0); },0);
   var saldo = totalIngreso - totalEgreso - totalObra;
+  return { totalIngreso:totalIngreso, totalEgreso:totalEgreso, totalObra:totalObra, saldo:saldo, movsResto:movsResto };
+}
+// "2026-05" -> "2026-04". Para calcular a qué mes comparar cuando el filtro de Mes de Resumen
+// tiene un único mes elegido.
+function mesAnteriorDe(mesStr){
+  var partes = (mesStr||'').split('-');
+  if(partes.length!==2) return '';
+  var d = new Date(parseInt(partes[0],10), parseInt(partes[1],10)-1, 1);
+  return mesOffset(d, -1);
+}
 
-  // Desglose por categoría o por centro de costo, según STATE.resumenFiltros.vista: total neto (ingresos - egresos). No incluye Sueldo (queda afuera de esta comparación, como Obra).
+function renderResumen(){
+  var f = STATE.resumenFiltros || {centro:[], categoria:[], mes:[], vista:'categoria'};
+
+  var centroOptions = centrosOrdenados().map(function(c){ return {value:c.id, label:c.codigo}; });
+  var categoriaOptions = categoriasOrdenadas().map(function(c){ return {value:c.id, label:c.nombre}; });
+  var meses = getMeses();
+  var mesOptions = meses.map(function(m){ return {value:m, label:mesLabelCorto(m)}; });
+
+  var movsCentro = STATE.movimientos.filter(function(m){ return !f.centro.length || f.centro.indexOf(m.centroId)!==-1; });
+
+  var actual = calcularTotalesResumenKpis(f.centro, f.categoria, f.mes);
+  var totalIngreso = actual.totalIngreso, totalEgreso = actual.totalEgreso, totalObra = actual.totalObra, saldo = actual.saldo;
+  var movsResto = actual.movsResto;
+
+  // Comparación contra el mes anterior: solo tiene sentido cuando el filtro de Mes está en un único
+  // mes puntual (con 0 o 2+ meses elegidos, "mes anterior" es ambiguo, así que se omite el delta).
+  var mesRef = f.mes.length===1 ? f.mes[0] : null;
+  var anterior = mesRef ? calcularTotalesResumenKpis(f.centro, f.categoria, [mesAnteriorDe(mesRef)]) : null;
+  function deltaHtml(valorActual, favorableSiSube, valorAnterior){
+    if(valorAnterior===null || valorAnterior===undefined) return '';
+    var diff = valorActual - valorAnterior;
+    if(Math.abs(diff) < 1) return '<div style="font-size:11px;margin-top:2px;color:var(--ink-soft)">= mes anterior</div>';
+    var subio = diff>0;
+    var favorable = favorableSiSube ? subio : !subio;
+    var color = favorable ? 'var(--accent)' : 'var(--danger)';
+    var icono = subio ? 'bi-arrow-up-short' : 'bi-arrow-down-short';
+    return '<div class="mono" style="font-size:11px;margin-top:2px;color:'+color+'"><i class="bi '+icono+'"></i> '+fmtMonto(Math.abs(diff))+' vs. mes ant.</div>';
+  }
+  // Tasa de ahorro: más comparable entre meses que el Saldo en pesos solo, porque no depende de cuánto
+  // ingresó ese mes puntual.
+  var tasaAhorro = totalIngreso>0 ? Math.round(saldo/totalIngreso*100) : null;
+
+  // "Estado actual": foto de hoy que junta números de otras pestañas (Saldos, USDT, Vencimientos,
+  // Flujo de Caja) -- a diferencia de las KPI cards de abajo, no depende de los filtros de Centro/
+  // Categoría/Mes de esta pantalla, porque son datos globales, no del recorte que se esté mirando.
+  var saldosGlobal = obtenerSaldos();
+  var saldoUsdtCant = calcularSaldoUsdt();
+  var valorUsdtArs = STATE.usdtCotizacionBid ? saldoUsdtCant*STATE.usdtCotizacionBid : null;
+  var capAhorro = capacidadAhorroPromedio('6m');
+  var vencPendientes = STATE.vencimientos.filter(function(v){ return v.estado!=='pagado'; }).sort(function(a,b){ return (a.fecha||'').localeCompare(b.fecha||''); });
+  var proximoVenc = vencPendientes[0] || null;
+  var vencProximos7d = vencPendientes.filter(function(v){ var d=diasHasta(v.fecha); return d!==null && d>=0 && d<=7; }).length;
+  var estadoActualHtml = '<div class="card">'+
+    '<h3>Estado actual</h3>'+
+    '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">La foto de hoy — no depende de los filtros de abajo.</div>'+
+    '<div class="summary-cards">'+
+      '<div class="summary-card"><div class="kpi-ic kpi-ic-accent"><i class="bi bi-bank"></i></div><div class="label">Saldo total (Saldos)</div><div class="value">'+fmtMonto(saldosGlobal.totalGeneral)+'</div></div>'+
+      '<div class="summary-card"><div class="kpi-ic kpi-ic-warning"><i class="bi bi-coin"></i></div><div class="label">Tenencia USDT</div><div class="value">'+fmtCantidadUsdt(saldoUsdtCant)+' USDT'+(valorUsdtArs!==null?'<div class="mono" style="font-size:12px;color:var(--ink-soft);font-weight:400">≈ '+fmtMonto(valorUsdtArs)+'</div>':'')+'</div></div>'+
+      '<div class="summary-card"><div class="kpi-ic kpi-ic-danger"><i class="bi bi-alarm"></i></div><div class="label">Próximo vencimiento</div>'+
+        (proximoVenc ? '<div class="value" style="font-size:15px">'+esc(proximoVenc.concepto)+'</div><div class="mono" style="font-size:12px;color:var(--ink-soft)">'+fmtMonto(proximoVenc.monto)+' · '+esc(fechaISOaDDMMAAAA(proximoVenc.fecha))+(vencProximos7d>1?' · '+vencProximos7d+' en los próx. 7 días':'')+'</div>' : '<div class="value" style="font-size:15px;color:var(--ink-soft)">Ninguno pendiente</div>')+
+      '</div>'+
+      '<div class="summary-card"><div class="kpi-ic kpi-ic-accent"><i class="bi bi-piggy-bank"></i></div><div class="label">Ahorro promedio / mes</div><div class="value">'+(capAhorro?fmtMonto(capAhorro.promedio):'—')+'</div>'+(capAhorro?'<div style="font-size:11px;color:var(--ink-soft);margin-top:2px">últimos 6 meses cerrados</div>':'')+'</div>'+
+    '</div>'+
+  '</div>';
+
+  // Desglose por categoría o por centro de costo, según STATE.resumenFiltros.vista: total neto (ingresos - egresos), más
+  // cantidad de movimientos (para distinguir "un gasto grande puntual" de "muchos gastos chicos"). No incluye Sueldo (queda afuera de esta comparación, como Obra).
   var porGrupo = {};
   movsResto.forEach(function(m){
     var key = f.vista === 'centro' ? (m.centroId||'') : (m.categoriaId||'');
-    porGrupo[key] = (porGrupo[key]||0) + (Number(m.ingreso)||0) - (Number(m.egreso)||0);
+    if(!porGrupo[key]) porGrupo[key] = {monto:0, cant:0};
+    porGrupo[key].monto += (Number(m.ingreso)||0) - (Number(m.egreso)||0);
+    porGrupo[key].cant++;
   });
   var lista = Object.keys(porGrupo).map(function(k){
     var nombre = f.vista === 'centro' ? (k ? nombreCentro(k).split(' · ')[0] : 'Sin centro') : (k ? nombreCategoria(k) : 'Sin categoría');
-    return { nombre: nombre, monto: porGrupo[k] };
+    return { nombre: nombre, monto: porGrupo[k].monto, cant: porGrupo[k].cant };
   }).filter(function(x){return x.monto!==0;}).sort(function(a,b){ return Math.abs(b.monto)-Math.abs(a.monto); });
   var maxBar = lista.length ? Math.abs(lista[0].monto) : 1;
 
+  function etiquetaCant(cant){ return ' <span style="color:var(--ink-soft);font-weight:400">('+cant+' mov.)</span>'; }
   var bars = lista.map(function(x){
     var pct = maxBar ? Math.round((Math.abs(x.monto)/maxBar)*100) : 0;
     var claseColor = x.monto >= 0 ? 'ingreso' : 'egreso';
-    return '<div class="bar-row"><div class="name">'+esc(x.nombre)+'</div>'+
+    return '<div class="bar-row"><div class="name">'+esc(x.nombre)+etiquetaCant(x.cant)+'</div>'+
       '<div class="bar-track"><div class="bar-fill '+claseColor+'-fill" style="width:'+pct+'%"></div></div>'+
       '<div class="amt '+claseColor+'">'+fmtMonto(x.monto)+'</div></div>';
   }).join('');
@@ -2978,6 +3040,28 @@ function renderResumen(){
       '<div class="name">Total</div><div class="bar-track"></div>'+
       '<div class="amt '+claseColorTotalLista+'">'+fmtMonto(totalLista)+'</div>'+
     '</div>' : '';
+
+  // Top proveedores: mismo recorte que "Total por Categoría/Centro" (movsResto: sin TEC/Sueldo/Obra)
+  // pero agrupado por proveedor en vez de por categoría -- suele ser más accionable ("Coto: -$65.000
+  // en 3 compras" dice más que "Supermercado: -$120.000").
+  var porProveedor = {};
+  movsResto.forEach(function(m){
+    var key = (m.proveedor||'').trim() || 'Sin proveedor';
+    if(!porProveedor[key]) porProveedor[key] = {monto:0, cant:0};
+    porProveedor[key].monto += (Number(m.ingreso)||0) - (Number(m.egreso)||0);
+    porProveedor[key].cant++;
+  });
+  var listaProveedores = Object.keys(porProveedor).map(function(k){
+    return { nombre:k, monto:porProveedor[k].monto, cant:porProveedor[k].cant };
+  }).filter(function(x){return x.monto!==0;}).sort(function(a,b){ return Math.abs(b.monto)-Math.abs(a.monto); }).slice(0,8);
+  var maxBarProv = listaProveedores.length ? Math.max.apply(null, listaProveedores.map(function(x){return Math.abs(x.monto);})) : 1;
+  var barsProveedores = listaProveedores.map(function(x){
+    var pct = maxBarProv ? Math.round((Math.abs(x.monto)/maxBarProv)*100) : 0;
+    var claseColor = x.monto >= 0 ? 'ingreso' : 'egreso';
+    return '<div class="bar-row"><div class="name">'+esc(x.nombre)+etiquetaCant(x.cant)+'</div>'+
+      '<div class="bar-track"><div class="bar-fill '+claseColor+'-fill" style="width:'+pct+'%"></div></div>'+
+      '<div class="amt '+claseColor+'">'+fmtMonto(x.monto)+'</div></div>';
+  }).join('');
 
   // Donut: top 8 + "Otros" (no incluye Obra, que ya tiene su propia tarjeta aparte). Usa el valor absoluto para el tamaño de cada porción (una torta no puede tener porciones negativas), pero muestra el monto real (con signo) en la leyenda.
   var segmentos = lista.slice(0,8).map(function(x,i){ return {label:x.nombre, value:Math.abs(x.monto), montoReal:x.monto, color:PALETA_DONUT[i%PALETA_DONUT.length]}; });
@@ -3020,11 +3104,12 @@ function renderResumen(){
       '</select></div>'+
     '</div>'+
   '</div>'+
+  estadoActualHtml+
   '<div class="summary-cards">'+
-    '<div class="summary-card"><div class="kpi-ic kpi-ic-accent"><i class="bi bi-arrow-up"></i></div><div class="label">Total ingresos</div><div class="value ingreso">'+fmtMonto(totalIngreso)+'</div></div>'+
-    '<div class="summary-card"><div class="kpi-ic kpi-ic-danger"><i class="bi bi-arrow-down"></i></div><div class="label">Total egresos</div><div class="value egreso">'+fmtMonto(totalEgreso)+'</div></div>'+
+    '<div class="summary-card"><div class="kpi-ic kpi-ic-accent"><i class="bi bi-arrow-up"></i></div><div class="label">Total ingresos</div><div class="value ingreso">'+fmtMonto(totalIngreso)+'</div>'+deltaHtml(totalIngreso, true, anterior?anterior.totalIngreso:null)+'</div>'+
+    '<div class="summary-card"><div class="kpi-ic kpi-ic-danger"><i class="bi bi-arrow-down"></i></div><div class="label">Total egresos</div><div class="value egreso">'+fmtMonto(totalEgreso)+'</div>'+deltaHtml(totalEgreso, false, anterior?anterior.totalEgreso:null)+'</div>'+
     '<div class="summary-card"><div class="kpi-ic kpi-ic-warning"><i class="bi bi-building"></i></div><div class="label">Obra</div><div class="value egreso">'+fmtMonto(totalObra)+'</div></div>'+
-    '<div class="summary-card"><div class="kpi-ic kpi-ic-accent"><i class="bi bi-wallet2"></i></div><div class="label">Saldo</div><div class="value">'+fmtMonto(saldo)+'</div></div>'+
+    '<div class="summary-card"><div class="kpi-ic kpi-ic-accent"><i class="bi bi-wallet2"></i></div><div class="label">Saldo</div><div class="value">'+fmtMonto(saldo)+'</div>'+(tasaAhorro!==null?'<div style="font-size:11px;color:var(--ink-soft);margin-top:2px">'+tasaAhorro+'% del ingreso</div>':'')+deltaHtml(saldo, true, anterior?anterior.saldo:null)+'</div>'+
   '</div>'+
   '<div class="card">'+
     '<h3>Tendencia mensual (Ingresos vs Egresos)</h3>'+
@@ -3040,6 +3125,11 @@ function renderResumen(){
     '<h3>Total por '+(f.vista==='centro'?'Centro de Costo':'Categoría')+'</h3>'+
     '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Ingresos menos egresos de cada '+(f.vista==='centro'?'centro':'categoría')+'. Verde = neto a favor (ingreso), coral = neto en contra (egreso). No incluye TEC (transferencias entre cuentas), Obra ni Sueldo (quedan afuera de esta comparación).</div>'+
     (lista.length ? bars+totalListaHtml : '<div class="empty">Todavía no hay movimientos cargados.</div>')+
+  '</div>'+
+  '<div class="card">'+
+    '<h3>Top proveedores</h3>'+
+    '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Los 8 proveedores con mayor movimiento neto en el período filtrado (mismo recorte que "Total por '+(f.vista==='centro'?'Centro de Costo':'Categoría')+'" de arriba: sin TEC, Sueldo ni Obra).</div>'+
+    (listaProveedores.length ? barsProveedores : '<div class="empty">Todavía no hay movimientos cargados.</div>')+
   '</div>'+
   '<div class="card">'+
     '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:4px">'+
