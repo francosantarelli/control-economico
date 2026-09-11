@@ -283,6 +283,15 @@ tr.fila-duplicada{ background:var(--danger-soft); }
 tr.fila-duplicada:hover{ background:#F5D9D2; }
 tr.fila-grupo-tarjeta{ background:var(--bg); }
 #tabla-movimientos tr.fila-grupo-tarjeta:hover{ background:var(--bg); }
+/* Al desplegar, las filas de detalle comparten el mismo tinte que el resumen (en vez de quedar
+   blancas como una fila de movimiento suelto) para que se lea el grupo completo como una unidad,
+   sin mezclarse con las filas normales de arriba/abajo. */
+tr.fila-detalle-tarjeta{ background:var(--bg); }
+#tabla-movimientos tr.fila-detalle-tarjeta:hover{ background:var(--bg); }
+/* La fila con datos faltantes sigue ganando (el aviso de "hay que categorizar" importa más que
+   el tinte de grupo) — misma especificidad que la regla de arriba, así que se define explícita. */
+tr.fila-detalle-tarjeta.fila-incompleta{ background:var(--danger-soft); }
+#tabla-movimientos tr.fila-detalle-tarjeta.fila-incompleta:hover{ background:#F5D9D2; }
 tr.fila-detalle-tarjeta td{ border-bottom-style:dashed; }
 tfoot td{ border-top:2px solid var(--accent); border-bottom:none; font-weight:600; font-family:'Geist Mono',ui-monospace,Consolas,monospace; font-variant-numeric:tabular-nums; }
 

@@ -2042,7 +2042,7 @@ function renderMovimientos(){
     return '<tr class="fila-detalle-tarjeta'+(incompleto?' fila-incompleta':'')+'"'+tituloFila+'>'+
       '<td data-label=""><input type="checkbox" class="chk-select-mov" data-mov-id="'+m.id+'" '+(seleccionados.indexOf(m.id)!==-1?'checked':'')+'></td>'+
       '<td class="mono" data-label="Fecha de consumo">'+(incompleto?'<i class="bi bi-exclamation-triangle"></i> ':'')+esc(m.fechaConsumo?fechaISOaDDMMAAAA(m.fechaConsumo):'—')+'</td>'+
-      '<td class="mono" data-label="Cuotas" style="color:var(--ink-soft)">'+(m.cuotas?esc(m.cuotas):'↳')+'</td>'+
+      '<td class="mono" data-label="Cuotas" style="color:var(--ink-soft)">'+(m.cuotas?esc(m.cuotas):'<i class="bi bi-link-45deg" title="Vinculado al resumen de tarjeta, sin cuota individual"></i>')+'</td>'+
       celdas.categoria + celdas.subcategoria + celdas.proveedor + celdas.detalle +
       '<td class="num ingreso" data-label="Ingreso">'+(Number(m.ingreso)?fmtMonto(m.ingreso):'')+'</td>'+
       '<td class="num egreso" data-label="Egreso">'+(Number(m.egreso)?fmtMonto(m.egreso):'')+'</td>'+
