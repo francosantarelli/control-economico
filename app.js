@@ -2575,7 +2575,7 @@ function renderVencimientos(){
     (!pendientesMov.length ? '<div class="empty">No hay movimientos con fecha futura.</div>' : '')+
   '</div>';
 
-  return formHtml + tablePendientesMovHtml + tableHtml + tablePagadosHtml;
+  return formHtml + tableHtml + tablePendientesMovHtml + tablePagadosHtml;
 }
 
 // ===================== SALDOS =====================
