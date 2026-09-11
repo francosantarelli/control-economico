@@ -12,6 +12,31 @@
   --danger-soft:#FBEAE6;
   --warning:#B8863E;
   --warning-soft:#F7EEDC;
+
+  /* Mapeo de Bootstrap 5.3 sobre nuestra propia paleta (no el azul/índigo por defecto). Como estas
+     variables apuntan a var(--accent) etc. en vez de a valores fijos, heredan el modo oscuro gratis
+     apenas cambian las variables base de arriba — no hace falta duplicar nada acá. */
+  --bs-body-bg: var(--bg);
+  --bs-body-color: var(--ink);
+  --bs-secondary-color: var(--ink-soft);
+  --bs-border-color: var(--rule);
+  --bs-body-font-family: 'Geist', sans-serif;
+  --bs-body-font-size: 14px;
+  --bs-link-color: var(--accent);
+  --bs-link-hover-color: var(--accent);
+  --bs-primary: var(--accent);
+  --bs-primary-rgb: 78, 157, 119;
+  --bs-success: var(--accent);
+  --bs-success-rgb: 78, 157, 119;
+  --bs-danger: var(--danger);
+  --bs-danger-rgb: 217, 123, 108;
+  --bs-warning: var(--warning);
+  --bs-warning-rgb: 184, 134, 62;
+  --bs-card-bg: var(--paper);
+  --bs-card-border-color: var(--rule);
+  --bs-border-radius: 10px;
+  --bs-border-radius-sm: 6px;
+  --bs-border-radius-lg: 14px;
 }
 :root[data-theme="oscuro"]{
   --bg:#141B17;
@@ -25,6 +50,10 @@
   --danger-soft:#3A241F;
   --warning:#D9AB5C;
   --warning-soft:#3A311D;
+  /* --bs-warning-rgb es un triplete RGB estático (Bootstrap la usa para rgba() en focus rings, alerts,
+     etc.) — no se puede derivar de --warning en CSS puro, así que se redefine acá para que el modo
+     oscuro no quede con el rgb del amarillo claro. El resto de los --bs-*-rgb no cambian entre temas. */
+  --bs-warning-rgb: 217, 171, 92;
 }
 :root[data-theme="oscuro"] #tabla-movimientos tr.fila-incompleta:hover,
 :root[data-theme="oscuro"] tr.fila-duplicada:hover{ background:#4A2E28; }
@@ -45,7 +74,7 @@ h1,h2,h3{ font-family:'Geist',sans-serif; font-weight:600; margin:0; }
 
 .layout{ display:flex; align-items:flex-start; min-height:100vh; }
 .sidebar{
-  width:64px; flex-shrink:0; padding:20px 8px; border-right:1px solid var(--rule);
+  width:240px; flex-shrink:0; padding:20px 14px; border-right:1px solid var(--rule);
   position:sticky; top:0; align-self:flex-start; height:100vh; overflow-y:auto; box-sizing:border-box;
 }
 .main-content{ flex:1; min-width:0; padding:28px 24px 60px; }
@@ -54,26 +83,32 @@ h1,h2,h3{ font-family:'Geist',sans-serif; font-weight:600; margin:0; }
 .sidebar-backdrop{ display:none; }
 .hamburger-btn{ background:none; border:none; color:var(--ink); font-size:22px; padding:6px 10px; min-height:auto; line-height:1; }
 
-/* En la franja angosta de escritorio solo queda un ícono de marca; el nombre completo
-   ("Control") se ve en el mobile-topbar y en el título de sección de arriba a la derecha. */
+/* Marca del sidebar: ícono en badge + nombre, como en el resto del dashboard (antes solo quedaba
+   el emoji en la franja angosta de escritorio; ahora el riel es ancho y muestra el nombre siempre). */
 .masthead{
-  border-bottom:2px solid var(--accent); padding-bottom:14px; margin-bottom:16px; text-align:center;
+  display:flex; align-items:center; gap:10px;
+  border-bottom:2px solid var(--accent); padding-bottom:14px; margin-bottom:16px; text-align:left;
 }
-.masthead h1, .masthead .tagline{ display:none; }
-.masthead::before{ content:"💰"; font-size:24px; line-height:1; display:block; }
+.masthead h1{ display:block; font-size:17px; }
+.masthead .tagline{ display:none; }
+.masthead::before{
+  content:"💰"; font-size:17px; line-height:1; flex-shrink:0;
+  width:34px; height:34px; border-radius:9px; background:var(--accent);
+  display:flex; align-items:center; justify-content:center;
+}
 
 .tabs{
   display:flex; flex-direction:column; gap:2px;
 }
 .tab{
-  padding:11px 6px; cursor:pointer; font-size:13px; color:var(--ink-soft);
-  border-left:3px solid transparent; user-select:none; font-weight:500; border-radius:0 6px 6px 0;
-  display:flex; align-items:center; justify-content:center; gap:9px;
+  padding:10px 12px; cursor:pointer; font-size:13.5px; color:var(--ink-soft);
+  user-select:none; font-weight:500; border-radius:8px;
+  display:flex; align-items:center; justify-content:flex-start; gap:11px;
 }
-.tab-icon{ font-size:17px; line-height:1; }
-.tab-label{ display:none; }
+.tab-icon{ font-size:16px; line-height:1; width:18px; text-align:center; flex-shrink:0; }
+.tab-label{ display:inline; }
 .tab:hover{ color:var(--ink); background:var(--accent-soft); }
-.tab.active{ color:var(--accent); border-left-color:var(--accent); background:var(--accent-soft); font-weight:600; }
+.tab.active{ color:#fff; background:var(--accent); font-weight:600; }
 
 .subtabs{ display:flex; gap:8px; margin-bottom:16px; }
 .subtab{
@@ -162,14 +197,14 @@ input[type=color]{
   background:var(--paper); cursor:pointer;
 }
 
-/* Barra superior de escritorio: solo aloja el menú de usuario, arriba a la derecha */
+/* Barra superior de escritorio: título de la sección + menú de usuario */
 .topbar-desktop{
   display:flex; justify-content:space-between; align-items:center;
-  margin:-28px -24px 20px; padding:10px 24px;
-  background:var(--accent-soft); border-bottom:2px solid var(--accent);
+  margin:-28px -24px 20px; padding:14px 24px;
+  background:var(--paper); border-bottom:1px solid var(--rule);
   position:sticky; top:0; z-index:40;
 }
-.topbar-titulo{ font-size:19px; color:var(--accent); }
+.topbar-titulo{ font-size:16px; font-weight:600; color:var(--ink); }
 
 /* Menú de usuario (avatar con iniciales + dropdown de tema/cerrar sesión) */
 .user-menu-wrap{ position:relative; }
@@ -260,9 +295,14 @@ tfoot td{ border-top:2px solid var(--accent); border-bottom:none; font-weight:60
 .filters{ display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
 .actions-cell{ white-space:nowrap; }
 .summary-cards{ display:flex; gap:14px; margin-bottom:18px; flex-wrap:wrap; }
-.summary-card{ flex:1; min-width:150px; background:var(--paper); border:1px solid var(--rule); border-radius:6px; padding:14px 16px; }
-.summary-card .label{ font-size:11px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.03em; }
+.summary-card{ flex:1; min-width:150px; background:var(--paper); border:1px solid var(--rule); border-radius:var(--bs-border-radius-lg); padding:16px 18px; }
+.summary-card .label{ font-size:11px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.03em; font-weight:600; }
 .summary-card .value{ font-family:'Geist Mono',ui-monospace,Consolas,monospace; font-variant-numeric:tabular-nums; font-size:22px; margin-top:4px; }
+/* Ícono en badge circular de cada KPI (estilo dashboard financiero) */
+.kpi-ic{ width:40px; height:40px; border-radius:11px; display:flex; align-items:center; justify-content:center; font-size:18px; margin-bottom:12px; }
+.kpi-ic-accent{ background:var(--accent-soft); color:var(--accent); }
+.kpi-ic-danger{ background:var(--danger-soft); color:var(--danger); }
+.kpi-ic-warning{ background:var(--warning-soft); color:var(--warning); }
 
 /* Saldos: columnas por titular, cada Centro de Costo en su propia tarjetita */
 .saldos-grupos{ display:flex; gap:20px; flex-wrap:wrap; align-items:flex-start; }
@@ -327,14 +367,9 @@ footer.small{ margin-top:28px; font-size:11px; color:var(--ink-soft); text-align
     padding:16px; padding-top:calc(16px + env(safe-area-inset-top));
   }
   .sidebar.abierto{ transform:translateX(0); box-shadow:4px 0 16px rgba(0,0,0,.25); }
-  /* El drawer de mobile no es una franja angosta permanente: se ve la marca y el texto completos */
-  .masthead{ text-align:left; }
-  .masthead::before{ display:none; }
-  .masthead h1, .masthead .tagline{ display:block; }
-  .tabs{ flex-direction:column; }
-  .tab{ border-left:3px solid transparent; border-bottom:none; border-radius:0 6px 6px 0; padding:10px 12px; justify-content:flex-start; }
-  .tab.active{ border-bottom:none; border-left-color:var(--accent); }
-  .tab-label{ display:inline; }
+  /* El drawer de mobile tiene más lugar que el riel de escritorio: mostramos también el subtítulo
+     (el resto — ícono, nombre, tabs con etiqueta — ya se ve igual por las reglas base de arriba). */
+  .masthead .tagline{ display:block; }
   .main-content{ padding:16px; padding-bottom:calc(16px + env(safe-area-inset-bottom)); }
 
   .card{ padding:14px; border-radius:8px; }

@@ -2997,10 +2997,10 @@ function renderResumen(){
     '</div>'+
   '</div>'+
   '<div class="summary-cards">'+
-    '<div class="summary-card"><div class="label">Total ingresos</div><div class="value ingreso">'+fmtMonto(totalIngreso)+'</div></div>'+
-    '<div class="summary-card"><div class="label">Total egresos</div><div class="value egreso">'+fmtMonto(totalEgreso)+'</div></div>'+
-    '<div class="summary-card"><div class="label">Obra</div><div class="value egreso">'+fmtMonto(totalObra)+'</div></div>'+
-    '<div class="summary-card"><div class="label">Saldo</div><div class="value">'+fmtMonto(saldo)+'</div></div>'+
+    '<div class="summary-card"><div class="kpi-ic kpi-ic-accent">↑</div><div class="label">Total ingresos</div><div class="value ingreso">'+fmtMonto(totalIngreso)+'</div></div>'+
+    '<div class="summary-card"><div class="kpi-ic kpi-ic-danger">↓</div><div class="label">Total egresos</div><div class="value egreso">'+fmtMonto(totalEgreso)+'</div></div>'+
+    '<div class="summary-card"><div class="kpi-ic kpi-ic-warning">🏗</div><div class="label">Obra</div><div class="value egreso">'+fmtMonto(totalObra)+'</div></div>'+
+    '<div class="summary-card"><div class="kpi-ic kpi-ic-accent">Σ</div><div class="label">Saldo</div><div class="value">'+fmtMonto(saldo)+'</div></div>'+
   '</div>'+
   '<div class="card">'+
     '<h3>Tendencia mensual (Ingresos vs Egresos)</h3>'+
