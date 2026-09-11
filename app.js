@@ -2188,7 +2188,7 @@ function renderMovimientos(){
     '<h3>Movimientos ('+lista.length+')</h3>'+
     barraSeleccionHtml+
     (lista.length ? ''+
-    '<table id="tabla-movimientos" class="tabla-movil"><thead><tr><th><input type="checkbox" id="chk-select-all-mov" '+(todosVisiblesSeleccionados?'checked':'')+'></th><th>Fecha</th><th>CC</th><th>Categoría</th><th>Subcategoría</th><th>Proveedor</th><th>Detalle</th><th class="num">Ingreso</th><th class="num">Egreso</th><th></th></tr></thead>'+
+    '<table id="tabla-movimientos" class="table tabla-movil"><thead><tr><th><input type="checkbox" id="chk-select-all-mov" '+(todosVisiblesSeleccionados?'checked':'')+'></th><th>Fecha</th><th>CC</th><th>Categoría</th><th>Subcategoría</th><th>Proveedor</th><th>Detalle</th><th class="num">Ingreso</th><th class="num">Egreso</th><th></th></tr></thead>'+
     '<tbody>'+rows+'</tbody>'+
     '<tfoot><tr><td colspan="7" data-label="">Totales (sin TEC)</td><td class="num ingreso" data-label="Total Ingreso">'+fmtMonto(totalIngreso)+'</td><td class="num egreso" data-label="Total Egreso">'+fmtMonto(totalEgreso)+'</td><td class="num '+(totalIngreso-totalEgreso>=0?'ingreso':'egreso')+'" data-label="Ingresos - Egresos">'+fmtMonto(totalIngreso-totalEgreso)+'</td></tr></tfoot>'+
     '</table>' : '<div class="empty">No hay movimientos que coincidan con los filtros.</div>')+
@@ -2293,7 +2293,7 @@ function renderImportar(){
     '<div class="card">'+
       '<h3>Previsualización ('+STATE.importPreview.length+' movimiento(s), '+incluidos+' seleccionado(s))</h3>'+
       (duplicados>0 ? '<div class="msg err">⚠️ '+duplicados+' fila(s) marcada(s) como posible duplicado (mismo Centro, fecha y monto que otro movimiento). Revisalas antes de confirmar.</div>' : '')+
-      '<table id="import-preview-table"><thead><tr><th></th><th>Fecha</th><th>Fecha de consumo</th><th>Centro</th><th>Categoría</th><th>Subcategoría</th><th>Proveedor</th><th>Detalle</th><th>Cuotas</th><th class="num">Ingreso</th><th class="num">Egreso</th><th title="Guardar la relación proveedor → categoría como regla para futuras importaciones">Regla</th></tr></thead>'+
+      '<table id="import-preview-table" class="table"><thead><tr><th></th><th>Fecha</th><th>Fecha de consumo</th><th>Centro</th><th>Categoría</th><th>Subcategoría</th><th>Proveedor</th><th>Detalle</th><th>Cuotas</th><th class="num">Ingreso</th><th class="num">Egreso</th><th title="Guardar la relación proveedor → categoría como regla para futuras importaciones">Regla</th></tr></thead>'+
       '<tbody>'+rows+'</tbody></table>'+
       '<div class="row" style="margin-top:14px">'+
         '<button data-action="confirm-import">Importar '+incluidos+' movimiento(s)</button>'+
@@ -2337,7 +2337,7 @@ function renderImportar(){
       '<h3>Previsualización ('+STATE.importPreviewExcel.length+' movimiento(s), '+incluidosExcel+' seleccionado(s))</h3>'+
       (nuevosCC>0||nuevasCat>0 ? '<div class="msg ok">Se van a crear automáticamente: '+nuevosCC+' Centro(s) de Costo nuevo(s), '+nuevasCat+' Categoría(s) nueva(s) (marcados en rojo abajo). Revisá que no sean errores de tipeo antes de confirmar.</div>' : '')+
       (duplicadosExcel>0 ? '<div class="msg err">⚠️ '+duplicadosExcel+' fila(s) marcada(s) como posible duplicado (mismo Centro, fecha y monto que otro movimiento). Revisalas antes de confirmar.</div>' : '')+
-      '<table id="import-preview-excel-table"><thead><tr><th></th><th>Fecha</th><th>CC</th><th>Categoría</th><th>Subcategoría</th><th>Proveedor</th><th>Detalle</th><th class="num">Ingreso</th><th class="num">Egreso</th></tr></thead>'+
+      '<table id="import-preview-excel-table" class="table"><thead><tr><th></th><th>Fecha</th><th>CC</th><th>Categoría</th><th>Subcategoría</th><th>Proveedor</th><th>Detalle</th><th class="num">Ingreso</th><th class="num">Egreso</th></tr></thead>'+
       '<tbody>'+rowsExcel+'</tbody></table>'+
       '<div class="row" style="margin-top:14px">'+
         '<button data-action="confirm-import-excel">Importar '+incluidosExcel+' movimiento(s)</button>'+
@@ -2365,7 +2365,7 @@ function renderImportar(){
       '<div class="field" style="justify-content:flex-end"><button data-action="agregar-regla">Agregar regla</button></div>'+
     '</div>'+
     (reglasOrdenadas.length ? ''+
-      '<div style="overflow-x:auto"><table><thead><tr><th>Proveedor</th><th>Categoría</th><th>Subcategoría</th><th></th></tr></thead>'+
+      '<div style="overflow-x:auto"><table class="table"><thead><tr><th>Proveedor</th><th>Categoría</th><th>Subcategoría</th><th></th></tr></thead>'+
       '<tbody>'+filasReglas+'</tbody></table></div>'
       : '<div class="empty">Todavía no hay reglas guardadas.</div>')+
   '</div>';
@@ -2873,7 +2873,7 @@ function renderGrillaMensual(movs, rango){
     '<td class="num mono '+(granTotal>=0?'ingreso':'egreso')+'">'+fmtMonto(granTotal)+'</td></tr>';
 
   return '<div style="overflow-x:auto">'+
-    '<table><thead><tr><th>Categoría</th>'+headerCols+'<th class="num">Total</th></tr></thead>'+
+    '<table class="table"><thead><tr><th>Categoría</th>'+headerCols+'<th class="num">Total</th></tr></thead>'+
     '<tbody>'+rows+'</tbody>'+
     '<tfoot>'+filaTotalSinObra+filaTotales+'</tfoot>'+
     '</table></div>';
