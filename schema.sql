@@ -10,6 +10,7 @@ create table centros (
   nombre text not null,
   color text,  -- color de fondo del chip en Movimientos y ABM, ej: '#4E9D77'
   color_texto text,  -- color de texto del chip (opcional); si es null, se calcula el contraste automático
+  entidad text,  -- banco/billetera para el logo en Saldos: 'santander' | 'nacion' | 'provincia' | 'icbc' | 'mercadopago' | null
   created_at timestamptz default now()
 );
 

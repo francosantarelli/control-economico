@@ -9,14 +9,15 @@ beforeEach(() => { win = loadApp(); });
 
 describe('centro', () => {
   it('toDbCentro -> fromDbCentro conserva los datos', () => {
-    const centro = { id: 'c1', codigo: 'EF', nombre: 'Efectivo Franco', color: '#4E9D77', colorTexto: '#fff' };
+    const centro = { id: 'c1', codigo: 'EF', nombre: 'Efectivo Franco', color: '#4E9D77', colorTexto: '#fff', entidad: 'santander' };
     expect(win.fromDbCentro(win.toDbCentro(centro))).toEqual(centro);
   });
-  it('color/colorTexto ausentes se guardan como null y vuelven como string vacío', () => {
+  it('color/colorTexto/entidad ausentes se guardan como null y vuelven como string vacío', () => {
     const row = win.toDbCentro({ id: 'c1', codigo: 'EF', nombre: 'Efectivo Franco' });
     expect(row.color).toBeNull();
     expect(row.color_texto).toBeNull();
-    expect(win.fromDbCentro(row)).toEqual({ id: 'c1', codigo: 'EF', nombre: 'Efectivo Franco', color: '', colorTexto: '' });
+    expect(row.entidad).toBeNull();
+    expect(win.fromDbCentro(row)).toEqual({ id: 'c1', codigo: 'EF', nombre: 'Efectivo Franco', color: '', colorTexto: '', entidad: '' });
   });
 });
 

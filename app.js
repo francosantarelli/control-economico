@@ -282,8 +282,8 @@ function uid(){
 }
 
 // ---- Mapeo entre el modelo JS (camelCase) y las columnas de Supabase (snake_case) ----
-function toDbCentro(c){ return {id:c.id, codigo:c.codigo, nombre:c.nombre, color:c.color||null, color_texto:c.colorTexto||null}; }
-function fromDbCentro(r){ return {id:r.id, codigo:r.codigo, nombre:r.nombre, color:r.color||'', colorTexto:r.color_texto||''}; }
+function toDbCentro(c){ return {id:c.id, codigo:c.codigo, nombre:c.nombre, color:c.color||null, color_texto:c.colorTexto||null, entidad:c.entidad||null}; }
+function fromDbCentro(r){ return {id:r.id, codigo:r.codigo, nombre:r.nombre, color:r.color||'', colorTexto:r.color_texto||'', entidad:r.entidad||''}; }
 function toDbCategoria(c){ return {id:c.id, nombre:c.nombre, tipo:c.tipo||null, color:c.color||null, color_texto:c.colorTexto||null}; }
 function fromDbCategoria(r){ return {id:r.id, nombre:r.nombre, tipo:r.tipo||'', color:r.color||'', colorTexto:r.color_texto||''}; }
 function toDbSubcategoria(s){ return {id:s.id, categoria_id:s.categoriaId||null, nombre:s.nombre}; }
@@ -1573,14 +1573,26 @@ function renderInterno(){
 var MODAL_HTML = '';
 
 // ===================== CENTROS DE COSTO =====================
-function campoCentro(codigo, nombre, color){
+var ENTIDADES = [
+  {id:'', label:'(sin asignar)'},
+  {id:'santander', label:'Santander'},
+  {id:'nacion', label:'Banco Nación'},
+  {id:'provincia', label:'Banco Provincia'},
+  {id:'icbc', label:'ICBC'},
+  {id:'mercadopago', label:'Mercado Pago'}
+];
+function campoCentro(codigo, nombre, color, entidad){
   return '<div class="field"><label>Código (CC)</label><input type="text" id="f-centro-codigo" placeholder="Ej: MPF" value="'+esc(codigo)+'" style="width:100px;text-transform:uppercase"></div>'+
     '<div class="field"><label>Nombre</label><input type="text" id="f-centro-nombre" placeholder="Ej: Mercado Pago" value="'+esc(nombre)+'" style="width:220px"></div>'+
-    '<div class="field"><label>Color</label><input type="color" id="f-centro-color" value="'+esc(color)+'"></div>';
+    '<div class="field"><label>Color</label><input type="color" id="f-centro-color" value="'+esc(color)+'"></div>'+
+    '<div class="field"><label>Entidad</label><select id="f-centro-entidad">'+
+      ENTIDADES.map(function(e){ return '<option value="'+e.id+'"'+(e.id===(entidad||'')?' selected':'')+'>'+e.label+'</option>'; }).join('')+
+    '</select></div>';
 }
 function renderCentros(){
   var rows = STATE.centros.map(function(c){
     return '<tr><td data-label="Código">'+renderChip(c.codigo, colorCentro(c.id), colorTextoCentro(c.id))+'</td><td data-label="Nombre">'+esc(c.nombre)+'</td>'+
+      '<td data-label="Entidad">'+logoEntidadHtml(c)+'</td>'+
       '<td class="actions-cell"><button class="link" data-action="edit-centro" data-id="'+c.id+'">editar</button>'+
       '<button class="link" data-action="del-centro" data-id="'+c.id+'">borrar</button></td></tr>';
   }).join('');
@@ -1589,7 +1601,7 @@ function renderCentros(){
   if(editing){
     MODAL_HTML = '<div class="modal-overlay" data-modal-backdrop="edit"><div class="modal-card">'+
       '<h2>Editar centro de costo</h2>'+
-      '<div class="fields-row">'+ campoCentro(editing.codigo, editing.nombre, colorCentro(editing.id)) +'</div>'+
+      '<div class="fields-row">'+ campoCentro(editing.codigo, editing.nombre, colorCentro(editing.id), editing.entidad) +'</div>'+
       '<div class="fields-row" style="margin-top:14px">'+
         '<button data-action="save-centro" data-id="'+editing.id+'">Guardar cambios</button>'+
         '<button class="secondary" data-action="cancel-edit">Cancelar</button>'+
@@ -1600,7 +1612,7 @@ function renderCentros(){
   var formNuevoCentro = editing ? '' : ''+
   '<div class="card">'+
     '<h2>Nuevo centro de costo</h2>'+
-    '<div class="fields-row">'+ campoCentro('', '', PALETA_DONUT[STATE.centros.length % PALETA_DONUT.length]) +
+    '<div class="fields-row">'+ campoCentro('', '', PALETA_DONUT[STATE.centros.length % PALETA_DONUT.length], '') +
       '<button data-action="save-centro" data-id="">Agregar</button>'+
     '</div>'+
   '</div>';
@@ -1608,7 +1620,7 @@ function renderCentros(){
   return formNuevoCentro +
   '<div class="card">'+
     '<h3>Centros de costo cargados</h3>'+
-    (STATE.centros.length ? '<table class="table tabla-movil"><thead><tr><th>Código</th><th>Nombre</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>' : '<div class="empty">Todavía no cargaste ningún centro de costo.</div>')+
+    (STATE.centros.length ? '<table class="table tabla-movil"><thead><tr><th>Código</th><th>Nombre</th><th>Entidad</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>' : '<div class="empty">Todavía no cargaste ningún centro de costo.</div>')+
   '</div>';
 }
 
@@ -2601,7 +2613,7 @@ function calcularSaldos(){
   });
 
   var filas = STATE.centros.map(function(c){
-    return { id:c.id, codigo:c.codigo, nombre:c.nombre, titular: titularDeCentro(c.codigo), saldo: saldoPorCentro[c.id]||0 };
+    return { id:c.id, codigo:c.codigo, nombre:c.nombre, entidad:c.entidad, titular: titularDeCentro(c.codigo), saldo: saldoPorCentro[c.id]||0 };
   }).sort(function(a,b){ return a.titular.localeCompare(b.titular) || a.codigo.localeCompare(b.codigo); });
 
   var totalAna = filas.filter(function(f){return f.titular==='Ana';}).reduce(function(s,f){return s+f.saldo;},0);
@@ -2619,15 +2631,26 @@ function obtenerSaldos(){
   }
   return STATE.saldosCache;
 }
-// Detecta la entidad a partir del nombre del Centro de Costo (texto libre en ABM) para mostrar
-// su logo en Saldos. Mercado Pago todavía no tiene un isologo propio disponible, usa badge de color.
-function logoEntidadHtml(nombre){
-  var n = (nombre||'').toLowerCase().replace(/á/g,'a').replace(/é/g,'e').replace(/í/g,'i').replace(/ó/g,'o').replace(/ú/g,'u').replace(/ñ/g,'n');
+// Logo/badge de la entidad de un Centro de Costo, para Saldos y ABM. Usa el campo explícito
+// `entidad` (elegido en ABM); si todavía no está cargado, adivina por el nombre como fallback
+// para no dejar en blanco los centros viejos. Mercado Pago e ICBC no tienen isologo propio
+// limpio disponible en Wikimedia Commons: Mercado Pago usa un badge de color de marca.
+function logoEntidadHtml(centro){
+  var e = (centro.entidad||'').toLowerCase();
+  if(!e){
+    var n = (centro.nombre||'').toLowerCase().replace(/á/g,'a').replace(/é/g,'e').replace(/í/g,'i').replace(/ó/g,'o').replace(/ú/g,'u').replace(/ñ/g,'n');
+    if(n.indexOf('santander')>-1) e = 'santander';
+    else if(n.indexOf('nacion')>-1) e = 'nacion';
+    else if(n.indexOf('provincia')>-1) e = 'provincia';
+    else if(n.indexOf('icbc')>-1) e = 'icbc';
+    else if(n.indexOf('mercado pago')>-1 || n.indexOf('mercadopago')>-1) e = 'mercadopago';
+  }
   var base = '/control-economico/assets/logos/';
-  if(n.indexOf('santander')>-1) return '<img class="entidad-logo" src="'+base+'santander.svg" alt="Santander" title="Santander">';
-  if(n.indexOf('nacion')>-1) return '<img class="entidad-logo" src="'+base+'nacion.svg" alt="Banco Nación" title="Banco Nación">';
-  if(n.indexOf('provincia')>-1) return '<img class="entidad-logo" src="'+base+'provincia.svg" alt="Banco Provincia" title="Banco Provincia">';
-  if(n.indexOf('mercado pago')>-1 || n.indexOf('mercadopago')>-1) return '<span class="entidad-badge" title="Mercado Pago">MP</span>';
+  if(e==='santander') return '<img class="entidad-logo" src="'+base+'santander.svg" alt="Santander" title="Santander">';
+  if(e==='nacion') return '<img class="entidad-logo" src="'+base+'nacion.svg" alt="Banco Nación" title="Banco Nación">';
+  if(e==='provincia') return '<img class="entidad-logo" src="'+base+'provincia.svg" alt="Banco Provincia" title="Banco Provincia">';
+  if(e==='icbc') return '<img class="entidad-logo" src="'+base+'icbc.svg" alt="ICBC" title="ICBC">';
+  if(e==='mercadopago') return '<span class="entidad-badge" title="Mercado Pago">MP</span>';
   return '';
 }
 function renderSaldos(){
@@ -2646,8 +2669,11 @@ function renderSaldos(){
     var items = filasGrupo.map(function(f){
       return '<div class="saldo-item">'+
         '<div class="saldo-item-encabezado">'+
-          '<div style="display:flex;align-items:center;gap:8px;min-width:0">'+logoEntidadHtml(f.nombre)+renderChip(f.codigo, colorCentro(f.id), colorTextoCentro(f.id))+'<span class="saldo-item-nombre"> · '+esc(f.nombre)+'</span></div>'+
-          '<button type="button" class="icon-btn" data-action="ir-a-movimientos-centro" data-id="'+f.id+'" title="Ver movimientos de este Centro de Costo" aria-label="Ver movimientos"><i class="bi bi-receipt"></i></button>'+
+          '<div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1">'+renderChip(f.codigo, colorCentro(f.id), colorTextoCentro(f.id))+'<span class="saldo-item-nombre"> · '+esc(f.nombre)+'</span></div>'+
+          '<div style="display:flex;align-items:center;gap:10px;flex-shrink:0">'+
+            logoEntidadHtml(f)+
+            '<button type="button" class="icon-btn" data-action="ir-a-movimientos-centro" data-id="'+f.id+'" title="Ver movimientos de este Centro de Costo" aria-label="Ver movimientos"><i class="bi bi-receipt"></i></button>'+
+          '</div>'+
         '</div>'+
         '<div class="saldo-item-monto">'+fmtMonto(f.saldo)+'</div>'+
       '</div>';
@@ -4202,15 +4228,16 @@ async function handleAction(action, id){
     var codigo = document.getElementById('f-centro-codigo').value.trim().toUpperCase();
     var nombre = document.getElementById('f-centro-nombre').value.trim();
     var colorCentroInput = document.getElementById('f-centro-color').value;
+    var entidadCentroInput = document.getElementById('f-centro-entidad').value;
     if(!codigo || !nombre) return;
     STATE.dbError = null;
     try{
       if(id){
-        await dbUpdate('centros', id, {codigo:codigo, nombre:nombre, color:colorCentroInput});
+        await dbUpdate('centros', id, {codigo:codigo, nombre:nombre, color:colorCentroInput, entidad:entidadCentroInput||null});
         var c = STATE.centros.find(function(x){return x.id===id;});
-        c.codigo = codigo; c.nombre = nombre; c.color = colorCentroInput;
+        c.codigo = codigo; c.nombre = nombre; c.color = colorCentroInput; c.entidad = entidadCentroInput;
       } else {
-        var nuevoC = {id:uid(), codigo:codigo, nombre:nombre, color:colorCentroInput};
+        var nuevoC = {id:uid(), codigo:codigo, nombre:nombre, color:colorCentroInput, entidad:entidadCentroInput};
         await dbInsert('centros', toDbCentro(nuevoC));
         STATE.centros.push(nuevoC);
       }
