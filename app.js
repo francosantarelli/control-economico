@@ -52,10 +52,10 @@ function cargarReglas(){
 
 var STATE = { centros: [], categorias: [], subcategorias: [], movimientos: [], vencimientos: [], gimnasioVisitas: [], usdtMovimientos: [], deudas: [], facturas: [], configuracion: [], facturaLoadingId:null, activeTab: 'movimientos', editing: null, ready:false,
   importEntidad:'mp', importBanco:'nacion', importVencimiento:'', importTarjetaMarca:'', importRaw:'', importPreview:null, importPreviewExcel:null, importMsg:null,
-  bulkCatMsg:null, bulkColorCatMsg:null, confirmState:null, subDeleteState:null, vencPagarState:null, movFormMsg:null, movFieldErrors:null,
+  bulkColorCatMsg:null, confirmState:null, subDeleteState:null, vencPagarState:null, movFormMsg:null, movFieldErrors:null,
   filtros:{centro:[], categoria:[], subcategoria:[], mes:[], texto:'', soloIncompletos:false, soloTarjeta:false},
   resumenFiltros:{centro:[], categoria:[], mes:[fechaHoyISO().slice(0,7)], vista:'categoria'}, multiSelectAbierto:null, multiSelectBusqueda:'', abmSubTab:'categorias', grillaRango:'actual',
-  bulkVencMsg:null, vencFormMsg:null, dbError:null, saldosCache:null, saldosDirty:true, gimnasioMsg:null,
+  vencFormMsg:null, dbError:null, saldosCache:null, saldosDirty:true, gimnasioMsg:null,
   usuarioEmail:null, efectivoAbierto:false, efectivoMsg:null, efectivoCategoriaId:'', efectivoDraft:null, backupMsg:null, backupPendiente:null, menuMovilAbierto:false, incompletosSnapshotIds:null,
   usdtVentaMovId:null, usdtVentaMovMsg:null, usdtVentaMovCantidad:'',
   reglas: cargarReglas(), reglaFormMsg:null, reglasPaginaActual:1,
@@ -1616,17 +1616,6 @@ function renderCentros(){
 function tipoLabel(tipo){
   return tipo==='tec' ? 'TEC' : '—';
 }
-function esPalabraDeTipo(s){
-  // reconoce las palabras que suelen venir en la columna "Cuenta" del Excel (Ingresos/Egresos/Ahorros/TeC),
-  // solo para poder detectar el orden de las columnas al pegar — el valor real que se guarda sale de normalizarTipo()
-  s = (s||'').trim().toLowerCase();
-  return /^ingres/.test(s) || /^egres/.test(s) || /^ahorr/.test(s) || /^tec$/.test(s) || /transfer.*cuenta/.test(s);
-}
-function normalizarTipo(s){
-  s = (s||'').trim().toLowerCase();
-  if(/^tec$/.test(s) || /transfer.*cuenta/.test(s)) return 'tec';
-  return '';
-}
 
 function renderABM(){
   var subtabs = [
@@ -1732,7 +1721,6 @@ function renderCategorias(){
   }).join('');
   var editing = STATE.editing && STATE.editing.type==='categoria' ? STATE.categorias.find(function(x){return x.id===STATE.editing.id;}) : null;
 
-  var bulkMsgHtml = STATE.bulkCatMsg ? '<div class="msg '+(STATE.bulkCatMsg.type==='ok'?'ok':'err')+'">'+esc(STATE.bulkCatMsg.text)+'</div>' : '';
   var bulkColorMsgHtml = STATE.bulkColorCatMsg ? '<div class="msg '+(STATE.bulkColorCatMsg.type==='ok'?'ok':'err')+'">'+esc(STATE.bulkColorCatMsg.text)+'</div>' : '';
 
   if(editing){
@@ -1755,13 +1743,6 @@ function renderCategorias(){
   '</div>';
 
   return formNuevaCategoria +
-  '<div class="card">'+
-    '<h3>Carga masiva</h3>'+
-    bulkMsgHtml+
-    '<div class="field"><label>Pegá "Nombre" + tab + "Tipo" (Ingreso/Egreso/Ahorro/TEC) por línea — también podés pegar solo el nombre, una por línea, sin tipo. Si la categoría ya existe, se actualiza el tipo; si no existe, se crea.</label>'+
-    '<textarea id="bulk-categorias" rows="8" style="width:100%;font-family:\'Geist Mono\',ui-monospace,Consolas,monospace;font-size:12px" placeholder="Aguinaldo\tIngreso\nAlq. Campo\tEgreso\n..."></textarea></div>'+
-    '<div class="fields-row" style="margin-top:10px"><button data-action="bulk-add-categorias">Cargar / actualizar todas</button></div>'+
-  '</div>'+
   '<div class="card">'+
     '<h3>Actualizar colores en masa</h3>'+
     bulkColorMsgHtml+
@@ -2464,8 +2445,6 @@ function campoVenc(e, mostrarEstado){
 function renderVencimientos(){
   var editing = STATE.editing && STATE.editing.type==='venc' ? STATE.vencimientos.find(function(x){return x.id===STATE.editing.id;}) : null;
 
-  var bulkMsgHtml = STATE.bulkVencMsg ? '<div class="msg '+(STATE.bulkVencMsg.type==='ok'?'ok':'err')+'">'+esc(STATE.bulkVencMsg.text)+'</div>' : '';
-
   if(editing){
     MODAL_HTML = '<div class="modal-overlay" data-modal-backdrop="edit"><div class="modal-card">'+
       '<h2>Editar vencimiento</h2>'+
@@ -2487,14 +2466,7 @@ function renderVencimientos(){
     '</div>'+
   '</div>';
 
-  var formHtml = formNuevoVenc +
-  '<div class="card">'+
-    '<h3>Carga masiva</h3>'+
-    bulkMsgHtml+
-    '<div class="field"><label>Pegá "Concepto" + tab + "Fecha (dd/mm/aaaa)" + tab + "Monto" por línea. Opcional: un cuarto valor con el código de Centro de Costo.</label>'+
-    '<textarea id="bulk-vencimientos" rows="5" style="width:100%;font-family:\'Geist Mono\',ui-monospace,Consolas,monospace;font-size:12px" placeholder="Tarjeta Visa Santander\t13/07/2026\t216759.02\tBSF"></textarea></div>'+
-    '<div class="fields-row" style="margin-top:10px"><button data-action="bulk-add-vencimientos">Cargar todos</button></div>'+
-  '</div>';
+  var formHtml = formNuevoVenc;
 
   var lista = STATE.vencimientos.filter(function(v){ return v.estado!=='pagado'; }).sort(function(a,b){ return (a.fecha||'').localeCompare(b.fecha||''); });
   var rows = lista.map(function(v){
@@ -4181,54 +4153,6 @@ async function handleAction(action, id){
     }catch(e){ STATE.dbError = 'No se pudo guardar la categoría: '+(e.message||e); }
     render(); return;
   }
-  if(action==='bulk-add-categorias'){
-    var raw = document.getElementById('bulk-categorias').value;
-    var lineas = raw.split('\n').map(function(l){ return l.replace(/\r$/,''); }).filter(function(l){ return l.trim().length>0; });
-    var agregadas = 0, actualizadas = 0, sinCambios = 0;
-    var paraUpsert = [];
-    lineas.forEach(function(linea){
-      var partes = linea.split('\t');
-      if(partes.length < 2) partes = linea.split(/\s{2,}/);
-      var col0 = (partes[0]||'').trim();
-      var col1 = (partes[1]||'').trim();
-
-      // fila de encabezado: "CUENTA / CATEGORÍA" o similar, en cualquier orden
-      if(/^categor[ií]a$/i.test(col0) || /^categor[ií]a$/i.test(col1) || /^cuenta$/i.test(col0) || /^cuenta$/i.test(col1)) return;
-
-      // detectar automáticamente si el orden es (Nombre, Tipo) o (Tipo, Nombre)
-      var t0 = esPalabraDeTipo(col0);
-      var t1 = col1 ? esPalabraDeTipo(col1) : false;
-      var nombreLinea, colTipoTexto;
-      if(t0 && !t1){ colTipoTexto = col0; nombreLinea = col1; }         // ej: "Ingresos  Aguinaldo"
-      else if(t1 || (!t0 && partes.length>1)){ nombreLinea = col0; colTipoTexto = col1; } // ej: "Aguinaldo  Ingreso" (o sin tipo reconocible)
-      else { nombreLinea = col0; colTipoTexto = col0; }                  // una sola columna, o ambas parecen tipo (ej "TeC  TeC")
-      var tipoLinea = normalizarTipo(colTipoTexto);
-
-      if(!nombreLinea) return;
-      var existente = STATE.categorias.find(function(c){ return c.nombre.toLowerCase() === nombreLinea.toLowerCase(); });
-      if(existente){
-        if(tipoLinea && existente.tipo !== tipoLinea){
-          existente.tipo = tipoLinea;
-          paraUpsert.push(toDbCategoria(existente));
-          actualizadas++;
-        } else { sinCambios++; }
-      } else {
-        if(partes.length < 2 && /^(ingresos?|egresos?|ahorros?|tec)$/i.test(nombreLinea)){
-          return; // probablemente una columna de "tipo" que quedó suelta por un pegado sin tabs; no la creamos como categoría
-        }
-        var nueva = {id:uid(), nombre:nombreLinea, tipo:tipoLinea};
-        STATE.categorias.push(nueva);
-        paraUpsert.push(toDbCategoria(nueva));
-        agregadas++;
-      }
-    });
-    try{
-      await dbUpsert('categorias', paraUpsert);
-      STATE.bulkCatMsg = { type:(agregadas>0||actualizadas>0)?'ok':'err',
-        text: agregadas+' agregada(s), '+actualizadas+' actualizada(s) con nuevo tipo, '+sinCambios+' sin cambios.' };
-    }catch(e){ STATE.dbError = 'No se pudo guardar la carga masiva: '+(e.message||e); }
-    render(); return;
-  }
   if(action==='bulk-actualizar-colores-categorias'){
     var rawColores = document.getElementById('bulk-colores-categorias').value;
     var lineasColor = rawColores.split('\n').map(function(l){ return l.replace(/\r$/,''); }).filter(function(l){ return l.trim().length>0; });
@@ -4748,37 +4672,6 @@ async function handleAction(action, id){
     }catch(e){ STATE.dbError = 'No se pudo registrar el pago de la cuota: '+(e.message||e); }
     render(); return;
   }
-  if(action==='bulk-add-vencimientos'){
-    var rawV = document.getElementById('bulk-vencimientos').value;
-    var lineasV = rawV.split('\n').map(function(l){ return l.replace(/\r$/,''); }).filter(function(l){ return l.trim().length>0; });
-    var agregadosV = 0;
-    var nuevosVenc = [];
-    lineasV.forEach(function(linea){
-      var partes = linea.split('\t');
-      if(partes.length < 3) partes = linea.split(/\s{2,}/);
-      if(partes.length < 3) return;
-      var concepto = (partes[0]||'').trim();
-      var fecha = fechaVencCortaAISO(partes[1]);
-      var monto = parseNumeroFlexible(partes[2]);
-      var ccTexto = (partes[3]||'').trim();
-      var centroId = '';
-      if(ccTexto){
-        var cc = STATE.centros.find(function(c){ return (c.codigo||'').toUpperCase()===ccTexto.toUpperCase(); });
-        if(cc) centroId = cc.id;
-      }
-      if(!concepto || !fecha) return;
-      var nv = {id:uid(), concepto:concepto, fecha:fecha, monto:monto, centroId:centroId, estado:'pendiente'};
-      nuevosVenc.push(nv);
-      agregadosV++;
-    });
-    try{
-      if(nuevosVenc.length) await dbInsert('vencimientos', nuevosVenc.map(toDbVencimiento));
-      STATE.vencimientos = STATE.vencimientos.concat(nuevosVenc);
-      STATE.bulkVencMsg = { type: agregadosV>0?'ok':'err', text: agregadosV+' vencimiento(s) agregado(s).' };
-    }catch(e){ STATE.dbError = 'No se pudo guardar la carga masiva de vencimientos: '+(e.message||e); }
-    render(); return;
-  }
-
   // ---- IMPORTAR ----
   if(action==='preview-import'){
     var entidadImp = document.getElementById('imp-entidad') ? document.getElementById('imp-entidad').value : STATE.importEntidad;
