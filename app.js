@@ -3294,10 +3294,13 @@ function renderFlujoCaja(){
     (lista.length ? '<div style="overflow-x:auto"><table class="table tabla-movil"><thead><tr><th>Concepto</th><th class="num">Saldo pendiente</th><th class="num">Cuota mensual</th><th>Centro</th><th>Meses restantes</th><th>Cancelación estimada</th><th></th></tr></thead><tbody>'+filas+'</tbody></table></div>' : '<div class="empty">Todavía no cargaste ninguna deuda.</div>')+
   '</div>';
 
+  // "Ahorro base" es la misma capacidad de ahorro promedio en las N filas (no varía mes a mes, a
+  // diferencia de "Cuotas deudas" que sí baja a medida que se van terminando de pagar) — repetirla
+  // en cada fila de la tabla era puro ruido. Se muestra una sola vez, arriba, como supuesto de la
+  // proyección, y la tabla queda solo con lo que efectivamente cambia mes a mes.
   var filasProy = proyeccion.map(function(f){
     return '<tr>'+
       '<td data-label="Mes">'+esc(mesLabelCorto(f.mes))+'</td>'+
-      '<td class="num mono ingreso" data-label="Ahorro base">'+fmtMonto(ahorroPromedio)+'</td>'+
       '<td class="num mono egreso" data-label="Cuotas deudas">'+(f.cuotasDeudas?fmtMonto(f.cuotasDeudas):'—')+'</td>'+
       '<td class="num mono '+(f.ahorroNeto>=0?'ingreso':'egreso')+'" data-label="Ahorro neto">'+fmtMonto(f.ahorroNeto)+'</td>'+
       '<td class="num mono '+(f.acumulado>=0?'ingreso':'egreso')+'" style="font-weight:600" data-label="Acumulado">'+fmtMonto(f.acumulado)+'</td>'+
@@ -3306,8 +3309,9 @@ function renderFlujoCaja(){
   var proyeccionHtml = '<div class="card">'+
     '<h3>Proyección de ahorro acumulado (próximos '+horizonte+' meses)</h3>'+
     '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Arranca en $0 y acumula cada mes la capacidad de ahorro promedio menos las cuotas de las deudas activas (que se dan de baja solas cuando terminan de pagarse). No incluye vencimientos ni cuotas de tarjeta ya cargados con fecha futura — esos compromisos puntuales se ven en la pestaña Vencimientos.</div>'+
+    (cap ? '<div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px">Ahorro base supuesto: <span class="mono" style="color:var(--ink);font-weight:600">'+fmtMonto(ahorroPromedio)+'</span> / mes en las '+horizonte+' filas de abajo.</div>' : '')+
     (cap ? lineChart(mesesProy, valoresAcumulado, 640, 220) : '<div class="empty">Cargá al menos un mes cerrado de movimientos para poder proyectar.</div>')+
-    (cap ? '<div style="overflow-x:auto;margin-top:14px"><table class="table tabla-movil"><thead><tr><th>Mes</th><th class="num">Ahorro base</th><th class="num">Cuotas deudas</th><th class="num">Ahorro neto</th><th class="num">Acumulado</th></tr></thead><tbody>'+filasProy+'</tbody></table></div>' : '')+
+    (cap ? '<div style="overflow-x:auto;margin-top:14px"><table class="table tabla-movil"><thead><tr><th>Mes</th><th class="num">Cuotas deudas</th><th class="num">Ahorro neto</th><th class="num">Acumulado</th></tr></thead><tbody>'+filasProy+'</tbody></table></div>' : '')+
   '</div>';
 
   return configHtml + summaryHtml + formNuevaDeuda + tablaDeudasHtml + proyeccionHtml;
