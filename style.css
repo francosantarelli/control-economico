@@ -218,6 +218,14 @@ input[type=color]{
   display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;
 }
 .avatar-btn:hover{ opacity:.88; }
+/* Acceso directo a "+ Movimiento" en el topbar mobile — antes solo estaba adentro del drawer
+   del hamburguesa, así que cargar un movimiento pedía 2 toques en vez de 1. */
+.mobile-add-btn{
+  width:36px; height:36px; border-radius:50%; padding:0;
+  background:var(--accent); color:#fff; border:none; font-size:16px;
+  display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;
+}
+.mobile-add-btn:hover{ opacity:.88; }
 .user-menu-wrap.abierto .avatar-btn{ outline:2px solid var(--accent); outline-offset:2px; }
 .user-menu-panel{
   position:absolute; top:calc(100% + 8px); right:0; z-index:990; min-width:190px;

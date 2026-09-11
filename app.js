@@ -1401,9 +1401,14 @@ function renderInterno(){
   var tituloSeccion = tabActual ? tabActual.label : 'Control';
 
   var mobileTopbarHtml = '<div class="mobile-topbar">'+
-    '<button class="hamburger-btn" data-action="toggle-menu-movil" aria-label="Abrir menú"><i class="bi bi-list"></i></button>'+
-    '<h1>Control</h1>'+
-    renderMenuUsuario()+
+    '<div style="display:flex;align-items:center;gap:8px;min-width:0">'+
+      '<button class="hamburger-btn" data-action="toggle-menu-movil" aria-label="Abrir menú"><i class="bi bi-list"></i></button>'+
+      '<h1>Control</h1>'+
+    '</div>'+
+    '<div style="display:flex;align-items:center;gap:10px;flex-shrink:0">'+
+      '<button class="mobile-add-btn" data-action="abrir-nuevo-mov" title="Nuevo movimiento" aria-label="Nuevo movimiento"><i class="bi bi-plus-lg"></i></button>'+
+      renderMenuUsuario()+
+    '</div>'+
   '</div>'+
   '<div class="sidebar-backdrop'+(STATE.menuMovilAbierto?' visible':'')+'" data-action="cerrar-menu-movil"></div>';
 
