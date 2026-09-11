@@ -147,7 +147,7 @@ function renderMenuUsuario(){
   if(abierto){
     panelHtml = '<div class="user-menu-panel">'+
       (STATE.usuarioEmail ? '<div class="user-menu-email">'+esc(STATE.usuarioEmail)+'</div>' : '')+
-      '<button type="button" class="user-menu-item" data-action="toggle-tema">'+(STATE.tema==='oscuro'?'☀️ Modo claro':'🌙 Modo oscuro')+'</button>'+
+      '<button type="button" class="user-menu-item" data-action="toggle-tema">'+(STATE.tema==='oscuro'?'<i class="bi bi-sun"></i> Modo claro':'<i class="bi bi-moon-stars"></i> Modo oscuro')+'</button>'+
       '<button type="button" class="user-menu-item" data-action="cerrar-sesion">Cerrar sesión</button>'+
     '</div>';
   }
@@ -1374,24 +1374,24 @@ function renderInterno(){
   MODAL_HTML = '';
 
   var tabs = [
-    {id:'movimientos', label:'Movimientos', icono:'🧾'},
-    {id:'importar', label:'Importar', icono:'📥'},
-    {id:'vencimientos', label:'Vencimientos', icono:'⏰'},
-    {id:'saldos', label:'Saldos', icono:'🏦'},
-    {id:'resumen', label:'Resumen', icono:'📊'},
-    {id:'flujo', label:'Flujo de Caja', icono:'📈'},
-    {id:'usdt', label:'USDT', icono:'🪙'},
-    {id:'gimnasio', label:'Gimnasio', icono:'💪'},
-    {id:'abm', label:'ABM', icono:'⚙️'}
+    {id:'movimientos', label:'Movimientos', icono:'bi-receipt'},
+    {id:'importar', label:'Importar', icono:'bi-cloud-arrow-down'},
+    {id:'vencimientos', label:'Vencimientos', icono:'bi-alarm'},
+    {id:'saldos', label:'Saldos', icono:'bi-bank'},
+    {id:'resumen', label:'Resumen', icono:'bi-bar-chart-line'},
+    {id:'flujo', label:'Flujo de Caja', icono:'bi-graph-up-arrow'},
+    {id:'usdt', label:'USDT', icono:'bi-coin'},
+    {id:'gimnasio', label:'Gimnasio', icono:'bi-activity'},
+    {id:'abm', label:'ABM', icono:'bi-gear'}
   ];
 
   var sidebarHtml = '<div class="sidebar'+(STATE.menuMovilAbierto?' abierto':'')+'">'+
-    '<div class="masthead"><h1>Control</h1><div class="tagline">Control económico<br>datos compartidos</div></div>'+
+    '<div class="masthead"><span class="masthead-mark"><i class="bi bi-piggy-bank"></i></span><h1>Control</h1><div class="tagline">Control económico<br>datos compartidos</div></div>'+
     '<button data-action="abrir-nuevo-mov" title="Nuevo movimiento" style="width:100%;margin-bottom:10px;font-size:14px;padding:12px">+<span class="tab-label"> Movimiento</span></button>'+
-    '<button data-action="abrir-efectivo" class="solo-mobile" style="width:100%;margin-bottom:16px;background:transparent;border:1.5px solid var(--accent);color:var(--accent);font-size:14px;padding:12px">💵 Efectivo</button>'+
+    '<button data-action="abrir-efectivo" class="solo-mobile" style="width:100%;margin-bottom:16px;background:transparent;border:1.5px solid var(--accent);color:var(--accent);font-size:14px;padding:12px"><i class="bi bi-cash-coin"></i> Efectivo</button>'+
     '<div class="tabs">';
   tabs.forEach(function(t){
-    sidebarHtml += '<div class="tab '+(STATE.activeTab===t.id?'active':'')+'" data-tab="'+t.id+'" title="'+esc(t.label)+'"><span class="tab-icon">'+t.icono+'</span><span class="tab-label">'+esc(t.label)+'</span></div>';
+    sidebarHtml += '<div class="tab '+(STATE.activeTab===t.id?'active':'')+'" data-tab="'+t.id+'" title="'+esc(t.label)+'"><span class="tab-icon"><i class="bi '+t.icono+'"></i></span><span class="tab-label">'+esc(t.label)+'</span></div>';
   });
   sidebarHtml += '</div>'+
     '</div>';
@@ -1400,7 +1400,7 @@ function renderInterno(){
   var tituloSeccion = tabActual ? tabActual.label : 'Control';
 
   var mobileTopbarHtml = '<div class="mobile-topbar">'+
-    '<button class="hamburger-btn" data-action="toggle-menu-movil" aria-label="Abrir menú">☰</button>'+
+    '<button class="hamburger-btn" data-action="toggle-menu-movil" aria-label="Abrir menú"><i class="bi bi-list"></i></button>'+
     '<h1>Control</h1>'+
     renderMenuUsuario()+
   '</div>'+
@@ -1446,7 +1446,7 @@ function renderInterno(){
     if(vps){
       MODAL_HTML = '<div class="modal-overlay" data-modal-backdrop="pagar-venc"><div class="modal-card">'+
         '<div style="margin-bottom:16px">¿Marcar "'+esc(vps.concepto)+'" como pagado?</div>'+
-        '<div class="row" style="flex-direction:column;align-items:stretch;gap:8px">'+
+        '<div class="fields-row" style="flex-direction:column;align-items:stretch;gap:8px">'+
           '<button data-action="pagar-venc-con-mov" data-id="'+vps.id+'">Sí, y cargarlo como movimiento</button>'+
           '<button class="secondary" data-action="pagar-venc-sin-mov" data-id="'+vps.id+'">Sí, sólo marcar pagado</button>'+
           '<button class="secondary" data-action="cancel-pagar-venc">Cancelar</button>'+
@@ -1486,9 +1486,9 @@ function renderInterno(){
     // ef-categoria más abajo) — si no, cada re-render los recrea vacíos porque no tienen otro estado.
     var efd = STATE.efectivoDraft || {};
     MODAL_HTML = '<div class="modal-overlay" data-modal-backdrop="efectivo"><div class="modal-card">'+
-      '<h2>💵 Cargar efectivo</h2>'+
+      '<h2><i class="bi bi-cash-coin"></i> Cargar efectivo</h2>'+
       (STATE.efectivoMsg ? '<div class="msg err">'+esc(STATE.efectivoMsg)+'</div>' : '')+
-      '<div class="row">'+
+      '<div class="fields-row">'+
         '<div class="field"><label>Fecha</label><input type="date" id="ef-fecha" value="'+esc(efd.fecha||fechaHoyISO())+'"></div>'+
         '<div class="field"><label>Centro de Costo</label><select id="ef-centro"><option value="">Elegir...</option>'+
           centrosOrdenados().map(function(c){ return '<option value="'+c.id+'" '+((efd.centroId||centroDefaultId)===c.id?'selected':'')+'>'+esc(c.codigo)+' · '+esc(c.nombre)+'</option>'; }).join('')+
@@ -1498,14 +1498,14 @@ function renderInterno(){
           '<option value="ingreso" '+(efd.tipo==='ingreso'?'selected':'')+'>Ingreso</option>'+
         '</select></div>'+
       '</div>'+
-      '<div class="row" style="margin-top:10px">'+
+      '<div class="fields-row" style="margin-top:10px">'+
         '<div class="field" style="flex:1 1 100%"><label>Monto</label><input type="number" step="0.01" id="ef-monto" placeholder="0.00" value="'+esc(efd.monto||'')+'" style="font-size:18px"></div>'+
       '</div>'+
-      '<div class="row" style="margin-top:10px">'+
+      '<div class="fields-row" style="margin-top:10px">'+
         '<div class="field"><label>Proveedor (opcional)</label><input type="text" id="ef-proveedor" placeholder="Ej: Kiosco" value="'+esc(efd.proveedor||'')+'"></div>'+
         '<div class="field"><label>Detalle (opcional)</label><input type="text" id="ef-detalle" value="'+esc(efd.detalle||'')+'"></div>'+
       '</div>'+
-      '<div class="row" style="margin-top:10px">'+
+      '<div class="fields-row" style="margin-top:10px">'+
         '<div class="field"><label>Categoría (opcional)</label><select id="ef-categoria"><option value="">Elegir...</option>'+
           categoriasOrdenadas().map(function(c){ return '<option value="'+c.id+'" '+(STATE.efectivoCategoriaId===c.id?'selected':'')+'>'+esc(c.nombre)+'</option>'; }).join('')+
         '</select></div>'+
@@ -1514,7 +1514,7 @@ function renderInterno(){
         '</select></div>'+
       '</div>'+
       '<div style="font-size:11px;color:var(--ink-soft);margin-top:10px">Podés completar Categoría y Subcategoría ahora, o dejarlas para después desde Movimientos.</div>'+
-      '<div class="row" style="margin-top:14px">'+
+      '<div class="fields-row" style="margin-top:14px">'+
         '<button data-action="guardar-efectivo">Guardar</button>'+
         '<button class="secondary" data-action="cerrar-efectivo">Cancelar</button>'+
       '</div>'+
@@ -1530,12 +1530,12 @@ function renderInterno(){
       var cantidadUvmNum = parseFloat(cantidadUvmDraft);
       var cotizacionUvmPreview = (cantidadUvmNum>0) ? (Number(mUvm.ingreso)/cantidadUvmNum) : 0;
       MODAL_HTML = '<div class="modal-overlay" data-modal-backdrop="usdt-venta-mov"><div class="modal-card">'+
-        '<h2>🪙 Generar movimiento USDT</h2>'+
+        '<h2><i class="bi bi-coin"></i> Generar movimiento USDT</h2>'+
         '<div style="margin-bottom:10px;font-size:13px;color:var(--ink-soft)">Vinculado al movimiento del '+esc(fechaISOaDDMMAAAA(mUvm.fecha)||mUvm.fecha)+' por '+fmtMonto(mUvm.ingreso)+(mUvm.proveedor?' ('+esc(mUvm.proveedor)+')':'')+'.</div>'+
         (STATE.usdtVentaMovMsg ? '<div class="msg err">'+esc(STATE.usdtVentaMovMsg)+'</div>' : '')+
         '<div class="field"><label>¿Cuántos USDT se vendieron?</label><input type="text" inputmode="decimal" id="uvm-cantidad" placeholder="0.00" value="'+esc(cantidadUvmDraft)+'" style="font-size:18px" autofocus></div>'+
         (cotizacionUvmPreview ? '<div style="font-size:12px;color:var(--ink-soft);margin-top:6px">Cotización resultante: $'+fmtMonto(cotizacionUvmPreview)+' por USDT</div>' : '')+
-        '<div class="row" style="margin-top:14px">'+
+        '<div class="fields-row" style="margin-top:14px">'+
           '<button data-action="guardar-usdt-venta-mov">Guardar</button>'+
           '<button class="secondary" data-action="cerrar-usdt-venta-mov">Cancelar</button>'+
         '</div>'+
@@ -1583,8 +1583,8 @@ function renderCentros(){
   if(editing){
     MODAL_HTML = '<div class="modal-overlay" data-modal-backdrop="edit"><div class="modal-card">'+
       '<h2>Editar centro de costo</h2>'+
-      '<div class="row">'+ campoCentro(editing.codigo, editing.nombre, colorCentro(editing.id)) +'</div>'+
-      '<div class="row" style="margin-top:14px">'+
+      '<div class="fields-row">'+ campoCentro(editing.codigo, editing.nombre, colorCentro(editing.id)) +'</div>'+
+      '<div class="fields-row" style="margin-top:14px">'+
         '<button data-action="save-centro" data-id="'+editing.id+'">Guardar cambios</button>'+
         '<button class="secondary" data-action="cancel-edit">Cancelar</button>'+
       '</div>'+
@@ -1594,7 +1594,7 @@ function renderCentros(){
   var formNuevoCentro = editing ? '' : ''+
   '<div class="card">'+
     '<h2>Nuevo centro de costo</h2>'+
-    '<div class="row">'+ campoCentro('', '', PALETA_DONUT[STATE.centros.length % PALETA_DONUT.length]) +
+    '<div class="fields-row">'+ campoCentro('', '', PALETA_DONUT[STATE.centros.length % PALETA_DONUT.length]) +
       '<button data-action="save-centro" data-id="">Agregar</button>'+
     '</div>'+
   '</div>';
@@ -1649,13 +1649,13 @@ function renderBackup(){
   '<div class="card">'+
     '<h2>Descargar backup</h2>'+
     '<div style="font-size:12px;color:var(--ink-soft);margin-bottom:12px">Genera un archivo con todo lo que hay cargado hoy (Centros, Categorías, Subcategorías, Movimientos y Vencimientos). Guardalo en Google Drive, tu mail, o donde prefieras — te sirve para restaurar todo si algún día se pierde algo en la base de datos. El plan gratis de Supabase no hace backups automáticos, así que conviene descargar uno de tanto en tanto (por ejemplo, una vez al mes).</div>'+
-    '<button data-action="descargar-backup">⬇ Descargar backup completo (.json)</button>'+
+    '<button data-action="descargar-backup"><i class="bi bi-download"></i> Descargar backup completo (.json)</button>'+
   '</div>'+
   '<div class="card">'+
     '<h2>Restaurar desde un backup</h2>'+
     msgHtml+
     '<div style="font-size:12px;color:var(--ink-soft);margin-bottom:12px">Elegí un archivo .json descargado antes con "Descargar backup". Esto <strong>no borra</strong> lo que ya tenés cargado: agrega lo que falte y actualiza lo que coincida por ID. Te va a pedir confirmación antes de aplicar nada.</div>'+
-    '<div class="row">'+
+    '<div class="fields-row">'+
       '<input type="file" id="backup-file" accept="application/json,.json">'+
       '<button data-action="restaurar-backup-preview">Restaurar</button>'+
     '</div>'+
@@ -1684,8 +1684,8 @@ function renderCategorias(){
   if(editing){
     MODAL_HTML = '<div class="modal-overlay" data-modal-backdrop="edit"><div class="modal-card">'+
       '<h2>Editar categoría</h2>'+
-      '<div class="row">'+ campoCategoria(editing.nombre, editing.tipo||'', colorCategoria(editing.id)) +'</div>'+
-      '<div class="row" style="margin-top:14px">'+
+      '<div class="fields-row">'+ campoCategoria(editing.nombre, editing.tipo||'', colorCategoria(editing.id)) +'</div>'+
+      '<div class="fields-row" style="margin-top:14px">'+
         '<button data-action="save-categoria" data-id="'+editing.id+'">Guardar cambios</button>'+
         '<button class="secondary" data-action="cancel-edit">Cancelar</button>'+
       '</div>'+
@@ -1695,7 +1695,7 @@ function renderCategorias(){
   var formNuevaCategoria = editing ? '' : ''+
   '<div class="card">'+
     '<h2>Nueva categoría</h2>'+
-    '<div class="row">'+ campoCategoria('', '', PALETA_DONUT[STATE.categorias.length % PALETA_DONUT.length]) +
+    '<div class="fields-row">'+ campoCategoria('', '', PALETA_DONUT[STATE.categorias.length % PALETA_DONUT.length]) +
       '<button data-action="save-categoria" data-id="">Agregar</button>'+
     '</div>'+
   '</div>';
@@ -1706,14 +1706,14 @@ function renderCategorias(){
     bulkMsgHtml+
     '<div class="field"><label>Pegá "Nombre" + tab + "Tipo" (Ingreso/Egreso/Ahorro/TEC) por línea — también podés pegar solo el nombre, una por línea, sin tipo. Si la categoría ya existe, se actualiza el tipo; si no existe, se crea.</label>'+
     '<textarea id="bulk-categorias" rows="8" style="width:100%;font-family:\'Geist Mono\',ui-monospace,Consolas,monospace;font-size:12px" placeholder="Aguinaldo\tIngreso\nAlq. Campo\tEgreso\n..."></textarea></div>'+
-    '<div class="row" style="margin-top:10px"><button data-action="bulk-add-categorias">Cargar / actualizar todas</button></div>'+
+    '<div class="fields-row" style="margin-top:10px"><button data-action="bulk-add-categorias">Cargar / actualizar todas</button></div>'+
   '</div>'+
   '<div class="card">'+
     '<h3>Actualizar colores en masa</h3>'+
     bulkColorMsgHtml+
     '<div class="field"><label>Pegá "Nombre" + tab + "Color" (hex, ej #FDE68A) por línea. También podés pegar directamente la fila "Categoría / Color sugerido / Hex" tal cual, usa la última columna. Solo actualiza categorías que ya existen (por nombre, sin importar mayúsculas); no crea categorías nuevas.</label>'+
     '<textarea id="bulk-colores-categorias" rows="8" style="width:100%;font-family:\'Geist Mono\',ui-monospace,Consolas,monospace;font-size:12px" placeholder="Comida\tDurazno\t#FED7AA"></textarea></div>'+
-    '<div class="row" style="margin-top:10px"><button data-action="bulk-actualizar-colores-categorias">Actualizar colores</button></div>'+
+    '<div class="fields-row" style="margin-top:10px"><button data-action="bulk-actualizar-colores-categorias">Actualizar colores</button></div>'+
   '</div>'+
   '<div class="card">'+
     '<h3>Categorías cargadas</h3>'+
@@ -1747,8 +1747,8 @@ function renderSubcategorias(){
   if(editing){
     MODAL_HTML = '<div class="modal-overlay" data-modal-backdrop="edit"><div class="modal-card">'+
       '<h2>Editar subcategoría</h2>'+
-      '<div class="row">'+ campoSubcategoria(catOptions, editing.nombre) +'</div>'+
-      '<div class="row" style="margin-top:14px">'+
+      '<div class="fields-row">'+ campoSubcategoria(catOptions, editing.nombre) +'</div>'+
+      '<div class="fields-row" style="margin-top:14px">'+
         '<button data-action="save-subcategoria" data-id="'+editing.id+'">Guardar cambios</button>'+
         '<button class="secondary" data-action="cancel-edit">Cancelar</button>'+
       '</div>'+
@@ -1758,7 +1758,7 @@ function renderSubcategorias(){
   var formNuevaSub = editing ? '' : ''+
   '<div class="card">'+
     '<h2>Nueva subcategoría</h2>'+
-    '<div class="row">'+ campoSubcategoria(catOptions, '') +
+    '<div class="fields-row">'+ campoSubcategoria(catOptions, '') +
       '<button data-action="save-subcategoria" data-id="">Agregar</button>'+
     '</div>'+
   '</div>';
@@ -1805,7 +1805,7 @@ function celdasEditablesMov(m){
       categoriasOrdenadas().map(function(c){ return '<option value="'+c.id+'" '+(m.categoriaId===c.id?'selected':'')+'>'+esc(c.nombre)+'</option>'; }).join('')+
       '</select></td>',
     subcategoria: '<td data-label="Subcategoría"><select data-mov-id="'+m.id+'" data-field="subcategoriaId"><option value="">—</option>'+subOpcionesFila+'</select></td>',
-    proveedor: '<td data-label="Proveedor">'+(m.tarjeta?'<span title="Pagado con tarjeta de crédito">💳</span> ':'')+'<input type="text" data-mov-id="'+m.id+'" data-field="proveedor" value="'+esc(m.proveedor||'')+'" style="width:100%;box-sizing:border-box"></td>',
+    proveedor: '<td data-label="Proveedor">'+(m.tarjeta?'<span title="Pagado con tarjeta de crédito"><i class="bi bi-credit-card"></i></span> ':'')+'<input type="text" data-mov-id="'+m.id+'" data-field="proveedor" value="'+esc(m.proveedor||'')+'" style="width:100%;box-sizing:border-box"></td>',
     detalle: '<td data-label="Detalle"><input type="text" data-mov-id="'+m.id+'" data-field="detalle" value="'+esc(m.detalle||'')+'" style="width:100%;box-sizing:border-box"></td>'
   };
 }
@@ -1819,7 +1819,7 @@ function celdasSoloLecturaMov(m){
     centro: '<td'+(m.centroId?' class="celda-filtrable" data-filter-field="centro" data-filter-value="'+esc(m.centroId)+'" title="Filtrar por este Centro de Costo"':'')+' data-label="Centro">'+(m.centroId?renderChip(nombreCentro(m.centroId).split(' · ')[0], colorCentro(m.centroId), colorTextoCentro(m.centroId)):'—')+'</td>',
     categoria: '<td'+(m.categoriaId?' class="celda-filtrable" data-filter-field="categoria" data-filter-value="'+esc(m.categoriaId)+'" title="Filtrar por esta Categoría"':'')+' data-label="Categoría">'+(m.categoriaId?renderChip(nombreCategoria(m.categoriaId), colorCategoria(m.categoriaId), colorTextoCategoria(m.categoriaId)):'—')+'</td>',
     subcategoria: '<td class="celda-filtrable" data-filter-field="subcategoria" data-filter-value="'+esc(subValorFiltro)+'" title="Filtrar por esta Subcategoría" data-label="Subcategoría">'+esc(nombreSubcategoria(m.subcategoriaId))+'</td>',
-    proveedor: '<td'+(m.proveedor?' class="celda-filtrable" data-filter-field="texto" data-filter-value="'+esc(m.proveedor)+'" title="Filtrar por este Proveedor"':'')+' data-label="Proveedor">'+(m.tarjeta?'<span title="Pagado con tarjeta de crédito">💳</span> ':'')+esc(m.proveedor||'')+'</td>',
+    proveedor: '<td'+(m.proveedor?' class="celda-filtrable" data-filter-field="texto" data-filter-value="'+esc(m.proveedor)+'" title="Filtrar por este Proveedor"':'')+' data-label="Proveedor">'+(m.tarjeta?'<span title="Pagado con tarjeta de crédito"><i class="bi bi-credit-card"></i></span> ':'')+esc(m.proveedor||'')+'</td>',
     detalle: '<td data-label="Detalle">'+esc(m.detalle||'')+'</td>'
   };
 }
@@ -1830,15 +1830,18 @@ function renderBulkEditMovModal(){
     return {value:s.id, label:nombreCategoria(s.categoriaId)+' → '+s.nombre};
   });
   var msgHtml = STATE.bulkEditMovMsg ? '<div class="msg '+(STATE.bulkEditMovMsg.type==='ok'?'ok':'err')+'">'+esc(STATE.bulkEditMovMsg.text)+'</div>' : '';
-  return '<div class="modal-overlay" data-modal-backdrop="edit"><div class="modal-card">'+
+  var labelVaciar = function(id){ return ' <span style="font-weight:normal;font-size:11px;color:var(--ink-soft);white-space:nowrap"><input type="checkbox" id="'+id+'" style="width:auto;vertical-align:middle"> vaciar</span>'; };
+  return '<div class="modal-overlay" data-modal-backdrop="edit"><div class="modal-card modal-card-lg">'+
     '<h2>Editar '+n+' movimiento(s) seleccionado(s)</h2>'+
     '<div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px">Dejá "— Sin cambios —" (o vacío) en los campos que no querés tocar: solo se aplican a los '+n+' movimientos los campos que completes acá.</div>'+
     msgHtml+
-    '<div class="row">'+
+    '<div class="form-grid">'+
       '<div class="field"><label>Fecha</label><input type="date" id="bem-fecha"></div>'+
       '<div class="field"><label>Centro de Costo</label><select id="bem-centro"><option value="">— Sin cambios —</option><option value="__vaciar__">(Vaciar)</option>'+
         centrosOrdenados().map(function(c){ return '<option value="'+c.id+'">'+esc(c.codigo+' · '+c.nombre)+'</option>'; }).join('')+
       '</select></div>'+
+    '</div>'+
+    '<div class="form-grid">'+
       '<div class="field"><label>Categoría</label><select id="bem-categoria"><option value="">— Sin cambios —</option><option value="__vaciar__">(Vaciar)</option>'+
         categoriasOrdenadas().map(function(c){ return '<option value="'+c.id+'">'+esc(c.nombre)+'</option>'; }).join('')+
       '</select></div>'+
@@ -1846,19 +1849,21 @@ function renderBulkEditMovModal(){
         subOpts.map(function(o){ return '<option value="'+o.value+'">'+esc(o.label)+'</option>'; }).join('')+
       '</select></div>'+
     '</div>'+
-    '<div class="row" style="margin-top:10px">'+
-      '<div class="field"><label>Proveedor</label><input type="text" id="bem-proveedor" placeholder="— Sin cambios —" style="width:160px"></div>'+
-      '<div class="field" style="justify-content:flex-end"><label style="font-size:12px;font-weight:normal;display:flex;align-items:center;gap:4px;padding-bottom:8px;white-space:nowrap"><input type="checkbox" id="bem-proveedor-vaciar" style="width:auto"> Vaciar</label></div>'+
-      '<div class="field"><label>Detalle</label><input type="text" id="bem-detalle" placeholder="— Sin cambios —" style="width:160px"></div>'+
-      '<div class="field" style="justify-content:flex-end"><label style="font-size:12px;font-weight:normal;display:flex;align-items:center;gap:4px;padding-bottom:8px;white-space:nowrap"><input type="checkbox" id="bem-detalle-vaciar" style="width:auto"> Vaciar</label></div>'+
+    '<div class="form-grid">'+
+      '<div class="field"><label>Proveedor'+labelVaciar('bem-proveedor-vaciar')+'</label><input type="text" id="bem-proveedor" placeholder="— Sin cambios —"></div>'+
+      '<div class="field"><label>Detalle'+labelVaciar('bem-detalle-vaciar')+'</label><input type="text" id="bem-detalle" placeholder="— Sin cambios —"></div>'+
     '</div>'+
-    '<div class="row" style="margin-top:10px">'+
+    '<div class="form-grid">'+
       '<div class="field"><label>Tipo</label><select id="bem-tipo"><option value="">— Sin cambios —</option><option value="egreso">Egreso</option><option value="ingreso">Ingreso</option></select></div>'+
-      '<div class="field"><label>Monto</label><input type="number" step="0.01" id="bem-monto" placeholder="— Sin cambios —" style="width:120px"></div>'+
-      '<div class="field"><label>Tarjeta</label><select id="bem-tarjeta"><option value="">— Sin cambios —</option><option value="si">💳 Marcar</option><option value="no">Desmarcar</option></select></div>'+
+      '<div class="field"><label>Monto</label><input type="number" step="0.01" id="bem-monto" placeholder="— Sin cambios —"></div>'+
     '</div>'+
+    '<div class="form-grid">'+
+      '<div class="field"><label>Tarjeta</label><select id="bem-tarjeta"><option value="">— Sin cambios —</option><option value="si">Marcar</option><option value="no">Desmarcar</option></select></div>'+
+    '</div>'+
+    '<div style="margin-top:16px;display:flex;gap:10px">'+
     '<button data-action="guardar-bulk-edit-mov">Aplicar a '+n+' movimiento(s)</button>'+
     '<button class="secondary" data-action="cancel-edit">Cancelar</button>'+
+    '</div>'+
   '</div></div>';
 }
 
@@ -1961,16 +1966,16 @@ function renderMovimientos(){
     idsCheckboxVisibles.push(m.id);
     return '<tr'+(claseFila?' class="'+claseFila+'"':'')+tituloFila+'>'+
       '<td data-label=""><input type="checkbox" class="chk-select-mov" data-mov-id="'+m.id+'" '+(seleccionados.indexOf(m.id)!==-1?'checked':'')+'></td>'+
-      '<td class="mono'+(fechaFiltrable?' celda-filtrable':'')+'" data-label="Fecha"'+(fechaFiltrable?' data-filter-field="mes" data-filter-value="'+esc(fechaFiltrable)+'" title="Filtrar por este Mes"':'')+'>'+(incompleto?'⚠️ ':'')+esc(fechaISOaDDMMAAAA(m.fecha)||m.fecha||'')+'</td>'+
+      '<td class="mono'+(fechaFiltrable?' celda-filtrable':'')+'" data-label="Fecha"'+(fechaFiltrable?' data-filter-field="mes" data-filter-value="'+esc(fechaFiltrable)+'" title="Filtrar por este Mes"':'')+'>'+(incompleto?'<i class="bi bi-exclamation-triangle"></i> ':'')+esc(fechaISOaDDMMAAAA(m.fecha)||m.fecha||'')+'</td>'+
       celdaCentro + celdaCategoria + celdaSubcategoria + celdaProveedor + celdaDetalle +
       '<td class="num ingreso" data-label="Ingreso">'+(Number(m.ingreso)?fmtMonto(m.ingreso):'')+'</td>'+
       '<td class="num egreso" data-label="Egreso">'+(Number(m.egreso)?fmtMonto(m.egreso):'')+'</td>'+
       '<td class="actions-cell">'+
-      (esVentaUsdtPendiente(m)?'<button class="icon-btn" data-action="abrir-usdt-venta-mov" data-id="'+m.id+'" title="Generar movimiento USDT" aria-label="Generar movimiento USDT">🪙</button>':'')+
-      (esVentaUsdtFacturable(m)?'<button class="icon-btn" data-action="facturar-mov" data-id="'+m.id+'" title="Facturar con ARCA" aria-label="Facturar con ARCA" '+(STATE.facturaLoadingId===m.id?'disabled':'')+'>🧾</button>':'')+
-      (facturaMov?'<button class="icon-btn" data-action="ver-comprobante" data-id="'+facturaMov.id+'" title="Ver comprobante — CAE '+esc(facturaMov.cae)+'" aria-label="Ver comprobante">✅</button>':'')+
-      '<button class="icon-btn" data-action="edit-mov" data-id="'+m.id+'" title="Editar" aria-label="Editar">✏️</button>'+
-      '<button class="icon-btn icon-btn-danger" data-action="del-mov" data-id="'+m.id+'" title="Borrar" aria-label="Borrar">🗑️</button></td>'+
+      (esVentaUsdtPendiente(m)?'<button class="icon-btn" data-action="abrir-usdt-venta-mov" data-id="'+m.id+'" title="Generar movimiento USDT" aria-label="Generar movimiento USDT"><i class="bi bi-coin"></i></button>':'')+
+      (esVentaUsdtFacturable(m)?'<button class="icon-btn" data-action="facturar-mov" data-id="'+m.id+'" title="Facturar con ARCA" aria-label="Facturar con ARCA" '+(STATE.facturaLoadingId===m.id?'disabled':'')+'><i class="bi bi-receipt"></i></button>':'')+
+      (facturaMov?'<button class="icon-btn" data-action="ver-comprobante" data-id="'+facturaMov.id+'" title="Ver comprobante — CAE '+esc(facturaMov.cae)+'" aria-label="Ver comprobante"><i class="bi bi-check-circle"></i></button>':'')+
+      '<button class="icon-btn" data-action="edit-mov" data-id="'+m.id+'" title="Editar" aria-label="Editar"><i class="bi bi-pencil"></i></button>'+
+      '<button class="icon-btn icon-btn-danger" data-action="del-mov" data-id="'+m.id+'" title="Borrar" aria-label="Borrar"><i class="bi bi-trash"></i></button></td>'+
     '</tr>';
   }
 
@@ -1982,13 +1987,13 @@ function renderMovimientos(){
     idsCheckboxVisibles.push(m.id);
     return '<tr class="fila-detalle-tarjeta'+(incompleto?' fila-incompleta':'')+'"'+tituloFila+'>'+
       '<td data-label=""><input type="checkbox" class="chk-select-mov" data-mov-id="'+m.id+'" '+(seleccionados.indexOf(m.id)!==-1?'checked':'')+'></td>'+
-      '<td class="mono" data-label="Fecha de consumo">'+(incompleto?'⚠️ ':'')+esc(m.fechaConsumo?fechaISOaDDMMAAAA(m.fechaConsumo):'—')+'</td>'+
+      '<td class="mono" data-label="Fecha de consumo">'+(incompleto?'<i class="bi bi-exclamation-triangle"></i> ':'')+esc(m.fechaConsumo?fechaISOaDDMMAAAA(m.fechaConsumo):'—')+'</td>'+
       '<td class="mono" data-label="Cuotas" style="color:var(--ink-soft)">'+(m.cuotas?esc(m.cuotas):'↳')+'</td>'+
       celdas.categoria + celdas.subcategoria + celdas.proveedor + celdas.detalle +
       '<td class="num ingreso" data-label="Ingreso">'+(Number(m.ingreso)?fmtMonto(m.ingreso):'')+'</td>'+
       '<td class="num egreso" data-label="Egreso">'+(Number(m.egreso)?fmtMonto(m.egreso):'')+'</td>'+
-      '<td class="actions-cell"><button class="icon-btn" data-action="edit-mov" data-id="'+m.id+'" title="Editar" aria-label="Editar">✏️</button>'+
-      '<button class="icon-btn icon-btn-danger" data-action="del-mov" data-id="'+m.id+'" title="Borrar" aria-label="Borrar">🗑️</button></td>'+
+      '<td class="actions-cell"><button class="icon-btn" data-action="edit-mov" data-id="'+m.id+'" title="Editar" aria-label="Editar"><i class="bi bi-pencil"></i></button>'+
+      '<button class="icon-btn icon-btn-danger" data-action="del-mov" data-id="'+m.id+'" title="Borrar" aria-label="Borrar"><i class="bi bi-trash"></i></button></td>'+
     '</tr>';
   }
 
@@ -1998,12 +2003,12 @@ function renderMovimientos(){
     var totalEgresoG = g.movs.reduce(function(s,m){ return s+(Number(m.egreso)||0); },0);
     var faltantesGrupo = g.movs.filter(function(m){ return camposFaltantes(m).length>0; }).length;
     var caret = abierto ? '▾' : '▸';
-    var leyenda = 'Resumen '+(g.marca ? esc(g.marca) : 'tarjeta')+' · '+g.movs.length+' movimiento(s)'+(faltantesGrupo?' · ⚠️ '+faltantesGrupo+' por categorizar':'');
+    var leyenda = 'Resumen '+(g.marca ? esc(g.marca) : 'tarjeta')+' · '+g.movs.length+' movimiento(s)'+(faltantesGrupo?' · <i class="bi bi-exclamation-triangle"></i> '+faltantesGrupo+' por categorizar':'');
     var filaResumen = '<tr class="fila-grupo-tarjeta">'+
       '<td data-label=""></td>'+
       '<td class="mono" data-label="Fecha">'+esc(fechaISOaDDMMAAAA(g.fecha)||g.fecha)+'</td>'+
       '<td data-label="Centro">'+(g.centroId?renderChip(nombreCentro(g.centroId).split(' · ')[0], colorCentro(g.centroId), colorTextoCentro(g.centroId)):'—')+'</td>'+
-      '<td colspan="4" data-label="Detalle"><button class="link" data-action="toggle-grupo-tarjeta-mov" data-id="'+esc(g.clave)+'">'+caret+' 💳 '+leyenda+'</button></td>'+
+      '<td colspan="4" data-label="Detalle"><button class="link" data-action="toggle-grupo-tarjeta-mov" data-id="'+esc(g.clave)+'">'+caret+' <i class="bi bi-credit-card"></i> '+leyenda+'</button></td>'+
       '<td class="num ingreso" data-label="Ingreso">'+(totalIngresoG?fmtMonto(totalIngresoG):'')+'</td>'+
       '<td class="num egreso" data-label="Egreso">'+(totalEgresoG?fmtMonto(totalEgresoG):'')+'</td>'+
       '<td class="actions-cell"></td>'+
@@ -2032,7 +2037,7 @@ function renderMovimientos(){
     var esTec = catSel && catSel.tipo === 'tec';
     var destinoOpts = [comboOpcionVacia()].concat(STATE.centros.filter(function(c){return c.id!==e.centroId;}).map(function(c){ return {value:c.id, label:c.codigo+' · '+c.nombre}; }));
     var campoDestino = esTec ? ''+
-      '<div class="row" style="margin-top:10px">'+
+      '<div class="fields-row" style="margin-top:12px">'+
         '<div class="field" style="flex:1 1 240px"><label>Centro de Costo Destino (transferencia, opcional)</label>'+renderCombo('mov-centro-destino', 'f-mov-centro-destino', destinoOpts, STATE.movDraftCentroDestinoId, 'Elegir...')+'</div>'+
         '<div class="field" style="flex:2 1 260px;justify-content:flex-end"><div style="font-size:11px;color:var(--ink-soft);padding-bottom:8px">'+(editing ?
           'Si lo completás, se va a crear un movimiento espejo nuevo en ese centro (misma fecha y categoría, mismo monto, tipo contrario) — pensado para cuando falta la contrapartida de un movimiento importado. No hace falta si ya la cargaste.' :
@@ -2049,23 +2054,30 @@ function renderMovimientos(){
       textoAyudaCuotas = 'La Fecha de arriba se toma como vencimiento de la 1ª cuota. Se van a crear '+cuotasNum+' movimientos, uno por mes, con este mismo monto cada uno.';
     }
     var campoCuotas = e.tarjeta ? ''+
-      '<div class="row" style="margin-top:10px">'+
-        '<div class="field"><label>Fecha de consumo (opcional)</label><input type="date" id="f-mov-fecha-consumo" value="'+esc(e.fechaConsumo||'')+'"></div>'+
-        '<div class="field"><label>Marca de tarjeta (opcional)</label><input type="text" id="f-mov-tarjeta-marca" autocomplete="off" placeholder="Visa, Mastercard, Amex..." value="'+esc(e.tarjetaMarca||'')+'" style="width:140px"></div>'+
-        '<div class="field"><label>Cuotas (opcional)</label><input type="text" autocomplete="off" placeholder="ej. 5/6" id="f-mov-cuotas-info" value="'+esc(e.cuotasInfo||'')+'" style="width:100px"></div>'+
-        '<div class="field"><label>Cantidad de cuotas</label><input type="text" inputmode="numeric" pattern="[0-9]*" id="f-mov-cuotas" value="'+cuotasNum+'" style="width:100px"></div>'+
-        '<div class="field" style="flex:2 1 260px;justify-content:flex-end"><div style="font-size:11px;color:var(--ink-soft);padding-bottom:8px">'+textoAyudaCuotas+'</div></div>'+
-      '</div>'+
-      '<div class="info-box warning">📌 <strong>Pendiente:</strong> este consumo va a figurar como pendiente hasta la Fecha de arriba (el vencimiento del resumen en que se paga).</div>' : '';
+      '<div class="form-section">'+
+        '<div class="form-section-title"><i class="bi bi-credit-card"></i> Tarjeta de crédito</div>'+
+        '<div class="form-grid">'+
+          '<div class="field"><label>Fecha de consumo (opcional)</label><input type="date" id="f-mov-fecha-consumo" value="'+esc(e.fechaConsumo||'')+'"></div>'+
+          '<div class="field"><label>Marca de tarjeta (opcional)</label><input type="text" id="f-mov-tarjeta-marca" autocomplete="off" placeholder="Visa, Mastercard, Amex..." value="'+esc(e.tarjetaMarca||'')+'"></div>'+
+        '</div>'+
+        '<div class="form-grid">'+
+          '<div class="field"><label>Cuotas a generar</label><input type="text" inputmode="numeric" pattern="[0-9]*" id="f-mov-cuotas" value="'+cuotasNum+'"></div>'+
+          '<div class="field"><label>Cuota manual (si no generás arriba)</label><input type="text" autocomplete="off" placeholder="ej. 5/6" id="f-mov-cuotas-info" value="'+esc(e.cuotasInfo||'')+'"></div>'+
+        '</div>'+
+        '<div style="font-size:11px;color:var(--ink-soft);margin-top:8px">'+textoAyudaCuotas+' "Cuota manual" es solo para escribir la etiqueta a mano en un movimiento suelto — dejala vacía si ya pusiste una cantidad arriba.</div>'+
+        '<div class="info-box warning" style="margin-top:10px"><i class="bi bi-pin-angle"></i> <strong>Pendiente:</strong> este consumo va a figurar como pendiente hasta la Fecha de arriba (el vencimiento del resumen en que se paga).</div>'+
+      '</div>' : '';
     function claseCampo(nombre){ return 'field'+(STATE.movFieldErrors && STATE.movFieldErrors[nombre] ? ' invalid' : ''); }
     function msgCampo(nombre){ return (STATE.movFieldErrors && STATE.movFieldErrors[nombre]) ? '<div class="field-error">'+esc(STATE.movFieldErrors[nombre])+'</div>' : ''; }
     return ''+
       (STATE.movFormMsg ? '<div class="msg err">'+esc(STATE.movFormMsg)+'</div>' : '')+
-      '<div class="row">'+
+      '<div class="form-grid">'+
         '<div class="'+claseCampo('fecha')+'"><label>Fecha</label><input type="date" id="f-mov-fecha" value="'+esc(e.fecha)+'">'+msgCampo('fecha')+'</div>'+
         '<div class="'+claseCampo('centroId')+'"><label>Centro de Costo'+((e.fecha && e.fecha>fechaHoyISO())?' (opcional, fecha futura)':'')+'</label>'+
           renderCombo('mov-centro', 'f-mov-centro', [comboOpcionVacia()].concat(centrosOrdenados().map(function(c){ return {value:c.id, label:c.codigo+' · '+c.nombre}; })), e.centroId, 'Elegir...')+msgCampo('centroId')+
         '</div>'+
+      '</div>'+
+      '<div class="form-grid">'+
         '<div class="'+claseCampo('categoriaId')+'"><label>Categoría</label>'+
           renderCombo('mov-categoria', 'f-mov-categoria', [comboOpcionVacia()].concat(categoriasOrdenadas().map(function(c){ return {value:c.id, label:c.nombre}; })), e.categoriaId, 'Elegir...')+msgCampo('categoriaId')+
         '</div>'+
@@ -2074,24 +2086,27 @@ function renderMovimientos(){
         '</div>'+
       '</div>'+
       campoDestino+
-      '<div class="row" style="margin-top:10px">'+
-        '<div class="'+claseCampo('proveedor')+'"><label>Proveedor</label><input type="text" id="f-mov-proveedor" value="'+esc(e.proveedor)+'" style="width:200px">'+msgCampo('proveedor')+'</div>'+
-        '<div class="field"><label>Detalle</label><input type="text" id="f-mov-detalle" value="'+esc(e.detalle)+'" style="width:200px"></div>'+
+      '<div class="form-grid" style="margin-top:12px">'+
+        '<div class="'+claseCampo('proveedor')+'"><label>Proveedor</label><input type="text" id="f-mov-proveedor" value="'+esc(e.proveedor)+'">'+msgCampo('proveedor')+'</div>'+
+        '<div class="field"><label>Detalle</label><input type="text" id="f-mov-detalle" value="'+esc(e.detalle)+'"></div>'+
+      '</div>'+
+      '<div class="form-grid">'+
         '<div class="field"><label>Tipo</label><select id="f-mov-tipo">'+
           '<option value="egreso" '+(e.tipo==='egreso'?'selected':'')+'>Egreso</option>'+
           '<option value="ingreso" '+(e.tipo==='ingreso'?'selected':'')+'>Ingreso</option>'+
         '</select></div>'+
-        '<div class="'+claseCampo('monto')+'"><label>Monto</label><input type="number" step="0.01" id="f-mov-monto" value="'+esc(e.monto)+'" style="width:120px">'+msgCampo('monto')+'</div>'+
-        '<div class="field"><label>&nbsp;</label><label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:normal;white-space:nowrap;padding:7px 0">'+
-          '<input type="checkbox" id="f-mov-tarjeta" '+(e.tarjeta?'checked':'')+' style="width:auto"> 💳 Pagado con tarjeta de crédito'+
-        '</label></div>'+
+        '<div class="'+claseCampo('monto')+'"><label>Monto</label><input type="number" step="0.01" id="f-mov-monto" value="'+esc(e.monto)+'">'+msgCampo('monto')+'</div>'+
+      '</div>'+
+      '<label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:normal;margin-top:14px">'+
+        '<input type="checkbox" id="f-mov-tarjeta" '+(e.tarjeta?'checked':'')+' style="width:auto"> <i class="bi bi-credit-card"></i> Pagado con tarjeta de crédito'+
+      '</label>'+
       campoCuotas;
   }
 
   if(STATE.bulkEditMovAbierto){
     MODAL_HTML = renderBulkEditMovModal();
   } else if(editing || STATE.nuevoMovAbierto){
-    MODAL_HTML = '<div class="modal-overlay" data-modal-backdrop="edit"><div class="modal-card">'+
+    MODAL_HTML = '<div class="modal-overlay" data-modal-backdrop="edit"><div class="modal-card modal-card-lg">'+
       '<h2>'+(editing?'Editar movimiento':'Nuevo movimiento')+'</h2>'+
       camposMov(e, subOptionsArr)+
         '<button data-action="save-mov" data-id="'+(editing?editing.id:'')+'">'+(editing?'Guardar cambios':'Agregar')+'</button>'+
@@ -2116,7 +2131,7 @@ function renderMovimientos(){
 
   var alertaVencimientosHtml = vencimientosProximos.length ? ''+
   '<div class="card" style="border-color:var(--danger);background:var(--danger-soft)">'+
-    '<h3 style="color:var(--danger)">⏰ Vencimientos próximos</h3>'+
+    '<h3 style="color:var(--danger)"><i class="bi bi-alarm"></i> Vencimientos próximos</h3>'+
     '<div style="font-size:13px;margin-bottom:8px">'+
       vencimientosProximos.map(function(x){
         return '<div style="margin-bottom:4px">'+(x.dias===0?'<strong>Hoy</strong>':'<strong>Mañana</strong>')+' — '+esc(x.concepto)+(x.centroId?' ('+esc(nombreCentro(x.centroId).split(' · ')[0])+')':'')+' — <span class="mono">'+fmtMonto(x.monto)+'</span></div>';
@@ -2127,7 +2142,7 @@ function renderMovimientos(){
 
   var controlTecHtml = (Math.abs(difTec) > 0.005 || categoriasSospechosas.length > 0) ? ''+
   '<div class="card" style="border-color:var(--danger);background:var(--danger-soft)">'+
-    '<h3 style="color:var(--danger)">⚠️ Control TEC</h3>'+
+    '<h3 style="color:var(--danger)"><i class="bi bi-exclamation-triangle"></i> Control TEC</h3>'+
     (Math.abs(difTec) > 0.005 ? ''+
       '<div style="font-size:13px;margin-bottom:6px">Ingresos TEC: <strong class="mono">'+fmtMonto(ingresoTec)+'</strong> — Egresos TEC: <strong class="mono">'+fmtMonto(egresoTec)+'</strong> — Diferencia: <strong class="mono">'+fmtMonto(difTec)+'</strong></div>'+
       '<div style="font-size:12px;color:var(--ink-soft)">Debería dar $0,00. Si no da cero, hay transferencias sin su par correspondiente en el otro Centro de Costo (revisá con el filtro de Categoría = TEC).</div>'
@@ -2149,7 +2164,7 @@ function renderMovimientos(){
       '<h3 style="margin-bottom:0">Filtros'+(filtrosColapsados && hayFiltrosActivosMov ? ' <span style="font-size:10px;font-weight:600;color:var(--accent);background:var(--accent-soft);border-radius:10px;padding:2px 8px;text-transform:none;letter-spacing:normal">activos</span>' : '')+'</h3>'+
       '<div style="display:flex;align-items:center;gap:8px">'+
         (hayFiltrosActivosMov && !filtrosColapsados ? '<button class="secondary" data-action="limpiar-filtros-mov" style="font-size:12px;padding:6px 12px">✕ Limpiar filtros</button>' : '')+
-        '<button class="secondary solo-mobile" data-action="toggle-filtros-mov" style="font-size:12px;padding:6px 12px" aria-label="'+(filtrosColapsados?'Mostrar filtros':'Ocultar filtros')+'">'+(filtrosColapsados?'🔍 Filtros':'✕ Ocultar')+'</button>'+
+        '<button class="secondary solo-mobile" data-action="toggle-filtros-mov" style="font-size:12px;padding:6px 12px" aria-label="'+(filtrosColapsados?'Mostrar filtros':'Ocultar filtros')+'">'+(filtrosColapsados?'<i class="bi bi-funnel"></i> Filtros':'<i class="bi bi-x-lg"></i> Ocultar')+'</button>'+
       '</div>'+
     '</div>'+
     (filtrosColapsados ? '' : ''+
@@ -2163,16 +2178,16 @@ function renderMovimientos(){
         '<input type="checkbox" id="ff-solo-incompletos" '+(f.soloIncompletos?'checked':'')+' style="width:auto"> Solo incompletos ('+cantidadIncompletos+')'+
       '</label></div>'+
       '<div class="field"><label>&nbsp;</label><label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:normal;white-space:nowrap;padding:7px 0">'+
-        '<input type="checkbox" id="ff-solo-tarjeta" '+(f.soloTarjeta?'checked':'')+' style="width:auto"> 💳 Solo tarjeta'+
+        '<input type="checkbox" id="ff-solo-tarjeta" '+(f.soloTarjeta?'checked':'')+' style="width:auto"> <i class="bi bi-credit-card"></i> Solo tarjeta'+
       '</label></div>'+
-      (f.soloIncompletos ? '<div class="field"><label>&nbsp;</label><button class="secondary" data-action="refrescar-incompletos" style="font-size:12px;padding:6px 12px">🔄 Actualizar lista</button></div>' : '')+
+      (f.soloIncompletos ? '<div class="field"><label>&nbsp;</label><button class="secondary" data-action="refrescar-incompletos" style="font-size:12px;padding:6px 12px"><i class="bi bi-arrow-clockwise"></i> Actualizar lista</button></div>' : '')+
     '</div>')+
   '</div>';
 
   var barraSeleccionHtml = seleccionados.length ? ''+
     '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;font-size:13px">'+
       '<span>'+seleccionados.length+' seleccionado(s)</span>'+
-      '<button data-action="abrir-bulk-edit-mov" style="font-size:12px;padding:6px 12px">✏️ Editar seleccionados</button>'+
+      '<button data-action="abrir-bulk-edit-mov" style="font-size:12px;padding:6px 12px"><i class="bi bi-pencil"></i> Editar seleccionados</button>'+
       '<button class="secondary" data-action="deseleccionar-mov" style="font-size:12px;padding:6px 12px">Deseleccionar todo</button>'+
     '</div>' : '';
 
@@ -2222,7 +2237,7 @@ function renderImportar(){
   '<div class="card">'+
     '<h2>Importar movimientos</h2>'+
     msgHtml+
-    '<div class="row">'+
+    '<div class="fields-row">'+
       '<div class="field"><label>Entidad</label><select id="imp-entidad">'+
         '<option value="mp" '+(e==='mp'?'selected':'')+'>Mercado Pago</option>'+
         '<option value="santander" '+(e==='santander'?'selected':'')+'>Santander</option>'+
@@ -2236,7 +2251,7 @@ function renderImportar(){
     excelHint+
     '<div class="field" style="margin-top:10px"><label>Texto del resumen</label>'+
     '<textarea id="imp-raw" rows="8" style="width:100%;font-family:\'Geist Mono\',ui-monospace,Consolas,monospace;font-size:12px" placeholder="Pegá acá el texto copiado del resumen...">'+esc(STATE.importRaw||'')+'</textarea></div>'+
-    '<div class="row" style="margin-top:10px"><button data-action="preview-import">Previsualizar</button></div>'+
+    '<div class="fields-row" style="margin-top:10px"><button data-action="preview-import">Previsualizar</button></div>'+
   '</div>';
 
   var previewHtml = '';
@@ -2257,7 +2272,7 @@ function renderImportar(){
       var subOpts = subcategoriasOrdenadas(STATE.subcategorias.filter(function(s){return s.categoriaId===r.categoriaId;}))
         .map(function(s){ return '<option value="'+s.id+'" '+(r.subcategoriaId===s.id?'selected':'')+'>'+esc(s.nombre)+'</option>'; }).join('');
       var subSel = '<select data-rowid="'+r.id+'" data-field="subcategoriaId"><option value="">—</option>'+subOpts+'</select>';
-      var dupTag = esDup ? ' <span title="Posible duplicado: mismo Centro, fecha y monto que otro movimiento. Revisá antes de importar." style="color:var(--danger)">⚠️</span>' : '';
+      var dupTag = esDup ? ' <span title="Posible duplicado: mismo Centro, fecha y monto que otro movimiento. Revisá antes de importar." style="color:var(--danger)"><i class="bi bi-exclamation-triangle"></i></span>' : '';
       var provInput = '<input type="text" id="imp-prov-'+r.id+'" data-rowid="'+r.id+'" data-field="proveedor" value="'+esc(r.proveedor)+'" style="width:100%;min-width:110px;box-sizing:border-box">';
       var detInput = '<input type="text" id="imp-det-'+r.id+'" data-rowid="'+r.id+'" data-field="detalle" value="'+esc(r.detalle)+'" style="width:100%;min-width:110px;box-sizing:border-box">';
       var cuotasInput = '<input type="text" id="imp-cuotas-'+r.id+'" data-rowid="'+r.id+'" data-field="cuotas" value="'+esc(r.cuotas||'')+'" style="width:100%;min-width:60px;box-sizing:border-box">';
@@ -2284,7 +2299,7 @@ function renderImportar(){
     previewHtml = ''+
     '<div class="card">'+
       '<h3>Aplicar a todas las filas</h3>'+
-      '<div class="row">'+
+      '<div class="fields-row">'+
         '<div class="field"><label>Centro de Costo</label><select id="imp-centro-all"><option value="">(sin cambio)</option>'+centroOpts+'</select></div>'+
         '<div class="field"><label>Categoría</label><select id="imp-cat-all"><option value="">(sin cambio)</option>'+catOpts+'</select></div>'+
         '<button class="secondary" data-action="apply-all">Aplicar a todas</button>'+
@@ -2292,10 +2307,10 @@ function renderImportar(){
     '</div>'+
     '<div class="card">'+
       '<h3>Previsualización ('+STATE.importPreview.length+' movimiento(s), '+incluidos+' seleccionado(s))</h3>'+
-      (duplicados>0 ? '<div class="msg err">⚠️ '+duplicados+' fila(s) marcada(s) como posible duplicado (mismo Centro, fecha y monto que otro movimiento). Revisalas antes de confirmar.</div>' : '')+
+      (duplicados>0 ? '<div class="msg err"><i class="bi bi-exclamation-triangle"></i> '+duplicados+' fila(s) marcada(s) como posible duplicado (mismo Centro, fecha y monto que otro movimiento). Revisalas antes de confirmar.</div>' : '')+
       '<table id="import-preview-table" class="table"><thead><tr><th></th><th>Fecha</th><th>Fecha de consumo</th><th>Centro</th><th>Categoría</th><th>Subcategoría</th><th>Proveedor</th><th>Detalle</th><th>Cuotas</th><th class="num">Ingreso</th><th class="num">Egreso</th><th title="Guardar la relación proveedor → categoría como regla para futuras importaciones">Regla</th></tr></thead>'+
       '<tbody>'+rows+'</tbody></table>'+
-      '<div class="row" style="margin-top:14px">'+
+      '<div class="fields-row" style="margin-top:14px">'+
         '<button data-action="confirm-import">Importar '+incluidos+' movimiento(s)</button>'+
         '<button class="secondary" data-action="cancel-import">Cancelar</button>'+
       '</div>'+
@@ -2314,7 +2329,7 @@ function renderImportar(){
       var tagCC = r.ccExists ? '' : ' <span style="color:var(--danger);font-size:11px">(se creará)</span>';
       var tagCat = r.catExists ? '' : ' <span style="color:var(--danger);font-size:11px">(se creará)</span>';
       var tagSub = (!r.subcategoriaText) ? '' : (r.subExists ? '' : ' <span style="color:var(--danger);font-size:11px">(se creará)</span>');
-      var dupTag = esDup ? ' <span title="Posible duplicado: mismo Centro, fecha y monto que otro movimiento. Revisá antes de importar." style="color:var(--danger)">⚠️</span>' : '';
+      var dupTag = esDup ? ' <span title="Posible duplicado: mismo Centro, fecha y monto que otro movimiento. Revisá antes de importar." style="color:var(--danger)"><i class="bi bi-exclamation-triangle"></i></span>' : '';
       return '<tr'+(esDup?' class="fila-duplicada"':'')+'>'+
         '<td><input type="checkbox" data-rowid="'+r.id+'" data-field="incluir" '+(r.incluir?'checked':'')+'></td>'+
         '<td class="mono">'+esc(fechaISOaDDMMAAAA(r.fecha)||r.fecha)+dupTag+'</td>'+
@@ -2336,10 +2351,10 @@ function renderImportar(){
     '<div class="card">'+
       '<h3>Previsualización ('+STATE.importPreviewExcel.length+' movimiento(s), '+incluidosExcel+' seleccionado(s))</h3>'+
       (nuevosCC>0||nuevasCat>0 ? '<div class="msg ok">Se van a crear automáticamente: '+nuevosCC+' Centro(s) de Costo nuevo(s), '+nuevasCat+' Categoría(s) nueva(s) (marcados en rojo abajo). Revisá que no sean errores de tipeo antes de confirmar.</div>' : '')+
-      (duplicadosExcel>0 ? '<div class="msg err">⚠️ '+duplicadosExcel+' fila(s) marcada(s) como posible duplicado (mismo Centro, fecha y monto que otro movimiento). Revisalas antes de confirmar.</div>' : '')+
+      (duplicadosExcel>0 ? '<div class="msg err"><i class="bi bi-exclamation-triangle"></i> '+duplicadosExcel+' fila(s) marcada(s) como posible duplicado (mismo Centro, fecha y monto que otro movimiento). Revisalas antes de confirmar.</div>' : '')+
       '<table id="import-preview-excel-table" class="table"><thead><tr><th></th><th>Fecha</th><th>CC</th><th>Categoría</th><th>Subcategoría</th><th>Proveedor</th><th>Detalle</th><th class="num">Ingreso</th><th class="num">Egreso</th></tr></thead>'+
       '<tbody>'+rowsExcel+'</tbody></table>'+
-      '<div class="row" style="margin-top:14px">'+
+      '<div class="fields-row" style="margin-top:14px">'+
         '<button data-action="confirm-import-excel">Importar '+incluidosExcel+' movimiento(s)</button>'+
         '<button class="secondary" data-action="cancel-import">Cancelar</button>'+
       '</div>'+
@@ -2358,7 +2373,7 @@ function renderImportar(){
     '<h3>Reglas de categorización</h3>'+
     '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Al previsualizar una importación, si el proveedor de una fila coincide (parcialmente, sin importar mayúsculas) con el texto de una regla, se precargan su Categoría y Subcategoría. Se guardan en este navegador, no en la base de datos compartida.</div>'+
     (STATE.reglaFormMsg ? '<div class="msg err">'+esc(STATE.reglaFormMsg)+'</div>' : '')+
-    '<div class="row" style="margin-bottom:10px">'+
+    '<div class="fields-row" style="margin-bottom:10px">'+
       '<div class="field"><label>Proveedor (texto parcial)</label><input type="text" id="regla-proveedor" placeholder="Ej: Barrientos"></div>'+
       '<div class="field"><label>Categoría</label><select id="regla-categoria"><option value="">Elegir...</option>'+categoriaOptsRegla+'</select></div>'+
       '<div class="field"><label>Subcategoría (opcional)</label><input type="text" id="regla-subcategoria" placeholder="Ej: Limpieza"></div>'+
@@ -2418,8 +2433,8 @@ function renderVencimientos(){
     MODAL_HTML = '<div class="modal-overlay" data-modal-backdrop="edit"><div class="modal-card">'+
       '<h2>Editar vencimiento</h2>'+
       (STATE.vencFormMsg ? '<div class="msg err">'+esc(STATE.vencFormMsg)+'</div>' : '')+
-      '<div class="row">'+ campoVenc(editing, true) +'</div>'+
-      '<div class="row" style="margin-top:14px">'+
+      '<div class="fields-row">'+ campoVenc(editing, true) +'</div>'+
+      '<div class="fields-row" style="margin-top:14px">'+
         '<button data-action="save-venc" data-id="'+editing.id+'">Guardar cambios</button>'+
         '<button class="secondary" data-action="cancel-edit">Cancelar</button>'+
       '</div>'+
@@ -2430,7 +2445,7 @@ function renderVencimientos(){
   '<div class="card">'+
     '<h2>Nuevo vencimiento</h2>'+
     (STATE.vencFormMsg ? '<div class="msg err">'+esc(STATE.vencFormMsg)+'</div>' : '')+
-    '<div class="row">'+ campoVenc({concepto:'', fecha:'', monto:'', centroId:''}) +
+    '<div class="fields-row">'+ campoVenc({concepto:'', fecha:'', monto:'', centroId:''}) +
       '<button data-action="save-venc" data-id="">Agregar</button>'+
     '</div>'+
   '</div>';
@@ -2441,7 +2456,7 @@ function renderVencimientos(){
     bulkMsgHtml+
     '<div class="field"><label>Pegá "Concepto" + tab + "Fecha (dd/mm/aaaa)" + tab + "Monto" por línea. Opcional: un cuarto valor con el código de Centro de Costo.</label>'+
     '<textarea id="bulk-vencimientos" rows="5" style="width:100%;font-family:\'Geist Mono\',ui-monospace,Consolas,monospace;font-size:12px" placeholder="Tarjeta Visa Santander\t13/07/2026\t216759.02\tBSF"></textarea></div>'+
-    '<div class="row" style="margin-top:10px"><button data-action="bulk-add-vencimientos">Cargar todos</button></div>'+
+    '<div class="fields-row" style="margin-top:10px"><button data-action="bulk-add-vencimientos">Cargar todos</button></div>'+
   '</div>';
 
   var lista = STATE.vencimientos.filter(function(v){ return v.estado!=='pagado'; }).sort(function(a,b){ return (a.fecha||'').localeCompare(b.fecha||''); });
@@ -2498,7 +2513,7 @@ function renderVencimientos(){
       '<td class="mono" data-label="Vence">'+diasTxt+'</td>'+
       '<td class="mono" data-label="Centro">'+esc(nombreCentro(m.centroId)).split(' · ')[0]+'</td>'+
       '<td data-label="Categoría">'+esc(nombreCategoria(m.categoriaId))+'</td>'+
-      '<td data-label="Proveedor">'+(m.tarjeta?'<span title="Pagado con tarjeta de crédito">💳</span> ':'')+esc(m.proveedor||'')+'</td>'+
+      '<td data-label="Proveedor">'+(m.tarjeta?'<span title="Pagado con tarjeta de crédito"><i class="bi bi-credit-card"></i></span> ':'')+esc(m.proveedor||'')+'</td>'+
       '<td data-label="Detalle">'+esc(m.detalle||'')+'</td>'+
       '<td class="num ingreso" data-label="Ingreso">'+(Number(m.ingreso)?fmtMonto(m.ingreso):'')+'</td>'+
       '<td class="num egreso" data-label="Egreso">'+(Number(m.egreso)?fmtMonto(m.egreso):'')+'</td>'+
@@ -2532,7 +2547,7 @@ function renderVencimientos(){
       '<summary>'+
         '<span class="mono">'+esc(fechaISOaDDMMAAAA(g.fecha)||g.fecha)+'</span>'+
         '<span style="color:var(--ink-soft);font-size:12px">'+diasTxt+'</span>'+
-        '<span>💳 '+esc(nombreCC)+'</span>'+
+        '<span><i class="bi bi-credit-card"></i> '+esc(nombreCC)+'</span>'+
         '<span style="font-size:12px;color:var(--ink-soft)">'+g.movs.length+' movimiento(s)</span>'+
         '<span class="mono egreso" style="margin-left:auto;font-weight:600">'+fmtMonto(g.total)+'</span>'+
       '</summary>'+
@@ -2612,7 +2627,7 @@ function renderSaldos(){
       return '<div class="saldo-item">'+
         '<div class="saldo-item-encabezado">'+
           '<div>'+renderChip(f.codigo, colorCentro(f.id), colorTextoCentro(f.id))+'<span class="saldo-item-nombre"> · '+esc(f.nombre)+'</span></div>'+
-          '<button type="button" class="icon-btn" data-action="ir-a-movimientos-centro" data-id="'+f.id+'" title="Ver movimientos de este Centro de Costo" aria-label="Ver movimientos">🧾</button>'+
+          '<button type="button" class="icon-btn" data-action="ir-a-movimientos-centro" data-id="'+f.id+'" title="Ver movimientos de este Centro de Costo" aria-label="Ver movimientos"><i class="bi bi-receipt"></i></button>'+
         '</div>'+
         '<div class="saldo-item-monto">'+fmtMonto(f.saldo)+'</div>'+
       '</div>';
@@ -2997,10 +3012,10 @@ function renderResumen(){
     '</div>'+
   '</div>'+
   '<div class="summary-cards">'+
-    '<div class="summary-card"><div class="kpi-ic kpi-ic-accent">↑</div><div class="label">Total ingresos</div><div class="value ingreso">'+fmtMonto(totalIngreso)+'</div></div>'+
-    '<div class="summary-card"><div class="kpi-ic kpi-ic-danger">↓</div><div class="label">Total egresos</div><div class="value egreso">'+fmtMonto(totalEgreso)+'</div></div>'+
-    '<div class="summary-card"><div class="kpi-ic kpi-ic-warning">🏗</div><div class="label">Obra</div><div class="value egreso">'+fmtMonto(totalObra)+'</div></div>'+
-    '<div class="summary-card"><div class="kpi-ic kpi-ic-accent">Σ</div><div class="label">Saldo</div><div class="value">'+fmtMonto(saldo)+'</div></div>'+
+    '<div class="summary-card"><div class="kpi-ic kpi-ic-accent"><i class="bi bi-arrow-up"></i></div><div class="label">Total ingresos</div><div class="value ingreso">'+fmtMonto(totalIngreso)+'</div></div>'+
+    '<div class="summary-card"><div class="kpi-ic kpi-ic-danger"><i class="bi bi-arrow-down"></i></div><div class="label">Total egresos</div><div class="value egreso">'+fmtMonto(totalEgreso)+'</div></div>'+
+    '<div class="summary-card"><div class="kpi-ic kpi-ic-warning"><i class="bi bi-building"></i></div><div class="label">Obra</div><div class="value egreso">'+fmtMonto(totalObra)+'</div></div>'+
+    '<div class="summary-card"><div class="kpi-ic kpi-ic-accent"><i class="bi bi-wallet2"></i></div><div class="label">Saldo</div><div class="value">'+fmtMonto(saldo)+'</div></div>'+
   '</div>'+
   '<div class="card">'+
     '<h3>Tendencia mensual (Ingresos vs Egresos)</h3>'+
@@ -3164,8 +3179,8 @@ function renderFlujoCaja(){
     MODAL_HTML = '<div class="modal-overlay" data-modal-backdrop="edit"><div class="modal-card">'+
       '<h2>Editar deuda</h2>'+
       (STATE.deudaFormMsg ? '<div class="msg err">'+esc(STATE.deudaFormMsg)+'</div>' : '')+
-      '<div class="row">'+ campoDeuda(editing) +'</div>'+
-      '<div class="row" style="margin-top:14px">'+
+      '<div class="fields-row">'+ campoDeuda(editing) +'</div>'+
+      '<div class="fields-row" style="margin-top:14px">'+
         '<button data-action="save-deuda" data-id="'+editing.id+'">Guardar cambios</button>'+
         '<button class="secondary" data-action="cancel-edit">Cancelar</button>'+
       '</div>'+
@@ -3176,7 +3191,7 @@ function renderFlujoCaja(){
   '<div class="card">'+
     '<h2>Nueva deuda</h2>'+
     (STATE.deudaFormMsg ? '<div class="msg err">'+esc(STATE.deudaFormMsg)+'</div>' : '')+
-    '<div class="row">'+ campoDeuda({concepto:'', saldoPendiente:'', cuotaMensual:'', centroId:''}) +
+    '<div class="fields-row">'+ campoDeuda({concepto:'', saldoPendiente:'', cuotaMensual:'', centroId:''}) +
       '<button data-action="save-deuda" data-id="">Agregar</button>'+
     '</div>'+
   '</div>';
@@ -3197,7 +3212,7 @@ function renderFlujoCaja(){
 
   var configHtml = '<div class="card">'+
     '<h3>Configuración</h3>'+
-    '<div class="row">'+
+    '<div class="fields-row">'+
       '<div class="field"><label>Ventana histórica para el promedio</label><select id="fc-ventana">'+
         '<option value="3m" '+(ventana==='3m'?'selected':'')+'>Últimos 3 meses cerrados</option>'+
         '<option value="6m" '+(ventana==='6m'?'selected':'')+'>Últimos 6 meses cerrados</option>'+
@@ -3379,7 +3394,7 @@ function gimnasioListaUltimasVisitas(){
   return lista.map(function(v){
     return '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--rule)">'+
       '<span><strong style="color:'+GYM_COLOR[v.persona]+'">'+nombrePersona(v.persona)+'</strong> — '+fechaISOaDDMMAAAA(v.fecha)+'</span>'+
-      '<button class="icon-btn icon-btn-danger" data-action="gym-borrar-visita" data-id="'+v.id+'" title="Borrar (fue un error)">🗑️</button>'+
+      '<button class="icon-btn icon-btn-danger" data-action="gym-borrar-visita" data-id="'+v.id+'" title="Borrar (fue un error)"><i class="bi bi-trash"></i></button>'+
     '</div>';
   }).join('');
 }
@@ -3409,7 +3424,7 @@ function campoUsdt(e){
   var camposTipo;
   if(esVenta){
     camposTipo = ''+
-      '<div class="row" style="margin-top:10px">'+
+      '<div class="fields-row" style="margin-top:10px">'+
         '<div class="field"><label>Monto recibido (ARS)</label><input type="number" step="0.01" id="f-usdt-monto-ars" value="'+esc(e.montoArs)+'" style="width:140px"></div>'+
         '<div class="field"><label>Centro de Costo destino</label><select id="f-usdt-centro"><option value="">Elegir...</option>'+
           centrosOrdenados().map(function(c){ return '<option value="'+c.id+'" '+(e.centroId===c.id?'selected':'')+'>'+esc(c.codigo)+' · '+esc(c.nombre)+'</option>'; }).join('')+
@@ -3423,7 +3438,7 @@ function campoUsdt(e){
       ? '<button type="button" class="link" data-action="usar-cotizacion-usdt-ingreso" style="padding:0;font-size:11px;margin-top:4px">Usar cotización de hoy ($'+fmtMonto(STATE.usdtCotizacionBid)+'/USDT → $'+fmtMonto(cantidadNum*STATE.usdtCotizacionBid)+')</button>'
       : '';
     camposTipo = ''+
-      '<div class="row" style="margin-top:10px">'+
+      '<div class="fields-row" style="margin-top:10px">'+
         categoriaSubHtml+
         '<div class="field"><label>Valor en pesos (referencial)</label><input type="number" step="0.01" id="f-usdt-monto-ars" value="'+esc(e.montoArs)+'" style="width:140px">'+sugerenciaCotizacion+'</div>'+
       '</div>'+
@@ -3431,7 +3446,7 @@ function campoUsdt(e){
   }
   return ''+
     (STATE.usdtFormMsg ? '<div class="msg err">'+esc(STATE.usdtFormMsg)+'</div>' : '')+
-    '<div class="row">'+
+    '<div class="fields-row">'+
       '<div class="field"><label>Tipo</label><select id="f-usdt-tipo">'+
         '<option value="ingreso" '+(e.tipo==='ingreso'?'selected':'')+'>Ingreso de USDT</option>'+
         '<option value="venta" '+(e.tipo==='venta'?'selected':'')+'>Venta de USDT</option>'+
@@ -3456,7 +3471,7 @@ function renderUsdt(){
     MODAL_HTML = '<div class="modal-overlay" data-modal-backdrop="edit"><div class="modal-card">'+
       '<h2>Editar movimiento USDT</h2>'+
       campoUsdt(e)+
-      '<div class="row" style="margin-top:14px">'+
+      '<div class="fields-row" style="margin-top:14px">'+
         '<button data-action="save-usdt" data-id="'+editing.id+'">Guardar cambios</button>'+
         '<button class="secondary" data-action="cancel-edit">Cancelar</button>'+
       '</div>'+
@@ -3466,7 +3481,7 @@ function renderUsdt(){
     '<div class="card">'+
       '<h2>Nuevo movimiento USDT</h2>'+
       campoUsdt(e)+
-      '<div class="row" style="margin-top:14px"><button data-action="save-usdt" data-id="">Agregar</button></div>'+
+      '<div class="fields-row" style="margin-top:14px"><button data-action="save-usdt" data-id="">Agregar</button></div>'+
     '</div>';
   }
 
@@ -3475,21 +3490,21 @@ function renderUsdt(){
     var esVenta = u.tipo==='venta';
     return '<tr>'+
       '<td class="mono" data-label="Fecha">'+esc(fechaISOaDDMMAAAA(u.fecha)||u.fecha||'')+'</td>'+
-      '<td data-label="Tipo">'+(esVenta?'🔴 Venta':'🟢 Ingreso')+'</td>'+
+      '<td data-label="Tipo">'+(esVenta?'<i class="bi bi-arrow-down-circle" style="color:var(--danger)"></i> Venta':'<i class="bi bi-arrow-up-circle" style="color:var(--accent)"></i> Ingreso')+'</td>'+
       '<td class="num mono" data-label="Cantidad">'+fmtCantidadUsdt(u.cantidad)+'</td>'+
       '<td class="num mono" data-label="Monto ARS">'+(u.montoArs?fmtMonto(u.montoArs):'—')+'</td>'+
       '<td class="num mono" data-label="Cotización">'+(u.cotizacion?fmtMonto(u.cotizacion):'—')+'</td>'+
       '<td data-label="Centro">'+(esVenta?esc(nombreCentro(u.centroId).split(' · ')[0]):'—')+'</td>'+
       '<td data-label="Categoría">'+(u.categoriaId?esc(nombreCategoria(u.categoriaId)):'—')+'</td>'+
       '<td data-label="Detalle">'+esc(u.detalle||'')+'</td>'+
-      '<td class="actions-cell"><button class="icon-btn" data-action="edit-usdt" data-id="'+u.id+'" title="Editar" aria-label="Editar">✏️</button>'+
-      '<button class="icon-btn icon-btn-danger" data-action="del-usdt" data-id="'+u.id+'" title="Borrar" aria-label="Borrar">🗑️</button></td>'+
+      '<td class="actions-cell"><button class="icon-btn" data-action="edit-usdt" data-id="'+u.id+'" title="Editar" aria-label="Editar"><i class="bi bi-pencil"></i></button>'+
+      '<button class="icon-btn icon-btn-danger" data-action="del-usdt" data-id="'+u.id+'" title="Borrar" aria-label="Borrar"><i class="bi bi-trash"></i></button></td>'+
     '</tr>';
   }).join('');
 
   return ''+
   '<div class="card">'+
-    '<h2>🪙 Tenencia de USDT</h2>'+
+    '<h2><i class="bi bi-coin"></i> Tenencia de USDT</h2>'+
     '<div style="font-size:12px;color:var(--ink-soft);margin-top:2px">Registrá acá tus ingresos en USDT y, cuando los vendas, cuánto recibiste en pesos. La venta resta de tu tenencia y crea sola el ingreso en pesos en Movimientos — no hace falta cargarlo dos veces.</div>'+
   '</div>'+
   '<div class="summary-cards">'+
