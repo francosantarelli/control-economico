@@ -1362,8 +1362,7 @@ function renderInterno(){
 
   var sidebarHtml = '<div class="sidebar'+(STATE.menuMovilAbierto?' abierto':'')+'">'+
     '<div class="masthead"><span class="masthead-mark"><i class="bi bi-piggy-bank"></i></span><h1>Control</h1><div class="tagline">Control económico<br>datos compartidos</div></div>'+
-    '<button data-action="abrir-nuevo-mov" title="Nuevo movimiento" style="width:100%;margin-bottom:10px;font-size:14px;padding:12px">+<span class="tab-label"> Movimiento</span></button>'+
-    '<button data-action="abrir-efectivo" class="solo-mobile" style="width:100%;margin-bottom:16px;background:transparent;border:1.5px solid var(--accent);color:var(--accent);font-size:14px;padding:12px"><i class="bi bi-cash-coin"></i> Efectivo</button>'+
+    '<button data-action="abrir-nuevo-mov" title="Nuevo movimiento" style="width:100%;margin-bottom:16px;font-size:14px;padding:12px">+<span class="tab-label"> Movimiento</span></button>'+
     '<div class="tabs">';
   tabs.forEach(function(t){
     sidebarHtml += '<div class="tab '+(STATE.activeTab===t.id?'active':'')+'" data-tab="'+t.id+'" title="'+esc(t.label)+'"><span class="tab-icon"><i class="bi '+t.icono+'"></i></span><span class="tab-label">'+esc(t.label)+'</span></div>';
@@ -1380,7 +1379,7 @@ function renderInterno(){
       '<h1>Control</h1>'+
     '</div>'+
     '<div style="display:flex;align-items:center;gap:10px;flex-shrink:0">'+
-      '<button class="mobile-add-btn" data-action="abrir-nuevo-mov" title="Nuevo movimiento" aria-label="Nuevo movimiento"><i class="bi bi-plus-lg"></i></button>'+
+      '<button class="mobile-add-btn" data-action="abrir-efectivo" title="Cargar efectivo" aria-label="Cargar efectivo"><i class="bi bi-cash-coin"></i></button>'+
       renderMenuUsuario()+
     '</div>'+
   '</div>'+
