@@ -1,10 +1,20 @@
-name: Tests
+name: Tests y deploy
 
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Evita que dos deploys pisen el orden de publicación si hay pushes seguidos a main.
+concurrency:
+  group: pages
+  cancel-in-progress: false
 
 jobs:
   test:
@@ -21,3 +31,37 @@ jobs:
 
       - name: Correr tests
         run: npm test
+
+  # Solo corre en push a main (no en pull requests), y solo si "test" pasó — así un
+  # test roto nunca llega a publicarse en GitHub Pages. Requiere que en Settings →
+  # Pages → Source esté elegido "GitHub Actions" (no "Deploy from a branch").
+  deploy:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar Pages
+        uses: actions/configure-pages@v5
+
+      # Solo lo que el sitio realmente necesita para funcionar — nada de schema.sql,
+      # migrations/, test/, package.json, etc. (antes se publicaba el repo entero: con
+      # "Deploy from a branch" GitHub Pages sirve la raíz completa tal cual, sin filtrar).
+      - name: Armar carpeta pública
+        run: |
+          mkdir _site
+          cp index.html app.js style.css favicon.ico favicon.png _site/
+          cp -r assets _site/assets
+
+      - name: Subir sitio como artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '_site'
+
+      - name: Publicar en GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
