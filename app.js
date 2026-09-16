@@ -62,6 +62,7 @@ var STATE = { centros: [], categorias: [], subcategorias: [], movimientos: [], v
   nuevoMovAbierto:false, movDraftCentroDestinoId:'', comboAbierto:null, comboBusqueda:'', comboHighlight:0,
   movSeleccionados:[], bulkEditMovAbierto:false, bulkEditMovMsg:null, movPaginaActual:1, gruposAbiertos:{},
   tema: (function(){ try{ return localStorage.getItem('controlTema')==='oscuro' ? 'oscuro' : 'claro'; }catch(e){ return 'claro'; } })(),
+  temaColor: (function(){ try{ var c = localStorage.getItem('controlTemaColor'); return (c==='azul'||c==='naranja') ? c : 'verde'; }catch(e){ return 'verde'; } })(),
   menuUsuarioAbierto:false, usdtFormMsg:null, usdtDraft:null, usdtIngresoOpcionalesAbierto:false,
   usdtCotizacionBid:null, usdtCotizacionActualizada:null, usdtCotizacionError:null, usdtCotizacionCargando:false,
   deudaFormMsg:null, flujoVentana:'6m', flujoHorizonte:12, filtrosMovAbiertos:false };
@@ -146,8 +147,19 @@ function renderMenuUsuario(){
   var abierto = STATE.menuUsuarioAbierto;
   var panelHtml = '';
   if(abierto){
+    var coloresTema = [
+      {id:'verde', nombre:'Verde', hex:'#2F9E6E'},
+      {id:'azul', nombre:'Azul', hex:'#2F6FE0'},
+      {id:'naranja', nombre:'Naranja', hex:'#E0722F'}
+    ];
+    var swatchesHtml = coloresTema.map(function(c){
+      var activo = (STATE.temaColor||'verde')===c.id;
+      return '<button type="button" class="color-swatch'+(activo?' activo':'')+'" data-action="set-tema-color" data-id="'+c.id+'" style="background:'+c.hex+'" title="'+c.nombre+'" aria-label="Tema '+c.nombre+'" aria-pressed="'+activo+'"></button>';
+    }).join('');
     panelHtml = '<div class="user-menu-panel">'+
       (STATE.usuarioEmail ? '<div class="user-menu-email">'+esc(STATE.usuarioEmail)+'</div>' : '')+
+      '<div class="user-menu-label">Color</div>'+
+      '<div class="user-menu-colores">'+swatchesHtml+'</div>'+
       '<button type="button" class="user-menu-item" data-action="toggle-tema">'+(STATE.tema==='oscuro'?'<i class="bi bi-sun"></i> Modo claro':'<i class="bi bi-moon-stars"></i> Modo oscuro')+'</button>'+
       '<button type="button" class="user-menu-item" data-action="cerrar-sesion">Cerrar sesión</button>'+
     '</div>';
@@ -4393,6 +4405,14 @@ async function handleAction(action, id){
     else document.documentElement.removeAttribute('data-theme');
     try{ localStorage.setItem('controlTema', STATE.tema); }catch(e){}
     STATE.menuUsuarioAbierto = false;
+    render(); return;
+  }
+  if(action==='set-tema-color'){
+    var colorElegido = id;
+    STATE.temaColor = colorElegido;
+    if(colorElegido==='verde') document.documentElement.removeAttribute('data-color');
+    else document.documentElement.setAttribute('data-color', colorElegido);
+    try{ localStorage.setItem('controlTemaColor', colorElegido); }catch(e){}
     render(); return;
   }
 

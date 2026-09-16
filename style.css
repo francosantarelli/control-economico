@@ -55,6 +55,30 @@
      oscuro no quede con el rgb del amarillo claro. El resto de los --bs-*-rgb no cambian entre temas. */
   --bs-warning-rgb: 230, 187, 92;
 }
+/* Variantes de color de acento, elegibles desde el menú de usuario. Verde es el default (sin
+   atributo). Los semánticos (danger/warning) y los neutros (bg/paper/ink/rule) no cambian entre
+   colores — solo el acento — para no multiplicar el mantenimiento de una paleta completa por cada
+   opción. --bs-primary-rgb/--bs-success-rgb se redeclaran porque Bootstrap los usa en rgba() y no
+   se pueden derivar de --accent en CSS puro (mismo motivo que --bs-warning-rgb arriba). */
+:root[data-color="azul"]{
+  --accent:#2F6FE0;
+  --accent-soft:#DCE8FB;
+  --bs-primary-rgb: 47, 111, 224;
+  --bs-success-rgb: 47, 111, 224;
+}
+:root[data-color="azul"][data-theme="oscuro"]{
+  --accent-soft:#1E3350;
+}
+:root[data-color="naranja"]{
+  --accent:#E0722F;
+  --accent-soft:#FBE7DA;
+  --bs-primary-rgb: 224, 114, 47;
+  --bs-success-rgb: 224, 114, 47;
+}
+:root[data-color="naranja"][data-theme="oscuro"]{
+  --accent-soft:#3D2A1B;
+}
+
 :root[data-theme="oscuro"] #tabla-movimientos tr.fila-incompleta:hover,
 :root[data-theme="oscuro"] tr.fila-duplicada:hover{ background:#4A2E28; }
 *{box-sizing:border-box}
@@ -241,6 +265,13 @@ input[type=color]{
   padding:8px; border-radius:5px; cursor:pointer;
 }
 .user-menu-item:hover{ background:var(--accent-soft); }
+.user-menu-label{ font-size:10.5px; font-weight:600; letter-spacing:.03em; text-transform:uppercase; color:var(--ink-soft); padding:6px 8px 4px; }
+.user-menu-colores{ display:flex; gap:8px; padding:0 8px 8px; }
+.color-swatch{
+  width:22px; height:22px; border-radius:50%; padding:0; cursor:pointer;
+  border:2px solid transparent; box-shadow:inset 0 0 0 1px rgba(0,0,0,.08);
+}
+.color-swatch.activo{ border-color:var(--ink); }
 
 button{
   font-family:'Geist',sans-serif; font-size:13px; font-weight:500; padding:8px 14px;
