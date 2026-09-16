@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { loadApp } from './helpers/loadApp.js';
+import { mockSb } from './helpers/mockSb.js';
 
 let win;
 beforeEach(() => { win = loadApp(); });
@@ -65,29 +66,39 @@ describe('aplicarReglaAFila', () => {
 });
 
 describe('agregarOActualizarRegla', () => {
-  it('agrega una regla nueva y la persiste en localStorage', () => {
+  let sbMock;
+  beforeEach(() => {
+    sbMock = mockSb();
+    win.sb = sbMock.client;
+  });
+
+  it('agrega una regla nueva y la persiste en la base', async () => {
     win.STATE.reglas = [];
-    win.agregarOActualizarRegla('Nuevo Proveedor', 'Salida', 'Kiosco');
+    await win.agregarOActualizarRegla('Nuevo Proveedor', 'Salida', 'Kiosco');
     expect(win.STATE.reglas).toHaveLength(1);
     expect(win.STATE.reglas[0]).toMatchObject({ proveedor: 'Nuevo Proveedor', categoria: 'Salida', subcategoria: 'Kiosco' });
     expect(win.STATE.reglas[0].id).toBeTruthy();
 
-    const persisted = JSON.parse(win.localStorage.getItem('controlEconomico_reglasCategorizacion'));
-    expect(persisted).toHaveLength(1);
-    expect(persisted[0].proveedor).toBe('Nuevo Proveedor');
+    expect(sbMock.calls).toHaveLength(1);
+    expect(sbMock.calls[0]).toMatchObject({ op: 'insert', table: 'reglas_categorizacion' });
+    expect(sbMock.calls[0].rows[0]).toMatchObject({ proveedor: 'Nuevo Proveedor', categoria: 'Salida', subcategoria: 'Kiosco' });
   });
 
-  it('actualiza la regla existente (match por proveedor case-insensitive) en vez de duplicarla', () => {
+  it('actualiza la regla existente (match por proveedor case-insensitive) en vez de duplicarla', async () => {
     win.STATE.reglas = [{ id: 'abc', proveedor: 'Melina', categoria: 'Comida', subcategoria: 'Verdulería' }];
-    win.agregarOActualizarRegla('melina', 'Salida', 'Kiosco');
+    await win.agregarOActualizarRegla('melina', 'Salida', 'Kiosco');
     expect(win.STATE.reglas).toHaveLength(1);
     expect(win.STATE.reglas[0]).toEqual({ id: 'abc', proveedor: 'Melina', categoria: 'Salida', subcategoria: 'Kiosco' });
+
+    expect(sbMock.calls).toHaveLength(1);
+    expect(sbMock.calls[0]).toMatchObject({ op: 'update', table: 'reglas_categorizacion', val: 'abc' });
   });
 
-  it('no hace nada si falta el proveedor o la categoría', () => {
+  it('no hace nada si falta el proveedor o la categoría', async () => {
     win.STATE.reglas = [];
-    win.agregarOActualizarRegla('', 'Salida', 'Kiosco');
-    win.agregarOActualizarRegla('Proveedor', '', 'Kiosco');
+    await win.agregarOActualizarRegla('', 'Salida', 'Kiosco');
+    await win.agregarOActualizarRegla('Proveedor', '', 'Kiosco');
     expect(win.STATE.reglas).toHaveLength(0);
+    expect(sbMock.calls).toHaveLength(0);
   });
 });

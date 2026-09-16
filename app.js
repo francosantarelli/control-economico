@@ -3,53 +3,6 @@ var SUPABASE_URL = 'https://krgwoiufhvhoqucqjpff.supabase.co';
 var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtyZ3dvaXVmaHZob3F1Y3FqcGZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0MDA2MTIsImV4cCI6MjA5OTk3NjYxMn0.HxA7P1_LUEkZq75kMPKmiCLixeJQ2sROXcmW37gnQOE';
 var sb = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
-// ===================== REGLAS DE CATEGORIZACIÓN AL IMPORTAR (localStorage) =====================
-// Coincidencia parcial (substring, sin distinguir mayúsc/minúsc) del proveedor de la fila importada
-// contra el texto de cada regla. Se guardan en el navegador, no en la base de datos compartida.
-var REGLAS_STORAGE_KEY = 'controlEconomico_reglasCategorizacion';
-var REGLAS_DEFAULT = [
-  {proveedor:'Barrientos', categoria:'Casa', subcategoria:'Limpieza'},
-  {proveedor:'Zuvilivia', categoria:'Comida', subcategoria:'Carnicería'},
-  {proveedor:'Melina', categoria:'Comida', subcategoria:'Verdulería'},
-  {proveedor:'Rocio Jaqueline Oderda', categoria:'Comida', subcategoria:'Panadería'},
-  {proveedor:'Kiosco las flores', categoria:'Salida', subcategoria:'Kiosco'},
-  {proveedor:'Rendimientos', categoria:'Intereses', subcategoria:'Rendimientos'},
-  {proveedor:'Nahir Aldana Kastelan', categoria:'Emma y Juli', subcategoria:'Librería'},
-  {proveedor:'Carina Ines', categoria:'Emma y Juli', subcategoria:'Pañalera'},
-  {proveedor:'Macarena', categoria:'Emma y Juli', subcategoria:'Niñera'},
-  {proveedor:'Boqon', categoria:'Salida', subcategoria:''},
-  {proveedor:'Casa oriental', categoria:'Casa', subcategoria:''},
-  {proveedor:'Claudio Gabriel Valerio', categoria:'Super', subcategoria:''},
-  {proveedor:'Luis Alberto Aguero', categoria:'Obra', subcategoria:'Albañil'},
-  {proveedor:'Francisco Mira', categoria:'Comida', subcategoria:'Dietética'},
-  {proveedor:'Mariano Del Valle', categoria:'Comida', subcategoria:'Pollería'},
-  {proveedor:'Gustavo Canale', categoria:'Obra', subcategoria:''},
-  {proveedor:'PEMASYS S. A.', categoria:'Sueldo', subcategoria:'Maslow'},
-  {proveedor:'Rendimiento', categoria:'Intereses', subcategoria:''},
-  {proveedor:'LA ANóNIMA SUC 100', categoria:'Super', subcategoria:''},
-  {proveedor:'APPYPF 03008 COMBUST', categoria:'Auto', subcategoria:''},
-  {proveedor:'Spotify', categoria:'Servicios', subcategoria:'Spotify'},
-  {proveedor:'IMPUESTO DE SELLOS', categoria:'Servicios', subcategoria:'Gastos Bancarios'},
-  {proveedor:'IIBB PERCEP-BSAS 2,00%( 5499,00)', categoria:'Servicios', subcategoria:'Gastos Bancarios'},
-  {proveedor:'IVA RG 4240 21%( 5499,00)', categoria:'Servicios', subcategoria:'Gastos Bancarios'},
-  {proveedor:'DB.RG 5617 30% ( 5499,00 )', categoria:'Servicios', subcategoria:'Gastos Bancarios'}
-];
-function guardarReglas(lista){
-  try{ window.localStorage.setItem(REGLAS_STORAGE_KEY, JSON.stringify(lista)); }catch(e){}
-}
-function cargarReglas(){
-  try{
-    var raw = window.localStorage.getItem(REGLAS_STORAGE_KEY);
-    if(raw){
-      var parsed = JSON.parse(raw);
-      if(Array.isArray(parsed)) return parsed;
-    }
-  }catch(e){}
-  var seed = REGLAS_DEFAULT.map(function(r){ return Object.assign({id:uid()}, r); });
-  guardarReglas(seed);
-  return seed;
-}
-
 var STATE = { centros: [], categorias: [], subcategorias: [], movimientos: [], vencimientos: [], gimnasioVisitas: [], usdtMovimientos: [], deudas: [], facturas: [], configuracion: [], facturaLoadingId:null, activeTab: 'movimientos', editing: null, ready:false,
   importEntidad:'mp', importBanco:'nacion', importVencimiento:'', importTarjetaMarca:'', importRaw:'', importPreview:null, importPreviewExcel:null, importMsg:null,
   bulkColorCatMsg:null, confirmState:null, subDeleteState:null, vencPagarState:null, movFormMsg:null, movFieldErrors:null,
@@ -58,7 +11,7 @@ var STATE = { centros: [], categorias: [], subcategorias: [], movimientos: [], v
   vencFormMsg:null, dbError:null, saldosCache:null, saldosDirty:true, gimnasioMsg:null,
   usuarioEmail:null, efectivoAbierto:false, efectivoMsg:null, efectivoCategoriaId:'', efectivoDraft:null, backupMsg:null, backupPendiente:null, menuMovilAbierto:false, incompletosSnapshotIds:null,
   usdtVentaMovId:null, usdtVentaMovMsg:null, usdtVentaMovCantidad:'',
-  reglas: cargarReglas(), reglaFormMsg:null, reglasPaginaActual:1,
+  reglas: [], reglaFormMsg:null, reglasPaginaActual:1,
   nuevoMovAbierto:false, movDraftCentroDestinoId:'', comboAbierto:null, comboBusqueda:'', comboHighlight:0,
   movSeleccionados:[], bulkEditMovAbierto:false, bulkEditMovMsg:null, movPaginaActual:1, gruposAbiertos:{},
   tema: (function(){ try{ return localStorage.getItem('controlTema')==='oscuro' ? 'oscuro' : 'claro'; }catch(e){ return 'claro'; } })(),
@@ -316,6 +269,8 @@ async function crearMovimientoDesdeVencimiento(v){
 function toDbDeuda(d){ return {id:d.id, concepto:d.concepto, saldo_pendiente:Number(d.saldoPendiente)||0, cuota_mensual:Number(d.cuotaMensual)||0, centro_id:d.centroId||null, estado:d.estado||'activa'}; }
 function fromDbDeuda(r){ return {id:r.id, concepto:r.concepto, saldoPendiente:Number(r.saldo_pendiente)||0, cuotaMensual:Number(r.cuota_mensual)||0, centroId:r.centro_id||'', estado:r.estado||'activa'}; }
 function fromDbGimnasioVisita(r){ return {id:r.id, persona:r.persona, fecha:r.fecha}; }
+function toDbRegla(r){ return {id:r.id, proveedor:r.proveedor, categoria:r.categoria, subcategoria:r.subcategoria||null}; }
+function fromDbRegla(r){ return {id:r.id, proveedor:r.proveedor, categoria:r.categoria, subcategoria:r.subcategoria||''}; }
 function toDbUsdt(u){
   return {
     id:u.id, fecha:u.fecha, tipo:u.tipo, cantidad:Number(u.cantidad)||0,
@@ -406,6 +361,11 @@ async function cargarTodo(){
     var deudas = await dbFetchAll('deudas');
     STATE.deudas = deudas.map(fromDbDeuda);
   }catch(e){ STATE.deudas = []; }
+  try{
+    // Idem: si todavía no corriste migracion_reglas_categorizacion.sql, arranca vacío en vez de romper la carga.
+    var reglas = await dbFetchAll('reglas_categorizacion');
+    STATE.reglas = reglas.map(fromDbRegla);
+  }catch(e){ STATE.reglas = []; }
   try{
     // Idem: si todavía no corriste migracion_facturacion_arca.sql, arranca vacío en vez de romper la carga.
     var facturas = await dbFetchAll('facturas');
@@ -1182,17 +1142,19 @@ function aplicarReglaAFila(proveedor){
   if(!regla) return { categoriaId:'', subcategoriaId:'' };
   return resolverCategoriaSubcategoriaPorNombre(regla.categoria, regla.subcategoria);
 }
-function agregarOActualizarRegla(proveedorTexto, categoriaNombre, subcategoriaNombre){
+async function agregarOActualizarRegla(proveedorTexto, categoriaNombre, subcategoriaNombre){
   var texto = (proveedorTexto||'').trim();
   if(!texto || !categoriaNombre) return;
   var existente = STATE.reglas.find(function(r){ return r.proveedor.toLowerCase() === texto.toLowerCase(); });
   if(existente){
     existente.categoria = categoriaNombre;
     existente.subcategoria = subcategoriaNombre||'';
+    await dbUpdate('reglas_categorizacion', existente.id, {categoria:categoriaNombre, subcategoria:subcategoriaNombre||null});
   } else {
-    STATE.reglas.push({ id: uid(), proveedor: texto, categoria: categoriaNombre, subcategoria: subcategoriaNombre||'' });
+    var nueva = { id: uid(), proveedor: texto, categoria: categoriaNombre, subcategoria: subcategoriaNombre||'' };
+    await dbInsert('reglas_categorizacion', [toDbRegla(nueva)]);
+    STATE.reglas.push(nueva);
   }
-  guardarReglas(STATE.reglas);
 }
 
 // ===================== DETECCIÓN DE DUPLICADOS EN IMPORTACIÓN =====================
@@ -1666,8 +1628,7 @@ function renderABM(){
 
 // Reglas de categorización: proveedor -> categoría/subcategoría sugeridas al previsualizar una
 // importación (ver Importar). Viven en ABM porque son dato de configuración igual que Centros/
-// Categorías, no una acción puntual de importar — se guardan en este navegador, no en la base
-// compartida (ver REGLAS_STORAGE_KEY).
+// Categorías, no una acción puntual de importar.
 function renderReglas(){
   var reglasOrdenadas = (STATE.reglas||[]).slice().sort(function(a,b){ return (a.proveedor||'').localeCompare(b.proveedor||'', 'es', {sensitivity:'base'}); });
   var totalPaginasReglas = Math.max(1, Math.ceil(reglasOrdenadas.length / REGLAS_PAGE_SIZE));
@@ -4961,12 +4922,13 @@ async function handleAction(action, id){
       STATE.movimientos = STATE.movimientos.concat(nuevosMov);
       STATE.saldosDirty = true;
       var nuevasReglas = 0;
-      seleccionadas.forEach(function(r){
-        if(r.guardarRegla && r.categoriaId){
-          agregarOActualizarRegla(r.proveedor, nombreCategoria(r.categoriaId), r.subcategoriaId ? nombreSubcategoria(r.subcategoriaId) : '');
+      for(var idxSel=0; idxSel<seleccionadas.length; idxSel++){
+        var rSel = seleccionadas[idxSel];
+        if(rSel.guardarRegla && rSel.categoriaId){
+          await agregarOActualizarRegla(rSel.proveedor, nombreCategoria(rSel.categoriaId), rSel.subcategoriaId ? nombreSubcategoria(rSel.subcategoriaId) : '');
           nuevasReglas++;
         }
-      });
+      }
       STATE.importPreview = null; STATE.importRaw = '';
       STATE.importMsg = {type:'ok', text: seleccionadas.length+' movimiento(s) importado(s) correctamente.'+(nuevasReglas ? ' Se guardaron '+nuevasReglas+' regla(s) de categorización nueva(s).' : '')};
       STATE.activeTab = 'movimientos'; STATE.editing = null;
@@ -4974,7 +4936,7 @@ async function handleAction(action, id){
     render(); return;
   }
 
-  // ---- REGLAS DE CATEGORIZACIÓN (localStorage) ----
+  // ---- REGLAS DE CATEGORIZACIÓN ----
   if(action==='agregar-regla'){
     var rProv = document.getElementById('regla-proveedor').value.trim();
     var rCatId = document.getElementById('regla-categoria').value;
@@ -4983,13 +4945,17 @@ async function handleAction(action, id){
       STATE.reglaFormMsg = 'Completá al menos el proveedor y la categoría.';
       render(); return;
     }
-    agregarOActualizarRegla(rProv, nombreCategoria(rCatId), rSub);
-    STATE.reglaFormMsg = null;
+    try{
+      await agregarOActualizarRegla(rProv, nombreCategoria(rCatId), rSub);
+      STATE.reglaFormMsg = null;
+    }catch(e){ STATE.reglaFormMsg = 'No se pudo guardar la regla: '+(e.message||e); }
     render(); return;
   }
   if(action==='borrar-regla'){
-    STATE.reglas = STATE.reglas.filter(function(r){ return r.id !== id; });
-    guardarReglas(STATE.reglas);
+    try{
+      await dbDelete('reglas_categorizacion', id);
+      STATE.reglas = STATE.reglas.filter(function(r){ return r.id !== id; });
+    }catch(e){ STATE.dbError = 'No se pudo borrar la regla: '+(e.message||e); }
     render(); return;
   }
 
