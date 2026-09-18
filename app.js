@@ -1886,6 +1886,30 @@ function renderBulkEditMovModal(){
   '</div></div>';
 }
 
+function movimientosFiltrados(f){
+  return STATE.movimientos.filter(function(m){
+    if(esMovimientoPendiente(m)) return false; // los movimientos con fecha futura se muestran en Vencimientos, no acá
+    if(f.centro.length && f.centro.indexOf(m.centroId)===-1) return false;
+    if(f.categoria.length && f.categoria.indexOf(m.categoriaId)===-1) return false;
+    if(f.mes.length && f.mes.indexOf((m.fecha||'').slice(0,7))===-1) return false;
+    if(f.subcategoria.length){
+      var valorSub = m.subcategoriaId || '__vacio__';
+      if(f.subcategoria.indexOf(valorSub)===-1) return false;
+    }
+    if(f.soloIncompletos){
+      var idsCongelados = STATE.incompletosSnapshotIds;
+      if(idsCongelados){ if(idsCongelados.indexOf(m.id)===-1) return false; }
+      else if(camposFaltantes(m).length===0){ return false; }
+    }
+    if(f.soloTarjeta && !m.tarjeta) return false;
+    if(f.texto){
+      var t = f.texto.toLowerCase();
+      if((m.proveedor||'').toLowerCase().indexOf(t)===-1 && (m.detalle||'').toLowerCase().indexOf(t)===-1) return false;
+    }
+    return true;
+  }).sort(function(a,b){ return (b.fecha||'').localeCompare(a.fecha||''); });
+}
+
 function renderMovimientos(){
   var f = STATE.filtros || {centro:[], categoria:[], mes:[], texto:'', subcategoria:[], soloIncompletos:false};
 
@@ -1910,27 +1934,7 @@ function renderMovimientos(){
     return c.tipo !== 'tec' && /tec|transfer/i.test(c.nombre||'');
   });
 
-  var lista = STATE.movimientos.filter(function(m){
-    if(esMovimientoPendiente(m)) return false; // los movimientos con fecha futura se muestran en Vencimientos, no acá
-    if(f.centro.length && f.centro.indexOf(m.centroId)===-1) return false;
-    if(f.categoria.length && f.categoria.indexOf(m.categoriaId)===-1) return false;
-    if(f.mes.length && f.mes.indexOf((m.fecha||'').slice(0,7))===-1) return false;
-    if(f.subcategoria.length){
-      var valorSub = m.subcategoriaId || '__vacio__';
-      if(f.subcategoria.indexOf(valorSub)===-1) return false;
-    }
-    if(f.soloIncompletos){
-      var idsCongelados = STATE.incompletosSnapshotIds;
-      if(idsCongelados){ if(idsCongelados.indexOf(m.id)===-1) return false; }
-      else if(camposFaltantes(m).length===0){ return false; }
-    }
-    if(f.soloTarjeta && !m.tarjeta) return false;
-    if(f.texto){
-      var t = f.texto.toLowerCase();
-      if((m.proveedor||'').toLowerCase().indexOf(t)===-1 && (m.detalle||'').toLowerCase().indexOf(t)===-1) return false;
-    }
-    return true;
-  }).sort(function(a,b){ return (b.fecha||'').localeCompare(a.fecha||''); });
+  var lista = movimientosFiltrados(f);
 
   var totalIngreso = lista.reduce(function(s,m){ return esTipoCategoria(m.categoriaId,'tec') ? s : s + (Number(m.ingreso)||0); },0);
   var totalEgreso = lista.reduce(function(s,m){ return esTipoCategoria(m.categoriaId,'tec') ? s : s + (Number(m.egreso)||0); },0);
@@ -2219,7 +2223,10 @@ function renderMovimientos(){
 
   var tableHtml = ''+
   '<div class="card">'+
-    '<h3>Movimientos ('+lista.length+')</h3>'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">'+
+      '<h3 style="margin-bottom:0">Movimientos ('+lista.length+')</h3>'+
+      (lista.length ? '<button class="secondary" data-action="exportar-movimientos-excel" style="font-size:12px;padding:6px 12px"><i class="bi bi-file-earmark-excel"></i> Exportar a Excel</button>' : '')+
+    '</div>'+
     barraSeleccionHtml+
     (lista.length ? ''+
     '<table id="tabla-movimientos" class="table tabla-movil"><thead><tr><th><input type="checkbox" id="chk-select-all-mov" '+(todosVisiblesSeleccionados?'checked':'')+'></th><th>Fecha</th><th>CC</th><th>Categoría</th><th>Subcategoría</th><th>Proveedor</th><th>Detalle</th><th class="num">Ingreso</th><th class="num">Egreso</th><th></th></tr></thead>'+
@@ -4279,6 +4286,73 @@ async function handleAction(action, id){
         text: actualizadasColor+' categoría(s) actualizada(s).'+(detalle.length?' '+detalle.join('. ')+'.':'') };
     }catch(e){ STATE.dbError = 'No se pudo actualizar los colores: '+(e.message||e); }
     render(); return;
+  }
+
+  // ---- EXPORTAR MOVIMIENTOS A EXCEL ----
+  if(action==='exportar-movimientos-excel'){
+    try{
+      var f = STATE.filtros || {centro:[], categoria:[], mes:[], texto:'', subcategoria:[], soloIncompletos:false, soloTarjeta:false};
+      var listaExport = movimientosFiltrados(f);
+
+      var workbook = new ExcelJS.Workbook();
+      var sheet = workbook.addWorksheet('Movimientos');
+      sheet.views = [{ state:'frozen', ySplit:1 }];
+      sheet.columns = [
+        { header:'Fecha', key:'fecha', width:12 },
+        { header:'Centro de Costo', key:'centro', width:22 },
+        { header:'Categoría', key:'categoria', width:20 },
+        { header:'Subcategoría', key:'subcategoria', width:20 },
+        { header:'Proveedor', key:'proveedor', width:24 },
+        { header:'Detalle', key:'detalle', width:30 },
+        { header:'Ingreso', key:'ingreso', width:14 },
+        { header:'Egreso', key:'egreso', width:14 },
+        { header:'Tarjeta', key:'tarjeta', width:10 },
+        { header:'Marca tarjeta', key:'marca', width:14 },
+        { header:'Cuotas', key:'cuotas', width:10 }
+      ];
+      sheet.getRow(1).font = { bold:true };
+
+      var COLOR_TARJETA = 'FFFCE8B2'; // amarillo suave: marca los movimientos con tarjeta, agrupados por fecha+centro+marca en la tabla de la app
+      listaExport.forEach(function(m){
+        var fila = sheet.addRow({
+          fecha: fechaISOaDDMMAAAA(m.fecha) || m.fecha || '',
+          centro: nombreCentro(m.centroId),
+          categoria: nombreCategoria(m.categoriaId),
+          subcategoria: m.subcategoriaId ? nombreSubcategoria(m.subcategoriaId) : '',
+          proveedor: m.proveedor || '',
+          detalle: m.detalle || '',
+          ingreso: Number(m.ingreso) || null,
+          egreso: Number(m.egreso) || null,
+          tarjeta: m.tarjeta ? 'Sí' : 'No',
+          marca: m.tarjetaMarca || '',
+          cuotas: m.cuotas || ''
+        });
+        fila.getCell('ingreso').numFmt = '#,##0.00';
+        fila.getCell('egreso').numFmt = '#,##0.00';
+        if(m.tarjeta){
+          fila.eachCell(function(celda){ celda.fill = { type:'pattern', pattern:'solid', fgColor:{argb:COLOR_TARJETA} }; });
+        }
+      });
+
+      var totalIngresoExport = listaExport.reduce(function(s,m){ return esTipoCategoria(m.categoriaId,'tec') ? s : s + (Number(m.ingreso)||0); },0);
+      var totalEgresoExport = listaExport.reduce(function(s,m){ return esTipoCategoria(m.categoriaId,'tec') ? s : s + (Number(m.egreso)||0); },0);
+      var filaTotales = sheet.addRow({ detalle:'Totales (sin TEC)', ingreso:totalIngresoExport, egreso:totalEgresoExport });
+      filaTotales.font = { bold:true };
+      filaTotales.getCell('ingreso').numFmt = '#,##0.00';
+      filaTotales.getCell('egreso').numFmt = '#,##0.00';
+
+      var buffer = await workbook.xlsx.writeBuffer();
+      var blob = new Blob([buffer], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'movimientos-'+fechaHoyISO()+'.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+    }catch(e){ STATE.dbError = 'No se pudo generar el Excel: '+(e.message||e); render(); }
+    return;
   }
 
   // ---- BACKUP ----
