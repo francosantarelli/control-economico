@@ -1250,6 +1250,21 @@ function parseNumeroFlexible(s){
   }
   return isNaN(val) ? 0 : val;
 }
+// Cantidad tipeada a mano (p. ej. USDT): acepta coma o punto como decimal ("12,5" / "12.5").
+// Si hay ambos, el último es el decimal. A diferencia de parseNumeroFlexible, un punto solo
+// siempre es decimal (las cantidades de USDT suelen tener más de 2 decimales).
+function parseCantidadDecimal(s){
+  s = String(s||'').trim().replace(/[^\d.,\-]/g,'');
+  if(!s) return 0;
+  var lastComma = s.lastIndexOf(',');
+  var lastDot = s.lastIndexOf('.');
+  var dec = lastComma > lastDot ? ',' : '.';
+  var entero = s.slice(0, Math.max(lastComma, lastDot)).replace(/[.,]/g,'');
+  var val = (lastComma === -1 && lastDot === -1) ? parseFloat(s)
+    : (s.split(dec).length > 2 ? parseFloat(s.replace(/[.,]/g,'')) // "1.234.567": solo miles
+    : parseFloat(entero + '.' + s.slice(Math.max(lastComma, lastDot)+1)));
+  return isNaN(val) ? 0 : val;
+}
 
 function parseExcelHistorico(raw){
   var lines = raw.split('\n').map(function(l){ return l.replace(/\r$/,''); }).filter(function(l){ return l.trim().length>0; });
@@ -1506,7 +1521,7 @@ function renderInterno(){
       STATE.usdtVentaMovId = null;
     } else {
       var cantidadUvmDraft = STATE.usdtVentaMovCantidad || '';
-      var cantidadUvmNum = parseFloat(cantidadUvmDraft);
+      var cantidadUvmNum = parseCantidadDecimal(cantidadUvmDraft);
       var cotizacionUvmPreview = (cantidadUvmNum>0) ? (Number(mUvm.ingreso)/cantidadUvmNum) : 0;
       MODAL_HTML = '<div class="modal-overlay" data-modal-backdrop="usdt-venta-mov"><div class="modal-card">'+
         '<h2><i class="bi bi-coin"></i> Generar movimiento USDT</h2>'+
@@ -5232,7 +5247,7 @@ async function handleAction(action, id){
     var mUvmG = STATE.movimientos.find(function(x){ return x.id===STATE.usdtVentaMovId; });
     if(!mUvmG){ STATE.usdtVentaMovId = null; render(); return; }
     var cantidadUvmInput = document.getElementById('uvm-cantidad').value;
-    var cantidadUvmG = Math.abs(parseFloat(cantidadUvmInput))||0;
+    var cantidadUvmG = Math.abs(parseCantidadDecimal(cantidadUvmInput))||0;
     if(!cantidadUvmG || cantidadUvmG<=0){
       STATE.usdtVentaMovCantidad = cantidadUvmInput;
       STATE.usdtVentaMovMsg = 'Ingresá una cantidad de USDT mayor a 0.';
