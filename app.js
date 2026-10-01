@@ -1564,8 +1564,8 @@ var MODAL_HTML = '';
 var ENTIDADES = [
   {id:'', label:'(sin asignar)'},
   {id:'santander', label:'Santander'},
-  {id:'nacion', label:'Banco Nación'},
-  {id:'provincia', label:'Banco Provincia'},
+  {id:'nacion', label:'Nación'},
+  {id:'provincia', label:'Provincia'},
   {id:'icbc', label:'ICBC'},
   {id:'mercadopago', label:'Mercado Pago'}
 ];
@@ -2110,7 +2110,7 @@ function renderMovimientos(){
     return ''+
       (STATE.movFormMsg ? '<div class="msg err">'+esc(STATE.movFormMsg)+'</div>' : '')+
       '<div class="form-grid">'+
-        '<div class="'+claseCampo('fecha')+'"><label>Fecha</label><input type="date" id="f-mov-fecha" value="'+esc(e.fecha)+'">'+msgCampo('fecha')+'</div>'+
+        '<div class="'+claseCampo('fecha')+'"><label>Fecha</label><input type="date" id="f-mov-fecha" max="9999-12-31" value="'+esc(e.fecha)+'">'+msgCampo('fecha')+'</div>'+
         '<div class="'+claseCampo('centroId')+'"><label>Centro de Costo'+((e.fecha && e.fecha>fechaHoyISO())?' (opcional, fecha futura)':'')+'</label>'+
           renderCombo('mov-centro', 'f-mov-centro', [comboOpcionVacia()].concat(centrosOrdenados().map(function(c){ return {value:c.id, label:c.codigo+' · '+c.nombre}; })), e.centroId, 'Elegir...')+msgCampo('centroId')+
         '</div>'+
@@ -2282,8 +2282,8 @@ function renderImportar(){
       '<div class="field"><label>Entidad</label><select id="imp-entidad">'+
         '<option value="mp" '+(e==='mp'?'selected':'')+'>Mercado Pago</option>'+
         '<option value="santander" '+(e==='santander'?'selected':'')+'>Santander</option>'+
-        '<option value="nacion" '+(e==='nacion'?'selected':'')+'>Banco Nación</option>'+
-        '<option value="provincia" '+(e==='provincia'?'selected':'')+'>Banco Provincia</option>'+
+        '<option value="nacion" '+(e==='nacion'?'selected':'')+'>Nación</option>'+
+        '<option value="provincia" '+(e==='provincia'?'selected':'')+'>Provincia</option>'+
         '<option value="tarjeta" '+(e==='tarjeta'?'selected':'')+'>Tarjeta de Crédito</option>'+
         '<option value="excel" '+(e==='excel'?'selected':'')+'>Excel histórico (ya categorizado)</option>'+
       '</select></div>'+
@@ -2640,7 +2640,7 @@ function logoEntidadHtml(centro){
     else if(n.indexOf('mercado pago')>-1 || n.indexOf('mercadopago')>-1) e = 'mercadopago';
   }
   var archivo = {santander:'santander.svg', nacion:'nacion.svg', provincia:'provincia.svg', icbc:'icbc.svg', mercadopago:'mercadopago.webp'}[e];
-  var nombreEntidad = {santander:'Santander', nacion:'Banco Nación', provincia:'Banco Provincia', icbc:'ICBC', mercadopago:'Mercado Pago'}[e];
+  var nombreEntidad = {santander:'Santander', nacion:'Nación', provincia:'Provincia', icbc:'ICBC', mercadopago:'Mercado Pago'}[e];
   if(!archivo) return '';
   return '<span class="entidad-logo-wrap"><img class="entidad-logo" src="/control-economico/assets/logos/'+archivo+'" alt="'+nombreEntidad+'" title="'+nombreEntidad+'"></span>';
 }
@@ -3034,7 +3034,7 @@ function renderResumen(){
       '<div class="summary-card"><div class="kpi-ic kpi-ic-danger"><i class="bi bi-alarm"></i></div><div class="label">Próximo vencimiento</div>'+
         (proximoVenc ? '<div class="value" style="font-size:15px">'+esc(proximoVenc.concepto)+'</div><div class="mono" style="font-size:12px;color:var(--ink-soft)">'+fmtMonto(proximoVenc.monto)+' · '+esc(fechaISOaDDMMAAAA(proximoVenc.fecha))+(vencProximos7d>1?' · '+vencProximos7d+' en los próx. 7 días':'')+'</div>' : '<div class="value" style="font-size:15px;color:var(--ink-soft)">Ninguno pendiente</div>')+
       '</div>'+
-      '<div class="summary-card"><div class="kpi-ic kpi-ic-accent"><i class="bi bi-piggy-bank"></i></div><div class="label">Ahorro promedio / mes</div><div class="value">'+(capAhorro?fmtMonto(capAhorro.promedio):'—')+'</div>'+(capAhorro?'<div style="font-size:11px;color:var(--ink-soft);margin-top:2px">últimos 6 meses cerrados</div>':'')+'</div>'+
+      '<div class="summary-card"><div class="kpi-ic kpi-ic-accent"><i class="bi bi-piggy-bank"></i></div><div class="label">Ahorro promedio / mes</div><div class="value">'+(capAhorro?fmtMonto(capAhorro.promedio):'—')+'</div>'+(capAhorro?'<div style="font-size:11px;color:var(--ink-soft);margin-top:2px">últimos 6 meses cerrados, sin Obra</div>':'')+'</div>'+
     '</div>'+
   '</div>';
 
@@ -3182,13 +3182,21 @@ function renderResumen(){
 }
 
 // ===================== FLUJO DE CAJA =====================
-// Capacidad de ahorro promedio: misma lógica que el "Saldo" de Resumen (Total ingresos = solo
-// Sueldo, Total egresos = neto del resto de categorías sin TEC/Sueldo/Obra, Obra restada aparte),
+// Capacidad de ahorro promedio: Sueldo menos el neto del resto de categorías (sin TEC/Sueldo/Obra),
 // promediada sobre los últimos meses CERRADOS (no cuenta el mes en curso, que suele estar
 // incompleto y subestimaría/sobreestimaría el promedio).
+// A diferencia del "Saldo" de Resumen, la Obra NO se resta: es una inversión que se paga con
+// ahorros, no un gasto corriente, y restarla daba un "ahorro" negativo en los meses de obra fuerte.
+// Se devuelve aparte (obraPromedio) para mostrarla al lado.
+// Los ingresos de Gerardo cargados en Sueldo tampoco cuentan: no son sueldo (es plata que entra
+// para pagar la Obra), y como la Obra ya no se resta, inflarían el ahorro.
 // El Sueldo usa mesEfectivoSueldo (no el mes calendario de la fecha) y excluye los movimientos con
 // subcategoría "Venta USDT": ese ingreso ya se contó cuando se acreditó el USDT (más abajo), y
 // volver a sumarlo al venderlo duplicaría el mismo sueldo.
+// Proveedor "Gerardo", "Gera" o "CASADEI GERARDO CESAR" (así aparece cargado según el medio de pago).
+function esAporteGerardo(m){
+  return /\bgera(rdo)?\b/i.test(m.proveedor||'');
+}
 function capacidadAhorroPromedio(ventana){
   var hoy = new Date();
   var mesActualStr = hoy.getFullYear()+'-'+pad2(hoy.getMonth()+1);
@@ -3203,6 +3211,7 @@ function capacidadAhorroPromedio(ventana){
     if(esTipoCategoria(m.categoriaId,'tec')) return;
     if(esCategoriaSueldo(m.categoriaId)){
       if(esSubcategoriaVentaUsdt(m.subcategoriaId)) return;
+      if(esAporteGerardo(m)) return;
       var mesSueldo = mesEfectivoSueldo(m.fecha);
       if(!usadosSet[mesSueldo]) return;
       ingresoPorMes[mesSueldo] = (ingresoPorMes[mesSueldo]||0) + (Number(m.ingreso)||0);
@@ -3224,9 +3233,10 @@ function capacidadAhorroPromedio(ventana){
   });
 
   var suma = usados.reduce(function(s,mes){
-    return s + (ingresoPorMes[mes]||0) - (egresoPorMes[mes]||0) - (obraPorMes[mes]||0);
+    return s + (ingresoPorMes[mes]||0) - (egresoPorMes[mes]||0);
   },0);
-  return { promedio: suma/usados.length, meses: usados };
+  var sumaObra = usados.reduce(function(s,mes){ return s + (obraPorMes[mes]||0); },0);
+  return { promedio: suma/usados.length, obraPromedio: sumaObra/usados.length, meses: usados };
 }
 function mesesRestantesDeuda(d){
   if(d.estado==='cancelada') return 0;
@@ -3356,11 +3366,12 @@ function renderFlujoCaja(){
 
   var summaryHtml = '<div class="summary-cards">'+
     '<div class="summary-card"><div class="label">Capacidad de ahorro promedio / mes</div><div class="value '+(ahorroPromedio>=0?'ingreso':'egreso')+'">'+(cap?fmtMonto(ahorroPromedio):'—')+'</div></div>'+
+    '<div class="summary-card"><div class="label">Inversión en Obra promedio / mes</div><div class="value">'+(cap?fmtMonto(cap.obraPromedio):'—')+'</div></div>'+
     '<div class="summary-card"><div class="label">Saldo actual total</div><div class="value">'+fmtMonto(saldos.totalGeneral)+'</div></div>'+
     '<div class="summary-card"><div class="label">Cuotas de deudas activas / mes</div><div class="value egreso">'+fmtMonto(totalCuotasActivas)+'</div></div>'+
     '<div class="summary-card"><div class="label">Margen libre / mes</div><div class="value '+(margen>=0?'ingreso':'egreso')+'">'+fmtMonto(margen)+'</div></div>'+
   '</div>'+
-  (cap ? '<div style="font-size:11px;color:var(--ink-soft);margin:-10px 0 18px">Promedio calculado sobre '+cap.meses.length+' mes(es) cerrados: '+cap.meses.map(mesLabelCorto).join(', ')+'. Ingresos menos egresos, sin contar TEC ni Obra (igual criterio que el Saldo de Resumen).</div>' : '<div class="empty" style="margin:-6px 0 18px">Todavía no hay ningún mes cerrado con movimientos cargados para calcular un promedio (el mes en curso no cuenta).</div>')+
+  (cap ? '<div style="font-size:11px;color:var(--ink-soft);margin:-10px 0 18px">Promedio calculado sobre '+cap.meses.length+' mes(es) cerrados: '+cap.meses.map(mesLabelCorto).join(', ')+'. Sueldo menos gastos corrientes, sin contar TEC ni Obra: la Obra es inversión y se muestra aparte (a diferencia del Saldo de Resumen, que sí la resta).</div>' : '<div class="empty" style="margin:-6px 0 18px">Todavía no hay ningún mes cerrado con movimientos cargados para calcular un promedio (el mes en curso no cuenta).</div>')+
   (cap && margen<0 ? '<div class="msg err" style="margin:-6px 0 18px">Las cuotas de las deudas activas superan la capacidad de ahorro promedio: con el ritmo actual no alcanzan para cubrirlas todas.</div>' : '');
 
   var lista = STATE.deudas.slice().sort(function(a,b){
@@ -4624,6 +4635,9 @@ async function handleAction(action, id){
     var esFechaFutura = !!v.fecha && v.fecha > fechaHoyISO();
     var errores = {};
     if(!v.fecha) errores.fecha = 'La fecha es obligatoria.';
+    // El input date deja tipear años de 5 dígitos ("20226-07-29"): esa fecha se guardaba, quedaba
+    // como "futura" y aparecía como un mes suelto en los filtros y promedios.
+    else if(!/^\d{4}-\d{2}-\d{2}$/.test(v.fecha)) errores.fecha = 'La fecha no es válida (revisá el año).';
     if(!v.centroId && !esFechaFutura) errores.centroId = 'Seleccioná un centro de costo.';
     if(!v.categoriaId) errores.categoriaId = 'Seleccioná una categoría.';
     if(!v.proveedor) errores.proveedor = 'El proveedor es obligatorio.';

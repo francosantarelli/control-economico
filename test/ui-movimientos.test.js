@@ -42,6 +42,19 @@ describe('Movimientos: alta, edición y borrado', () => {
     expect(win.STATE.nuevoMovAbierto).toBe(true); // el modal sigue abierto
   });
 
+  it('rechaza una fecha con año de 5 dígitos (no la toma como fecha futura)', async () => {
+    llenarFormMov(win, {
+      fecha: '20226-07-29', centroId: 'c-ef', categoriaId: 'cat-super',
+      proveedor: 'Intereses', tipo: 'ingreso', monto: '132.4'
+    });
+    // jsdom (como algunos navegadores) puede sanear el valor del input date; se fuerza el valor
+    // crudo para probar la validación propia del formulario.
+    Object.defineProperty(win.document.getElementById('f-mov-fecha'), 'value', { value: '20226-07-29', configurable: true });
+    await win.handleAction('save-mov');
+    expect(win.STATE.movFieldErrors.fecha).toBeTruthy();
+    expect(sbMock.calls.length).toBe(0);
+  });
+
   it('conserva Proveedor/Detalle tipeados si falla la validación (no los pisa el re-render)', async () => {
     llenarFormMov(win, { fecha: '2026-07-10', proveedor: 'Coto', detalle: 'Compra semanal' }); // falta centro/categoría/monto
     await win.handleAction('save-mov');
