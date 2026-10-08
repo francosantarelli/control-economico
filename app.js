@@ -2159,8 +2159,8 @@ function renderMovimientos(){
     '</div></div>';
   }
 
-  // Los movimientos con tarjeta se juntan en una sola línea por resumen (Fecha + Centro + Marca, igual
-  // que en la tabla), en vez de listar cada consumo.
+  // Los movimientos con tarjeta se juntan en una sola línea por resumen (Fecha + Centro, igual que en
+  // Vencimientos), en vez de listar cada consumo. La marca se muestra solo si es la misma en todos.
   var movsProximos = [], resumenesTarjetaProximos = {};
   STATE.movimientos.forEach(function(m){
     if(!esMovimientoPendiente(m)) return;
@@ -2171,17 +2171,20 @@ function renderMovimientos(){
       movsProximos.push({dias:dias, concepto:m.proveedor||nombreCategoria(m.categoriaId)||m.detalle||'Movimiento', monto:monto, centroId:m.centroId});
       return;
     }
-    var clave = m.fecha+'|'+(m.centroId||'')+'|'+(m.tarjetaMarca||'');
+    var clave = m.fecha+'|'+(m.centroId||'');
     var r = resumenesTarjetaProximos[clave];
     if(!r){
-      r = resumenesTarjetaProximos[clave] = {dias:dias, marca:m.tarjetaMarca||'', cantidad:0, monto:0, centroId:m.centroId};
+      r = resumenesTarjetaProximos[clave] = {dias:dias, marcas:{}, cantidad:0, monto:0, centroId:m.centroId};
       movsProximos.push(r);
     }
+    if(m.tarjetaMarca) r.marcas[m.tarjetaMarca] = true;
     r.cantidad++;
     r.monto += monto;
   });
   movsProximos.forEach(function(x){
-    if(x.cantidad) x.concepto = 'Resumen '+(x.marca||'tarjeta')+' · '+x.cantidad+' movimiento(s)';
+    if(!x.cantidad) return;
+    var marcas = Object.keys(x.marcas);
+    x.concepto = 'Resumen '+(marcas.length===1 ? marcas[0] : 'tarjeta')+' · '+x.cantidad+' movimiento(s)';
   });
 
   var vencimientosProximos = STATE.vencimientos.filter(function(v){
