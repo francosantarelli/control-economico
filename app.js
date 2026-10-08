@@ -2159,19 +2159,38 @@ function renderMovimientos(){
     '</div></div>';
   }
 
+  // Los movimientos con tarjeta se juntan en una sola línea por resumen (Fecha + Centro + Marca, igual
+  // que en la tabla), en vez de listar cada consumo.
+  var movsProximos = [], resumenesTarjetaProximos = {};
+  STATE.movimientos.forEach(function(m){
+    if(!esMovimientoPendiente(m)) return;
+    var dias = diasHasta(m.fecha);
+    if(dias!==0 && dias!==1) return;
+    var monto = (Number(m.egreso)||0)-(Number(m.ingreso)||0);
+    if(!m.tarjeta){
+      movsProximos.push({dias:dias, concepto:m.proveedor||nombreCategoria(m.categoriaId)||m.detalle||'Movimiento', monto:monto, centroId:m.centroId});
+      return;
+    }
+    var clave = m.fecha+'|'+(m.centroId||'')+'|'+(m.tarjetaMarca||'');
+    var r = resumenesTarjetaProximos[clave];
+    if(!r){
+      r = resumenesTarjetaProximos[clave] = {dias:dias, marca:m.tarjetaMarca||'', cantidad:0, monto:0, centroId:m.centroId};
+      movsProximos.push(r);
+    }
+    r.cantidad++;
+    r.monto += monto;
+  });
+  movsProximos.forEach(function(x){
+    if(x.cantidad) x.concepto = 'Resumen '+(x.marca||'tarjeta')+' · '+x.cantidad+' movimiento(s)';
+  });
+
   var vencimientosProximos = STATE.vencimientos.filter(function(v){
     if(v.estado==='pagado') return false;
     var dias = diasHasta(v.fecha);
     return dias===0 || dias===1;
   }).map(function(v){
     return {dias:diasHasta(v.fecha), concepto:v.concepto, monto:v.monto, centroId:v.centroId};
-  }).concat(STATE.movimientos.filter(function(m){
-    if(!esMovimientoPendiente(m)) return false;
-    var dias = diasHasta(m.fecha);
-    return dias===0 || dias===1;
-  }).map(function(m){
-    return {dias:diasHasta(m.fecha), concepto:m.proveedor||nombreCategoria(m.categoriaId)||m.detalle||'Movimiento', monto:(Number(m.egreso)||0)-(Number(m.ingreso)||0), centroId:m.centroId};
-  })).sort(function(a,b){ return a.dias-b.dias; });
+  }).concat(movsProximos).sort(function(a,b){ return a.dias-b.dias; });
 
   var alertaVencimientosHtml = vencimientosProximos.length ? ''+
   '<div class="card" style="border-color:var(--danger);background:var(--danger-soft)">'+
