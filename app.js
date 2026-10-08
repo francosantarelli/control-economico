@@ -302,12 +302,14 @@ function fromDbFactura(r){
 function fromDbConfiguracion(r){ return {clave:r.clave, valor:r.valor}; }
 
 // ---- CRUD genérico contra Supabase ----
-async function dbFetchAll(table){
+async function dbFetchAll(table, ordenarPor){
   var allRows = [];
   var pageSize = 1000;
   var from = 0;
   while(true){
-    var res = await sb.from(table).select('*').range(from, from + pageSize - 1);
+    var q = sb.from(table).select('*');
+    if(ordenarPor) q = q.order(ordenarPor, {ascending:true}).order('id', {ascending:true});
+    var res = await q.range(from, from + pageSize - 1);
     if(res.error) throw res.error;
     var rows = res.data || [];
     allRows = allRows.concat(rows);
@@ -338,7 +340,7 @@ async function dbUpsert(table, rows){
 
 async function cargarTodo(){
   var [centros, categorias, subcategorias, movimientos, vencimientos] = await Promise.all([
-    dbFetchAll('centros'), dbFetchAll('categorias'), dbFetchAll('subcategorias'), dbFetchAll('movimientos'), dbFetchAll('vencimientos')
+    dbFetchAll('centros'), dbFetchAll('categorias'), dbFetchAll('subcategorias'), dbFetchAll('movimientos', 'created_at'), dbFetchAll('vencimientos')
   ]);
   STATE.centros = centros.map(fromDbCentro);
   STATE.categorias = categorias.map(fromDbCategoria);
@@ -1902,6 +1904,10 @@ function renderBulkEditMovModal(){
 }
 
 function movimientosFiltrados(f){
+  // STATE.movimientos está en orden de carga (viene de la base por created_at y lo nuevo se agrega al
+  // final), así que su posición desempata: dentro de un mismo día, lo último cargado va primero.
+  var ordenCarga = new Map();
+  STATE.movimientos.forEach(function(m, i){ ordenCarga.set(m, i); });
   return STATE.movimientos.filter(function(m){
     if(esMovimientoPendiente(m)) return false; // los movimientos con fecha futura se muestran en Vencimientos, no acá
     if(f.centro.length && f.centro.indexOf(m.centroId)===-1) return false;
@@ -1922,7 +1928,7 @@ function movimientosFiltrados(f){
       if((m.proveedor||'').toLowerCase().indexOf(t)===-1 && (m.detalle||'').toLowerCase().indexOf(t)===-1) return false;
     }
     return true;
-  }).sort(function(a,b){ return (b.fecha||'').localeCompare(a.fecha||''); });
+  }).sort(function(a,b){ return (b.fecha||'').localeCompare(a.fecha||'') || (ordenCarga.get(b) - ordenCarga.get(a)); });
 }
 
 function renderMovimientos(){
