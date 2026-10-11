@@ -92,6 +92,16 @@ describe('calcularSaldos', () => {
     const s = win.calcularSaldos();
     expect(s.filas.find(function(f){ return f.id === 'cA'; }).saldo).toBe(1000);
   });
+
+  it('ignora los movimientos de categorías de tipo Solo control', () => {
+    win.STATE.categorias = [{ id: 'cat-ctrl', nombre: 'Control', tipo: 'control' }];
+    win.STATE.movimientos = [
+      { fecha: '2026-08-01', centroId: 'cA', ingreso: 1000, egreso: 0 },
+      { fecha: '2026-08-02', centroId: 'cA', categoriaId: 'cat-ctrl', ingreso: 0, egreso: 400 },
+    ];
+    const s = win.calcularSaldos();
+    expect(s.filas.find(function(f){ return f.id === 'cA'; }).saldo).toBe(1000);
+  });
 });
 
 describe('esTipoCategoria / esCategoriaInversion / esCategoriaSueldo', () => {
@@ -116,6 +126,24 @@ describe('esTipoCategoria / esCategoriaInversion / esCategoriaSueldo', () => {
     expect(win.esCategoriaInversion('c1')).toBe(false);
     expect(win.esCategoriaSueldo('c1')).toBe(true);
     expect(win.esCategoriaSueldo('c2')).toBe(false);
+  });
+
+  it('esCategoriaFueraDeReportes: TEC y Solo control quedan afuera de los reportes', () => {
+    win.STATE.categorias.push({ id: 'c6', nombre: 'Transferencia', tipo: 'tec' }, { id: 'c7', nombre: 'Control', tipo: 'control' });
+    expect(win.esCategoriaFueraDeReportes('c6')).toBe(true);
+    expect(win.esCategoriaFueraDeReportes('c7')).toBe(true);
+    expect(win.esCategoriaFueraDeReportes('c2')).toBe(false);
+    expect(win.esCategoriaFueraDeReportes('c3')).toBe(false);
+  });
+
+  it('cuentaEnTotalesMovimientos: Solo control solo suma si se filtra por esa categoría', () => {
+    win.STATE.categorias.push({ id: 'c6', nombre: 'Transferencia', tipo: 'tec' }, { id: 'c7', nombre: 'Control', tipo: 'control' });
+    expect(win.cuentaEnTotalesMovimientos({ categoriaId: 'c3' }, [])).toBe(true);
+    expect(win.cuentaEnTotalesMovimientos({ categoriaId: 'c6' }, [])).toBe(false);
+    expect(win.cuentaEnTotalesMovimientos({ categoriaId: 'c6' }, ['c6'])).toBe(false);
+    expect(win.cuentaEnTotalesMovimientos({ categoriaId: 'c7' }, [])).toBe(false);
+    expect(win.cuentaEnTotalesMovimientos({ categoriaId: 'c7' }, ['c3'])).toBe(false);
+    expect(win.cuentaEnTotalesMovimientos({ categoriaId: 'c7' }, ['c7'])).toBe(true);
   });
 
   it('etiquetaInversion usa los nombres de las categorías de tipo Inversión', () => {

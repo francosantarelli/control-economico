@@ -1620,14 +1620,28 @@ function renderCentros(){
 //   'tec'     → transferencia entre cuentas: no cuenta en ningún reporte
 //   'inversion' → se muestra aparte (tarjeta propia) y no se resta de la capacidad de ahorro
 //   'sueldo'  → ingreso base de Resumen y de la capacidad de ahorro
+//   'control' → solo para llevar la cuenta: no cuenta en reportes, ni en Saldos, ni en los totales de
+//               Movimientos (salvo que se filtre por esa categoría)
 var TIPOS_CATEGORIA = [
   {id:'', label:'Normal'},
   {id:'tec', label:'TEC (transferencia entre cuentas)'},
   {id:'inversion', label:'Inversión (se muestra aparte)'},
-  {id:'sueldo', label:'Sueldo (ingreso base)'}
+  {id:'sueldo', label:'Sueldo (ingreso base)'},
+  {id:'control', label:'Solo control (no cuenta en reportes)'}
 ];
+// Ayuda que se muestra abajo del desplegable "Tratamiento en reportes" en el ABM.
+function ayudaTipoCategoria(){
+  return '<div style="font-size:11px;color:var(--ink-soft);margin-top:10px;line-height:1.5">'+
+    '<strong>¿Cuál elegir?</strong> Pensá si esa plata tiene que bajar tu capacidad de ahorro mensual.<br>'+
+    '<strong>Normal:</strong> gastos e ingresos del día a día (Super, Servicios, Auto…). Se restan del Saldo y de la capacidad de ahorro.<br>'+
+    '<strong>TEC:</strong> plata que pasa de una cuenta tuya a otra tuya. No cuenta en ningún reporte, solo mueve el saldo de cada cuenta.<br>'+
+    '<strong>Inversión:</strong> gastos grandes pagados con ahorros que dejan algo de valor (ej. Obra). Tarjeta propia en Resumen y no se resta de la capacidad de ahorro.<br>'+
+    '<strong>Sueldo:</strong> tu ingreso fijo. Es el "Total ingresos" de Resumen y la base de la capacidad de ahorro.<br>'+
+    '<strong>Solo control:</strong> movimientos que querés registrar pero que no son plata tuya ni la mueven. No cuenta en reportes ni en Saldos; en Movimientos sus totales solo se suman si filtrás por esa categoría.'+
+  '</div>';
+}
 function tipoLabel(tipo){
-  return ({tec:'TEC', inversion:'Inversión', sueldo:'Sueldo'})[tipo] || '—';
+  return ({tec:'TEC', inversion:'Inversión', sueldo:'Sueldo', control:'Solo control'})[tipo] || '—';
 }
 
 function renderABM(){
@@ -1739,6 +1753,7 @@ function renderCategorias(){
     MODAL_HTML = '<div class="modal-overlay" data-modal-backdrop="edit"><div class="modal-card">'+
       '<h2>Editar categoría</h2>'+
       '<div class="fields-row">'+ campoCategoria(editing.nombre, editing.tipo||'', colorCategoria(editing.id)) +'</div>'+
+      ayudaTipoCategoria()+
       '<div class="fields-row" style="margin-top:14px">'+
         '<button data-action="save-categoria" data-id="'+editing.id+'">Guardar cambios</button>'+
         '<button class="secondary" data-action="cancel-edit">Cancelar</button>'+
@@ -1752,6 +1767,7 @@ function renderCategorias(){
     '<div class="fields-row">'+ campoCategoria('', '', PALETA_DONUT[STATE.categorias.length % PALETA_DONUT.length]) +
       '<button data-action="save-categoria" data-id="">Agregar</button>'+
     '</div>'+
+    ayudaTipoCategoria()+
   '</div>';
 
   return formNuevaCategoria +
@@ -1963,13 +1979,14 @@ function renderMovimientos(){
   var egresoTec = movsTec.reduce(function(s,m){ return s+(Number(m.egreso)||0); },0);
   var difTec = ingresoTec - egresoTec;
   var categoriasSospechosas = STATE.categorias.filter(function(c){
-    return c.tipo !== 'tec' && /tec|transfer/i.test(c.nombre||'');
+    return c.tipo !== 'tec' && c.tipo !== 'control' && /tec|transfer/i.test(c.nombre||'');
   });
 
   var lista = movimientosFiltrados(f);
 
-  var totalIngreso = lista.reduce(function(s,m){ return esTipoCategoria(m.categoriaId,'tec') ? s : s + (Number(m.ingreso)||0); },0);
-  var totalEgreso = lista.reduce(function(s,m){ return esTipoCategoria(m.categoriaId,'tec') ? s : s + (Number(m.egreso)||0); },0);
+  var totalIngreso = lista.reduce(function(s,m){ return cuentaEnTotalesMovimientos(m, f.categoria) ? s + (Number(m.ingreso)||0) : s; },0);
+  var totalEgreso = lista.reduce(function(s,m){ return cuentaEnTotalesMovimientos(m, f.categoria) ? s + (Number(m.egreso)||0) : s; },0);
+  var etiquetaTotales = 'Totales (sin TEC'+(lista.some(function(m){ return esTipoCategoria(m.categoriaId,'control') && !cuentaEnTotalesMovimientos(m, f.categoria); }) ? ' ni Solo control' : '')+')';
 
   // Los movimientos con tarjeta se agrupan por Fecha + Centro + Marca (un resumen = un pago de una
   // tarjeta puntual) en una sola línea desplegable, ubicada en la tabla en el mismo lugar cronológico
@@ -2285,7 +2302,7 @@ function renderMovimientos(){
     (lista.length ? ''+
     '<table id="tabla-movimientos" class="table tabla-movil"><thead><tr><th><input type="checkbox" id="chk-select-all-mov" '+(todosVisiblesSeleccionados?'checked':'')+'></th><th>Fecha</th><th>CC</th><th>Categoría</th><th>Subcategoría</th><th>Proveedor</th><th>Detalle</th><th class="num">Ingreso</th><th class="num">Egreso</th><th></th></tr></thead>'+
     '<tbody>'+rows+'</tbody>'+
-    '<tfoot><tr><td colspan="7" data-label="">Totales (sin TEC)</td><td class="num ingreso" data-label="Total Ingreso">'+fmtMonto(totalIngreso)+'</td><td class="num egreso" data-label="Total Egreso">'+fmtMonto(totalEgreso)+'</td><td class="num '+(totalIngreso-totalEgreso>=0?'ingreso':'egreso')+'" data-label="Ingresos - Egresos">'+fmtMonto(totalIngreso-totalEgreso)+'</td></tr></tfoot>'+
+    '<tfoot><tr><td colspan="7" data-label="">'+esc(etiquetaTotales)+'</td><td class="num ingreso" data-label="Total Ingreso">'+fmtMonto(totalIngreso)+'</td><td class="num egreso" data-label="Total Egreso">'+fmtMonto(totalEgreso)+'</td><td class="num '+(totalIngreso-totalEgreso>=0?'ingreso':'egreso')+'" data-label="Ingresos - Egresos">'+fmtMonto(totalIngreso-totalEgreso)+'</td></tr></tfoot>'+
     '</table>' : '<div class="empty">No hay movimientos que coincidan con los filtros.</div>')+
     paginacionHtml+
   '</div>';
@@ -2637,6 +2654,7 @@ function calcularSaldos(){
 
   STATE.movimientos.forEach(function(m){
     if(esMovimientoPendiente(m)) return; // los movimientos con fecha futura no se consideran para el saldo todavía
+    if(esTipoCategoria(m.categoriaId, 'control')) return; // Solo control: se registra pero no mueve la cuenta
     var delta = (Number(m.ingreso)||0) - (Number(m.egreso)||0);
     if(m.centroId && saldoPorCentro.hasOwnProperty(m.centroId)){
       saldoPorCentro[m.centroId] += delta;
@@ -2733,7 +2751,7 @@ function renderSaldos(){
         '<button class="secondary" data-action="recalcular-saldos" style="font-size:12px;padding:6px 12px">↻ Recalcular</button>'+
       '</div>'+
     '</div>'+
-    '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Parte del saldo inicial cargado en la categoría "Saldo Inicial" (0 si no tiene) y suma/resta todos los ingresos y egresos, sin excluir TEC ni inversiones, para reflejar el saldo real de cada cuenta. Se recalcula solo con cada movimiento nuevo; usá "Recalcular" para traer también cambios hechos desde otra sesión. Los movimientos con fecha posterior a hoy se ven en Vencimientos (no en Movimientos) y no se incluyen en este cálculo.</div>'+
+    '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Parte del saldo inicial cargado en la categoría "Saldo Inicial" (0 si no tiene) y suma/resta todos los ingresos y egresos, sin excluir TEC ni inversiones (solo deja afuera las categorías de tipo Solo control), para reflejar el saldo real de cada cuenta. Se recalcula solo con cada movimiento nuevo; usá "Recalcular" para traer también cambios hechos desde otra sesión. Los movimientos con fecha posterior a hoy se ven en Vencimientos (no en Movimientos) y no se incluyen en este cálculo.</div>'+
     (filas.length || saldoSinCentro!==0 ? '<div class="saldos-grupos">'+gruposHtml+'</div>' : '<div class="empty">Todavía no cargaste ningún Centro de Costo.</div>')+
   '</div>';
 
@@ -2751,6 +2769,16 @@ function esCategoriaInversion(categoriaId){
 }
 function esCategoriaSueldo(categoriaId){
   return esTipoCategoria(categoriaId, 'sueldo');
+}
+// TEC y Solo control no cuentan en ningún reporte (Resumen, grilla mensual, Flujo de caja).
+function esCategoriaFueraDeReportes(categoriaId){
+  return esTipoCategoria(categoriaId, 'tec') || esTipoCategoria(categoriaId, 'control');
+}
+// Totales de Movimientos (tabla y Excel): sin TEC; Solo control únicamente si se filtra por esa categoría.
+function cuentaEnTotalesMovimientos(m, filtroCategorias){
+  if(esTipoCategoria(m.categoriaId, 'tec')) return false;
+  if(esTipoCategoria(m.categoriaId, 'control')) return (filtroCategorias||[]).indexOf(m.categoriaId) !== -1;
+  return true;
 }
 // Nombre para mostrar las categorías de tipo Inversión en Resumen/Flujo de caja: si hay una sola
 // (ej. "Obra") se usa su nombre; si hay varias, se juntan; si no hay ninguna, "Inversión".
@@ -2923,7 +2951,7 @@ function renderGrillaMensual(movs, rango){
   var datos = {}, totalesPorMes = {}, totalesPorMesSinInversion = {}, totalesPorCategoria = {}, granTotal = 0, granTotalSinInversion = 0;
 
   movs.forEach(function(m){
-    if(esTipoCategoria(m.categoriaId,'tec')) return;
+    if(esCategoriaFueraDeReportes(m.categoriaId)) return;
     if(esCategoriaSueldo(m.categoriaId)) return;
     var neto = (Number(m.ingreso)||0) - (Number(m.egreso)||0);
     if(neto===0) return;
@@ -2985,7 +3013,7 @@ function calcularTotalesResumenKpis(centroArr, categoriaArr, mesArr){
     if(mesArr.length && mesArr.indexOf((m.fecha||'').slice(0,7))===-1) return false;
     return true;
   });
-  var movsReales = filtrados.filter(function(m){ return !esTipoCategoria(m.categoriaId, 'tec'); });
+  var movsReales = filtrados.filter(function(m){ return !esCategoriaFueraDeReportes(m.categoriaId); });
   var movsInversion = movsReales.filter(function(m){ return esCategoriaInversion(m.categoriaId); });
   var movsSinInversion = movsReales.filter(function(m){ return !esCategoriaInversion(m.categoriaId); });
   var movsResto = movsSinInversion.filter(function(m){ return !esCategoriaSueldo(m.categoriaId); });
@@ -3150,7 +3178,7 @@ function renderResumen(){
   // (usa su propio set sin aplicar f.mes, porque "filtrados"/movsSinInversion sí lo aplican y acá queremos ver todos los meses igual)
   var movsRealesTrend = movsCentro.filter(function(m){
     if(f.categoria.length && f.categoria.indexOf(m.categoriaId)===-1) return false;
-    return !esTipoCategoria(m.categoriaId, 'tec');
+    return !esCategoriaFueraDeReportes(m.categoriaId);
   });
   var mesesTrend = meses.slice().sort();
   var dataPorMes = {};
@@ -3252,7 +3280,7 @@ function capacidadAhorroPromedio(ventana){
 
   var ingresoPorMes = {}, egresoPorMes = {}, inversionPorMes = {};
   STATE.movimientos.forEach(function(m){
-    if(esTipoCategoria(m.categoriaId,'tec')) return;
+    if(esCategoriaFueraDeReportes(m.categoriaId)) return;
     if(esCategoriaSueldo(m.categoriaId)){
       if(esSubcategoriaVentaUsdt(m.subcategoriaId)) return;
       if(esAporteGerardo(m)) return;
@@ -4318,6 +4346,7 @@ async function handleAction(action, id){
         await dbUpdate('categorias', id, {nombre:nombre, tipo:tipo||null, color:colorCategoriaInput});
         var c = STATE.categorias.find(function(x){return x.id===id;});
         c.nombre = nombre; c.tipo = tipo; c.color = colorCategoriaInput;
+        STATE.saldosDirty = true; // cambiar a/desde Solo control cambia los saldos
       } else {
         var nuevaC = {id:uid(), nombre:nombre, tipo:tipo, color:colorCategoriaInput};
         await dbInsert('categorias', toDbCategoria(nuevaC));
@@ -4404,9 +4433,10 @@ async function handleAction(action, id){
         }
       });
 
-      var totalIngresoExport = listaExport.reduce(function(s,m){ return esTipoCategoria(m.categoriaId,'tec') ? s : s + (Number(m.ingreso)||0); },0);
-      var totalEgresoExport = listaExport.reduce(function(s,m){ return esTipoCategoria(m.categoriaId,'tec') ? s : s + (Number(m.egreso)||0); },0);
-      var filaTotales = sheet.addRow({ detalle:'Totales (sin TEC)', ingreso:totalIngresoExport, egreso:totalEgresoExport });
+      var totalIngresoExport = listaExport.reduce(function(s,m){ return cuentaEnTotalesMovimientos(m, f.categoria) ? s + (Number(m.ingreso)||0) : s; },0);
+      var totalEgresoExport = listaExport.reduce(function(s,m){ return cuentaEnTotalesMovimientos(m, f.categoria) ? s + (Number(m.egreso)||0) : s; },0);
+      var hayControlExcluido = listaExport.some(function(m){ return esTipoCategoria(m.categoriaId,'control') && !cuentaEnTotalesMovimientos(m, f.categoria); });
+      var filaTotales = sheet.addRow({ detalle:'Totales (sin TEC'+(hayControlExcluido?' ni Solo control':'')+')', ingreso:totalIngresoExport, egreso:totalEgresoExport });
       filaTotales.font = { bold:true };
       filaTotales.getCell('ingreso').numFmt = '#,##0.00';
       filaTotales.getCell('egreso').numFmt = '#,##0.00';

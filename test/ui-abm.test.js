@@ -70,7 +70,7 @@ describe('ABM: Categorías', () => {
     expect(nueva.tipo).toBe('');
   });
 
-  it.each(['tec', 'inversion', 'sueldo'])('agrega una categoría con tratamiento %s', async (tipo) => {
+  it.each(['tec', 'inversion', 'sueldo', 'control'])('agrega una categoría con tratamiento %s', async (tipo) => {
     win.document.getElementById('f-categoria-nombre').value = 'Nueva ' + tipo;
     win.document.getElementById('f-categoria-tipo').value = tipo;
     await win.handleAction('save-categoria', '');
