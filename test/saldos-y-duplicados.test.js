@@ -93,14 +93,14 @@ describe('calcularSaldos', () => {
     expect(s.filas.find(function(f){ return f.id === 'cA'; }).saldo).toBe(1000);
   });
 
-  it('ignora los movimientos de categorías de tipo Solo control', () => {
+  it('los movimientos de categorías Solo control sí mueven el saldo (solo quedan afuera de los reportes)', () => {
     win.STATE.categorias = [{ id: 'cat-ctrl', nombre: 'Control', tipo: 'control' }];
     win.STATE.movimientos = [
       { fecha: '2026-08-01', centroId: 'cA', ingreso: 1000, egreso: 0 },
       { fecha: '2026-08-02', centroId: 'cA', categoriaId: 'cat-ctrl', ingreso: 0, egreso: 400 },
     ];
     const s = win.calcularSaldos();
-    expect(s.filas.find(function(f){ return f.id === 'cA'; }).saldo).toBe(1000);
+    expect(s.filas.find(function(f){ return f.id === 'cA'; }).saldo).toBe(600);
   });
 });
 

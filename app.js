@@ -1620,8 +1620,8 @@ function renderCentros(){
 //   'tec'     → transferencia entre cuentas: no cuenta en ningún reporte
 //   'inversion' → se muestra aparte (tarjeta propia) y no se resta de la capacidad de ahorro
 //   'sueldo'  → ingreso base de Resumen y de la capacidad de ahorro
-//   'control' → solo para llevar la cuenta: no cuenta en reportes, ni en Saldos, ni en los totales de
-//               Movimientos (salvo que se filtre por esa categoría)
+//   'control' → solo para llevar la cuenta: no cuenta en reportes ni en los totales de Movimientos
+//               (salvo que se filtre por esa categoría), pero sí mueve el saldo de la cuenta en Saldos
 var TIPOS_CATEGORIA = [
   {id:'', label:'Normal'},
   {id:'tec', label:'TEC (transferencia entre cuentas)'},
@@ -1637,7 +1637,7 @@ function ayudaTipoCategoria(){
     '<strong>TEC:</strong> plata que pasa de una cuenta tuya a otra tuya. No cuenta en ningún reporte, solo mueve el saldo de cada cuenta.<br>'+
     '<strong>Inversión:</strong> gastos grandes pagados con ahorros que dejan algo de valor (ej. Obra). Tarjeta propia en Resumen y no se resta de la capacidad de ahorro.<br>'+
     '<strong>Sueldo:</strong> tu ingreso fijo. Es el "Total ingresos" de Resumen y la base de la capacidad de ahorro.<br>'+
-    '<strong>Solo control:</strong> movimientos que querés registrar pero que no son plata tuya ni la mueven. No cuenta en reportes ni en Saldos; en Movimientos sus totales solo se suman si filtrás por esa categoría.'+
+    '<strong>Solo control:</strong> movimientos que querés registrar y controlar pero que no son ingresos ni gastos tuyos. No cuenta en reportes (sí mueve el saldo de la cuenta en Saldos); en Movimientos sus totales solo se suman si filtrás por esa categoría.'+
   '</div>';
 }
 function tipoLabel(tipo){
@@ -2654,7 +2654,6 @@ function calcularSaldos(){
 
   STATE.movimientos.forEach(function(m){
     if(esMovimientoPendiente(m)) return; // los movimientos con fecha futura no se consideran para el saldo todavía
-    if(esTipoCategoria(m.categoriaId, 'control')) return; // Solo control: se registra pero no mueve la cuenta
     var delta = (Number(m.ingreso)||0) - (Number(m.egreso)||0);
     if(m.centroId && saldoPorCentro.hasOwnProperty(m.centroId)){
       saldoPorCentro[m.centroId] += delta;
@@ -2751,7 +2750,7 @@ function renderSaldos(){
         '<button class="secondary" data-action="recalcular-saldos" style="font-size:12px;padding:6px 12px">↻ Recalcular</button>'+
       '</div>'+
     '</div>'+
-    '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Parte del saldo inicial cargado en la categoría "Saldo Inicial" (0 si no tiene) y suma/resta todos los ingresos y egresos, sin excluir TEC ni inversiones (solo deja afuera las categorías de tipo Solo control), para reflejar el saldo real de cada cuenta. Se recalcula solo con cada movimiento nuevo; usá "Recalcular" para traer también cambios hechos desde otra sesión. Los movimientos con fecha posterior a hoy se ven en Vencimientos (no en Movimientos) y no se incluyen en este cálculo.</div>'+
+    '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Parte del saldo inicial cargado en la categoría "Saldo Inicial" (0 si no tiene) y suma/resta todos los ingresos y egresos, sin excluir TEC, inversiones ni Solo control, para reflejar el saldo real de cada cuenta. Se recalcula solo con cada movimiento nuevo; usá "Recalcular" para traer también cambios hechos desde otra sesión. Los movimientos con fecha posterior a hoy se ven en Vencimientos (no en Movimientos) y no se incluyen en este cálculo.</div>'+
     (filas.length || saldoSinCentro!==0 ? '<div class="saldos-grupos">'+gruposHtml+'</div>' : '<div class="empty">Todavía no cargaste ningún Centro de Costo.</div>')+
   '</div>';
 
@@ -4346,7 +4345,6 @@ async function handleAction(action, id){
         await dbUpdate('categorias', id, {nombre:nombre, tipo:tipo||null, color:colorCategoriaInput});
         var c = STATE.categorias.find(function(x){return x.id===id;});
         c.nombre = nombre; c.tipo = tipo; c.color = colorCategoriaInput;
-        STATE.saldosDirty = true; // cambiar a/desde Solo control cambia los saldos
       } else {
         var nuevaC = {id:uid(), nombre:nombre, tipo:tipo, color:colorCategoriaInput};
         await dbInsert('categorias', toDbCategoria(nuevaC));
