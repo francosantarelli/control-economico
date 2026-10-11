@@ -8,7 +8,7 @@ describe('Flujo de Caja: capacidad de ahorro promedio', () => {
     seedBase(win);
     const restore = mockNow(win, '2026-04-15T12:00:00');
 
-    win.STATE.categorias.push({ id: 'cat-obra', nombre: 'Obra', tipo: 'normal' });
+    win.STATE.categorias.push({ id: 'cat-obra', nombre: 'Obra', tipo: 'inversion' });
     win.STATE.subcategorias.push({ id: 'sub-venta-usdt', categoriaId: 'cat-suel', nombre: 'Venta USDT' });
 
     win.STATE.movimientos = [
@@ -30,7 +30,7 @@ describe('Flujo de Caja: capacidad de ahorro promedio', () => {
     // ingreso: 100000 (sueldo ARS) + 50000 (sueldo acreditado en USDT) = 150000, sin sumar los 48000 de la venta
     // egreso resto: 30000 → 150000 - 30000 = 120000, sobre 1 solo mes con datos; obra: 20000 aparte
     expect(cap.promedio).toBe(120000);
-    expect(cap.obraPromedio).toBe(20000);
+    expect(cap.inversionPromedio).toBe(20000);
 
     restore();
   });

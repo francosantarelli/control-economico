@@ -6,7 +6,7 @@ export function seedBase(win) {
   ];
   win.STATE.categorias = [
     { id: 'cat-super', nombre: 'Supermercado', tipo: 'normal' },
-    { id: 'cat-suel', nombre: 'Sueldo', tipo: 'normal' },
+    { id: 'cat-suel', nombre: 'Sueldo', tipo: 'sueldo' },
     { id: 'cat-tec', nombre: 'Transferencia entre centros', tipo: 'tec' }
   ];
   win.STATE.subcategorias = [

@@ -63,19 +63,25 @@ describe('ABM: Categorías', () => {
     win.render();
   });
 
-  it('agrega una categoría normal (checkbox TEC destildado -> tipo vacío)', async () => {
+  it('agrega una categoría normal (tratamiento "Normal" -> tipo vacío)', async () => {
     win.document.getElementById('f-categoria-nombre').value = 'Entretenimiento';
     await win.handleAction('save-categoria', '');
     const nueva = win.STATE.categorias.find(c => c.nombre === 'Entretenimiento');
     expect(nueva.tipo).toBe('');
   });
 
-  it('agrega una categoría de tipo TEC cuando se tilda el checkbox', async () => {
-    win.document.getElementById('f-categoria-nombre').value = 'Otra transferencia';
-    win.document.getElementById('f-categoria-es-tec').checked = true;
+  it.each(['tec', 'inversion', 'sueldo'])('agrega una categoría con tratamiento %s', async (tipo) => {
+    win.document.getElementById('f-categoria-nombre').value = 'Nueva ' + tipo;
+    win.document.getElementById('f-categoria-tipo').value = tipo;
     await win.handleAction('save-categoria', '');
-    const nueva = win.STATE.categorias.find(c => c.nombre === 'Otra transferencia');
-    expect(nueva.tipo).toBe('tec');
+    const nueva = win.STATE.categorias.find(c => c.nombre === 'Nueva ' + tipo);
+    expect(nueva.tipo).toBe(tipo);
+  });
+
+  it('al editar, el desplegable muestra el tratamiento guardado', () => {
+    win.STATE.categorias.push({ id: 'cat-obra', nombre: 'Obra', tipo: 'inversion' });
+    win.handleAction('edit-categoria', 'cat-obra');
+    expect(win.document.getElementById('f-categoria-tipo').value).toBe('inversion');
   });
 
   it('borrar una categoría también borra sus subcategorías en STATE (ON DELETE CASCADE en la base)', async () => {

@@ -94,25 +94,35 @@ describe('calcularSaldos', () => {
   });
 });
 
-describe('esTipoCategoria / esCategoriaObra / esCategoriaSueldo', () => {
+describe('esTipoCategoria / esCategoriaInversion / esCategoriaSueldo', () => {
   beforeEach(() => {
     win.STATE.categorias = [
-      { id: 'c1', nombre: 'Sueldo', tipo: 'ingreso' },
-      { id: 'c2', nombre: 'Obra', tipo: 'egreso' },
-      { id: 'c3', nombre: 'Comida', tipo: 'egreso' },
+      { id: 'c1', nombre: 'Sueldo', tipo: 'sueldo' },
+      { id: 'c2', nombre: 'Obra', tipo: 'inversion' },
+      { id: 'c3', nombre: 'Comida', tipo: '' },
+      { id: 'c4', nombre: 'Obra', tipo: '' },
     ];
   });
 
   it('esTipoCategoria compara el campo tipo de la categoría', () => {
-    expect(win.esTipoCategoria('c1', 'ingreso')).toBe(true);
-    expect(win.esTipoCategoria('c3', 'ingreso')).toBe(false);
-    expect(win.esTipoCategoria('inexistente', 'ingreso')).toBe(false);
+    expect(win.esTipoCategoria('c1', 'sueldo')).toBe(true);
+    expect(win.esTipoCategoria('c3', 'sueldo')).toBe(false);
+    expect(win.esTipoCategoria('inexistente', 'sueldo')).toBe(false);
   });
 
-  it('esCategoriaObra / esCategoriaSueldo matchean por nombre, sin distinguir mayúsculas', () => {
-    expect(win.esCategoriaObra('c2')).toBe(true);
-    expect(win.esCategoriaObra('c1')).toBe(false);
+  it('esCategoriaInversion / esCategoriaSueldo usan el tipo, no el nombre', () => {
+    expect(win.esCategoriaInversion('c2')).toBe(true);
+    expect(win.esCategoriaInversion('c4')).toBe(false); // se llama "Obra" pero es Normal
+    expect(win.esCategoriaInversion('c1')).toBe(false);
     expect(win.esCategoriaSueldo('c1')).toBe(true);
     expect(win.esCategoriaSueldo('c2')).toBe(false);
+  });
+
+  it('etiquetaInversion usa los nombres de las categorías de tipo Inversión', () => {
+    expect(win.etiquetaInversion()).toBe('Obra');
+    win.STATE.categorias.push({ id: 'c5', nombre: 'Auto', tipo: 'inversion' });
+    expect(win.etiquetaInversion()).toBe('Obra + Auto');
+    win.STATE.categorias = [];
+    expect(win.etiquetaInversion()).toBe('Inversión');
   });
 });

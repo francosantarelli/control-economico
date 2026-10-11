@@ -1615,8 +1615,19 @@ function renderCentros(){
 }
 
 // ===================== CATEGORÍAS =====================
+// Tratamiento de la categoría en Resumen y Flujo de caja (campo "tipo"):
+//   ''        → normal: cuenta como ingreso/egreso corriente
+//   'tec'     → transferencia entre cuentas: no cuenta en ningún reporte
+//   'inversion' → se muestra aparte (tarjeta propia) y no se resta de la capacidad de ahorro
+//   'sueldo'  → ingreso base de Resumen y de la capacidad de ahorro
+var TIPOS_CATEGORIA = [
+  {id:'', label:'Normal'},
+  {id:'tec', label:'TEC (transferencia entre cuentas)'},
+  {id:'inversion', label:'Inversión (se muestra aparte)'},
+  {id:'sueldo', label:'Sueldo (ingreso base)'}
+];
 function tipoLabel(tipo){
-  return tipo==='tec' ? 'TEC' : '—';
+  return ({tec:'TEC', inversion:'Inversión', sueldo:'Sueldo'})[tipo] || '—';
 }
 
 function renderABM(){
@@ -1709,9 +1720,9 @@ function renderBackup(){
 function campoCategoria(nombre, tipo, color){
   return '<div class="field"><label>Nombre</label><input type="text" id="f-categoria-nombre" placeholder="Ej: Alimentos" value="'+esc(nombre)+'" style="width:220px"></div>'+
     '<div class="field"><label>Color</label><input type="color" id="f-categoria-color" value="'+esc(color)+'"></div>'+
-    '<div class="field"><label>&nbsp;</label><label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:normal;white-space:nowrap;padding:7px 0">'+
-      '<input type="checkbox" id="f-categoria-es-tec" '+(tipo==='tec'?'checked':'')+' style="width:auto"> Es TEC (transferencia entre cuentas)'+
-    '</label></div>';
+    '<div class="field"><label>Tratamiento en reportes</label><select id="f-categoria-tipo">'+
+      TIPOS_CATEGORIA.map(function(t){ return '<option value="'+t.id+'" '+((tipo||'')===t.id?'selected':'')+'>'+esc(t.label)+'</option>'; }).join('')+
+    '</select></div>';
 }
 function renderCategorias(){
   var rows = STATE.categorias.map(function(c){
@@ -2722,7 +2733,7 @@ function renderSaldos(){
         '<button class="secondary" data-action="recalcular-saldos" style="font-size:12px;padding:6px 12px">↻ Recalcular</button>'+
       '</div>'+
     '</div>'+
-    '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Parte del saldo inicial cargado en la categoría "Saldo Inicial" (0 si no tiene) y suma/resta todos los ingresos y egresos, sin excluir TEC ni Obra, para reflejar el saldo real de cada cuenta. Se recalcula solo con cada movimiento nuevo; usá "Recalcular" para traer también cambios hechos desde otra sesión. Los movimientos con fecha posterior a hoy se ven en Vencimientos (no en Movimientos) y no se incluyen en este cálculo.</div>'+
+    '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Parte del saldo inicial cargado en la categoría "Saldo Inicial" (0 si no tiene) y suma/resta todos los ingresos y egresos, sin excluir TEC ni inversiones, para reflejar el saldo real de cada cuenta. Se recalcula solo con cada movimiento nuevo; usá "Recalcular" para traer también cambios hechos desde otra sesión. Los movimientos con fecha posterior a hoy se ven en Vencimientos (no en Movimientos) y no se incluyen en este cálculo.</div>'+
     (filas.length || saldoSinCentro!==0 ? '<div class="saldos-grupos">'+gruposHtml+'</div>' : '<div class="empty">Todavía no cargaste ningún Centro de Costo.</div>')+
   '</div>';
 
@@ -2734,13 +2745,18 @@ function esTipoCategoria(categoriaId, tipo){
   var cat = STATE.categorias.find(function(c){ return c.id === categoriaId; });
   return !!cat && cat.tipo === tipo;
 }
-function esCategoriaObra(categoriaId){
-  var cat = STATE.categorias.find(function(c){ return c.id === categoriaId; });
-  return !!cat && cat.nombre.trim().toLowerCase() === 'obra';
+// El tratamiento en reportes sale del campo "tipo" de la categoría (se elige en el ABM), no del nombre.
+function esCategoriaInversion(categoriaId){
+  return esTipoCategoria(categoriaId, 'inversion');
 }
 function esCategoriaSueldo(categoriaId){
-  var cat = STATE.categorias.find(function(c){ return c.id === categoriaId; });
-  return !!cat && cat.nombre.trim().toLowerCase() === 'sueldo';
+  return esTipoCategoria(categoriaId, 'sueldo');
+}
+// Nombre para mostrar las categorías de tipo Inversión en Resumen/Flujo de caja: si hay una sola
+// (ej. "Obra") se usa su nombre; si hay varias, se juntan; si no hay ninguna, "Inversión".
+function etiquetaInversion(){
+  var nombres = STATE.categorias.filter(function(c){ return c.tipo === 'inversion'; }).map(function(c){ return c.nombre; });
+  return nombres.length ? nombres.join(' + ') : 'Inversión';
 }
 
 var PALETA_DONUT = ['#2F9E6E','#A8D8BE','#E0654B','#F0C48A','#8FBFE0','#C3AEDB','#E3C08D','#7FC4B8','#F2A6A6','#B7D89A'];
@@ -2904,7 +2920,7 @@ function renderGrillaMensual(movs, rango){
   var mesesSet = {};
   meses.forEach(function(m){ mesesSet[m] = true; });
 
-  var datos = {}, totalesPorMes = {}, totalesPorMesSinObra = {}, totalesPorCategoria = {}, granTotal = 0, granTotalSinObra = 0;
+  var datos = {}, totalesPorMes = {}, totalesPorMesSinInversion = {}, totalesPorCategoria = {}, granTotal = 0, granTotalSinInversion = 0;
 
   movs.forEach(function(m){
     if(esTipoCategoria(m.categoriaId,'tec')) return;
@@ -2919,9 +2935,9 @@ function renderGrillaMensual(movs, rango){
     totalesPorMes[mes] = (totalesPorMes[mes]||0) + neto;
     totalesPorCategoria[cid] = (totalesPorCategoria[cid]||0) + neto;
     granTotal += neto;
-    if(!esCategoriaObra(cid)){
-      totalesPorMesSinObra[mes] = (totalesPorMesSinObra[mes]||0) + neto;
-      granTotalSinObra += neto;
+    if(!esCategoriaInversion(cid)){
+      totalesPorMesSinInversion[mes] = (totalesPorMesSinInversion[mes]||0) + neto;
+      granTotalSinInversion += neto;
     }
   });
 
@@ -2944,9 +2960,9 @@ function renderGrillaMensual(movs, rango){
     return '<tr><td>'+esc(cid ? nombreCategoria(cid) : 'Sin categoría')+'</td>'+celdas+'<td class="num mono '+(totalCat>=0?'ingreso':'egreso')+'" style="font-weight:600">'+fmtMonto(totalCat)+'</td></tr>';
   }).join('');
 
-  var filaTotalSinObra = '<tr style="font-weight:600"><td>Total (sin Obra)</td>'+
-    meses.map(function(m){ var v=totalesPorMesSinObra[m]||0; return '<td class="num mono '+(v>=0?'ingreso':'egreso')+'">'+fmtMonto(v)+'</td>'; }).join('')+
-    '<td class="num mono '+(granTotalSinObra>=0?'ingreso':'egreso')+'">'+fmtMonto(granTotalSinObra)+'</td></tr>';
+  var filaTotalSinInversion = '<tr style="font-weight:600"><td>Total (sin '+esc(etiquetaInversion())+')</td>'+
+    meses.map(function(m){ var v=totalesPorMesSinInversion[m]||0; return '<td class="num mono '+(v>=0?'ingreso':'egreso')+'">'+fmtMonto(v)+'</td>'; }).join('')+
+    '<td class="num mono '+(granTotalSinInversion>=0?'ingreso':'egreso')+'">'+fmtMonto(granTotalSinInversion)+'</td></tr>';
 
   var filaTotales = '<tr style="font-weight:600"><td>Total</td>'+
     meses.map(function(m){ var v=totalesPorMes[m]||0; return '<td class="num mono '+(v>=0?'ingreso':'egreso')+'">'+fmtMonto(v)+'</td>'; }).join('')+
@@ -2955,11 +2971,11 @@ function renderGrillaMensual(movs, rango){
   return '<div style="overflow-x:auto">'+
     '<table class="table"><thead><tr><th>Categoría</th>'+headerCols+'<th class="num">Total</th></tr></thead>'+
     '<tbody>'+rows+'</tbody>'+
-    '<tfoot>'+filaTotalSinObra+filaTotales+'</tfoot>'+
+    '<tfoot>'+filaTotalSinInversion+filaTotales+'</tfoot>'+
     '</table></div>';
 }
 
-// Calcula los 4 totales de Resumen (ingresos/egresos/obra/saldo) para una combinación de filtros
+// Calcula los 4 totales de Resumen (ingresos/egresos/inversión/saldo) para una combinación de filtros
 // de Centro/Categoría/Mes. Extraído de renderResumen() para poder llamarlo dos veces: una con los
 // filtros vigentes y otra con el mes anterior, y así mostrar la comparación en las KPI cards.
 function calcularTotalesResumenKpis(centroArr, categoriaArr, mesArr){
@@ -2970,12 +2986,12 @@ function calcularTotalesResumenKpis(centroArr, categoriaArr, mesArr){
     return true;
   });
   var movsReales = filtrados.filter(function(m){ return !esTipoCategoria(m.categoriaId, 'tec'); });
-  var movsObra = movsReales.filter(function(m){ return esCategoriaObra(m.categoriaId); });
-  var movsSinObra = movsReales.filter(function(m){ return !esCategoriaObra(m.categoriaId); });
-  var movsResto = movsSinObra.filter(function(m){ return !esCategoriaSueldo(m.categoriaId); });
+  var movsInversion = movsReales.filter(function(m){ return esCategoriaInversion(m.categoriaId); });
+  var movsSinInversion = movsReales.filter(function(m){ return !esCategoriaInversion(m.categoriaId); });
+  var movsResto = movsSinInversion.filter(function(m){ return !esCategoriaSueldo(m.categoriaId); });
 
   // "Total ingresos" = solo lo categorizado como Sueldo. "Total egresos" = neto (egreso-ingreso) del
-  // resto de las categorías (todo menos TEC/Sueldo/Obra, que tienen su propio tratamiento). Obra sigue aparte.
+  // resto de las categorías (todo menos TEC/Sueldo/Inversión, que tienen su propio tratamiento). Inversión sigue aparte.
   // El Sueldo (en pesos o en USDT) se filtra por mes aparte (no viene de "filtrados"): usa mesEfectivoSueldo
   // en vez del mes calendario de la fecha, porque se acredita unos días antes de fin de mes y así ese pago
   // ya cuenta para el mes al que corresponde, no para el mes en que se acreditó. Sueldo con subcategoría
@@ -2998,9 +3014,9 @@ function calcularTotalesResumenKpis(centroArr, categoriaArr, mesArr){
   var totalIngreso = movsSueldo.reduce(function(s,m){ return s + (Number(m.ingreso)||0); },0)
     + usdtSueldo.reduce(function(s,u){ return s + (Number(u.montoArs)||0); },0);
   var totalEgreso = movsResto.reduce(function(s,m){ return s + (Number(m.egreso)||0) - (Number(m.ingreso)||0); },0);
-  var totalObra = movsObra.reduce(function(s,m){ return s + (Number(m.egreso)||0) - (Number(m.ingreso)||0); },0);
-  var saldo = totalIngreso - totalEgreso - totalObra;
-  return { totalIngreso:totalIngreso, totalEgreso:totalEgreso, totalObra:totalObra, saldo:saldo, movsResto:movsResto };
+  var totalInversion = movsInversion.reduce(function(s,m){ return s + (Number(m.egreso)||0) - (Number(m.ingreso)||0); },0);
+  var saldo = totalIngreso - totalEgreso - totalInversion;
+  return { totalIngreso:totalIngreso, totalEgreso:totalEgreso, totalInversion:totalInversion, saldo:saldo, movsResto:movsResto };
 }
 // "2026-05" -> "2026-04". Para calcular a qué mes comparar cuando el filtro de Mes de Resumen
 // tiene un único mes elegido.
@@ -3022,7 +3038,7 @@ function renderResumen(){
   var movsCentro = STATE.movimientos.filter(function(m){ return !f.centro.length || f.centro.indexOf(m.centroId)!==-1; });
 
   var actual = calcularTotalesResumenKpis(f.centro, f.categoria, f.mes);
-  var totalIngreso = actual.totalIngreso, totalEgreso = actual.totalEgreso, totalObra = actual.totalObra, saldo = actual.saldo;
+  var totalIngreso = actual.totalIngreso, totalEgreso = actual.totalEgreso, totalInversion = actual.totalInversion, saldo = actual.saldo;
   var movsResto = actual.movsResto;
 
   // Comparación contra el mes anterior: solo tiene sentido cuando el filtro de Mes está en un único
@@ -3062,12 +3078,12 @@ function renderResumen(){
       '<div class="summary-card"><div class="kpi-ic kpi-ic-danger"><i class="bi bi-alarm"></i></div><div class="label">Próximo vencimiento</div>'+
         (proximoVenc ? '<div class="value" style="font-size:15px">'+esc(proximoVenc.concepto)+'</div><div class="mono" style="font-size:12px;color:var(--ink-soft)">'+fmtMonto(proximoVenc.monto)+' · '+esc(fechaISOaDDMMAAAA(proximoVenc.fecha))+(vencProximos7d>1?' · '+vencProximos7d+' en los próx. 7 días':'')+'</div>' : '<div class="value" style="font-size:15px;color:var(--ink-soft)">Ninguno pendiente</div>')+
       '</div>'+
-      '<div class="summary-card"><div class="kpi-ic kpi-ic-accent"><i class="bi bi-piggy-bank"></i></div><div class="label">Ahorro promedio / mes</div><div class="value">'+(capAhorro?fmtMonto(capAhorro.promedio):'—')+'</div>'+(capAhorro?'<div style="font-size:11px;color:var(--ink-soft);margin-top:2px">últimos 6 meses cerrados, sin Obra</div>':'')+'</div>'+
+      '<div class="summary-card"><div class="kpi-ic kpi-ic-accent"><i class="bi bi-piggy-bank"></i></div><div class="label">Ahorro promedio / mes</div><div class="value">'+(capAhorro?fmtMonto(capAhorro.promedio):'—')+'</div>'+(capAhorro?'<div style="font-size:11px;color:var(--ink-soft);margin-top:2px">últimos 6 meses cerrados, sin '+esc(etiquetaInversion())+'</div>':'')+'</div>'+
     '</div>'+
   '</div>';
 
   // Desglose por categoría o por centro de costo, según STATE.resumenFiltros.vista: total neto (ingresos - egresos), más
-  // cantidad de movimientos (para distinguir "un gasto grande puntual" de "muchos gastos chicos"). No incluye Sueldo (queda afuera de esta comparación, como Obra).
+  // cantidad de movimientos (para distinguir "un gasto grande puntual" de "muchos gastos chicos"). No incluye Sueldo (queda afuera de esta comparación, como las inversiones).
   var porGrupo = {};
   movsResto.forEach(function(m){
     var key = f.vista === 'centro' ? (m.centroId||'') : (m.categoriaId||'');
@@ -3097,7 +3113,7 @@ function renderResumen(){
       '<div class="amt '+claseColorTotalLista+'">'+fmtMonto(totalLista)+'</div>'+
     '</div>' : '';
 
-  // Top proveedores: mismo recorte que "Total por Categoría/Centro" (movsResto: sin TEC/Sueldo/Obra)
+  // Top proveedores: mismo recorte que "Total por Categoría/Centro" (movsResto: sin TEC/Sueldo/Inversión)
   // pero agrupado por proveedor en vez de por categoría -- suele ser más accionable ("Coto: -$65.000
   // en 3 compras" dice más que "Supermercado: -$120.000").
   var porProveedor = {};
@@ -3119,7 +3135,7 @@ function renderResumen(){
       '<div class="amt '+claseColor+'">'+fmtMonto(x.monto)+'</div></div>';
   }).join('');
 
-  // Donut: top 8 + "Otros" (no incluye Obra, que ya tiene su propia tarjeta aparte). Usa el valor absoluto para el tamaño de cada porción (una torta no puede tener porciones negativas), pero muestra el monto real (con signo) en la leyenda.
+  // Donut: top 8 + "Otros" (no incluye las inversiones, que ya tienen su propia tarjeta aparte). Usa el valor absoluto para el tamaño de cada porción (una torta no puede tener porciones negativas), pero muestra el monto real (con signo) en la leyenda.
   var segmentos = lista.slice(0,8).map(function(x,i){ return {label:x.nombre, value:Math.abs(x.monto), montoReal:x.monto, color:PALETA_DONUT[i%PALETA_DONUT.length]}; });
   var restoMonto = lista.slice(8).reduce(function(s,x){return s+x.monto;},0);
   if(restoMonto!==0) segmentos.push({label:'Otros', value:Math.abs(restoMonto), montoReal:restoMonto, color:'#E1EEE7'});
@@ -3131,7 +3147,7 @@ function renderResumen(){
   }).join('');
 
   // Tendencia mensual (Ingreso vs Egreso), respetando filtro de Centro/Categoría pero mostrando todos los meses disponibles
-  // (usa su propio set sin aplicar f.mes, porque "filtrados"/movsSinObra sí lo aplican y acá queremos ver todos los meses igual)
+  // (usa su propio set sin aplicar f.mes, porque "filtrados"/movsSinInversion sí lo aplican y acá queremos ver todos los meses igual)
   var movsRealesTrend = movsCentro.filter(function(m){
     if(f.categoria.length && f.categoria.indexOf(m.categoriaId)===-1) return false;
     return !esTipoCategoria(m.categoriaId, 'tec');
@@ -3164,7 +3180,7 @@ function renderResumen(){
   '<div class="summary-cards">'+
     '<div class="summary-card"><div class="kpi-ic kpi-ic-accent"><i class="bi bi-arrow-up"></i></div><div class="label">Total ingresos</div><div class="value ingreso">'+fmtMonto(totalIngreso)+'</div>'+deltaHtml(totalIngreso, true, anterior?anterior.totalIngreso:null)+'</div>'+
     '<div class="summary-card"><div class="kpi-ic kpi-ic-danger"><i class="bi bi-arrow-down"></i></div><div class="label">Total egresos</div><div class="value egreso">'+fmtMonto(totalEgreso)+'</div>'+deltaHtml(totalEgreso, false, anterior?anterior.totalEgreso:null)+'</div>'+
-    '<div class="summary-card"><div class="kpi-ic kpi-ic-warning"><i class="bi bi-building"></i></div><div class="label">Obra</div><div class="value egreso">'+fmtMonto(totalObra)+'</div></div>'+
+    '<div class="summary-card"><div class="kpi-ic kpi-ic-warning"><i class="bi bi-building"></i></div><div class="label">'+esc(etiquetaInversion())+'</div><div class="value egreso">'+fmtMonto(totalInversion)+'</div></div>'+
     '<div class="summary-card"><div class="kpi-ic kpi-ic-accent"><i class="bi bi-wallet2"></i></div><div class="label">Saldo</div><div class="value">'+fmtMonto(saldo)+'</div>'+(tasaAhorro!==null?'<div style="font-size:11px;color:var(--ink-soft);margin-top:2px">'+tasaAhorro+'% del ingreso</div>':'')+deltaHtml(saldo, true, anterior?anterior.saldo:null)+'</div>'+
   '</div>'+
   '<div class="card">'+
@@ -3179,12 +3195,12 @@ function renderResumen(){
   '</div>'+
   '<div class="card">'+
     '<h3>Total por '+(f.vista==='centro'?'Centro de Costo':'Categoría')+'</h3>'+
-    '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Ingresos menos egresos de cada '+(f.vista==='centro'?'centro':'categoría')+'. Verde = neto a favor (ingreso), coral = neto en contra (egreso). No incluye TEC (transferencias entre cuentas), Obra ni Sueldo (quedan afuera de esta comparación).</div>'+
+    '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Ingresos menos egresos de cada '+(f.vista==='centro'?'centro':'categoría')+'. Verde = neto a favor (ingreso), coral = neto en contra (egreso). No incluye TEC (transferencias entre cuentas), '+esc(etiquetaInversion())+' ni Sueldo (quedan afuera de esta comparación).</div>'+
     (lista.length ? bars+totalListaHtml : '<div class="empty">Todavía no hay movimientos cargados.</div>')+
   '</div>'+
   '<div class="card">'+
     '<h3>Top proveedores</h3>'+
-    '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Los 8 proveedores con mayor movimiento neto en el período filtrado (mismo recorte que "Total por '+(f.vista==='centro'?'Centro de Costo':'Categoría')+'" de arriba: sin TEC, Sueldo ni Obra).</div>'+
+    '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Los 8 proveedores con mayor movimiento neto en el período filtrado (mismo recorte que "Total por '+(f.vista==='centro'?'Centro de Costo':'Categoría')+'" de arriba: sin TEC, Sueldo ni '+esc(etiquetaInversion())+').</div>'+
     (listaProveedores.length ? barsProveedores : '<div class="empty">Todavía no hay movimientos cargados.</div>')+
   '</div>'+
   '<div class="card">'+
@@ -3204,20 +3220,20 @@ function renderResumen(){
         '<option value="anio" '+(STATE.grillaRango==='anio'?'selected':'')+'>Este año</option>'+
       '</select></div>'+
     '</div>'+
-    '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Ingresos menos egresos por categoría, mes a mes'+(f.centro.length?' (Centro de Costo: '+f.centro.map(function(cid){ return esc(nombreCentro(cid).split(' · ')[0]); }).join(', ')+')':'')+'. Verde = neto a favor, coral = neto en contra. No incluye TEC ni Sueldo. "Total (sin Obra)" excluye la categoría Obra del total; "Total" la incluye. Ignora el filtro de Mes/Categoría de arriba (usa el selector de rango de acá al lado).</div>'+
+    '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Ingresos menos egresos por categoría, mes a mes'+(f.centro.length?' (Centro de Costo: '+f.centro.map(function(cid){ return esc(nombreCentro(cid).split(' · ')[0]); }).join(', ')+')':'')+'. Verde = neto a favor, coral = neto en contra. No incluye TEC ni Sueldo. "Total (sin '+esc(etiquetaInversion())+')" excluye las categorías de tipo Inversión del total; "Total" las incluye. Ignora el filtro de Mes/Categoría de arriba (usa el selector de rango de acá al lado).</div>'+
     renderGrillaMensual(movsCentro, STATE.grillaRango)+
   '</div>';
 }
 
 // ===================== FLUJO DE CAJA =====================
-// Capacidad de ahorro promedio: Sueldo menos el neto del resto de categorías (sin TEC/Sueldo/Obra),
+// Capacidad de ahorro promedio: Sueldo menos el neto del resto de categorías (sin TEC/Sueldo/Inversión),
 // promediada sobre los últimos meses CERRADOS (no cuenta el mes en curso, que suele estar
 // incompleto y subestimaría/sobreestimaría el promedio).
-// A diferencia del "Saldo" de Resumen, la Obra NO se resta: es una inversión que se paga con
-// ahorros, no un gasto corriente, y restarla daba un "ahorro" negativo en los meses de obra fuerte.
-// Se devuelve aparte (obraPromedio) para mostrarla al lado.
+// A diferencia del "Saldo" de Resumen, las categorías de tipo Inversión (ej. Obra) NO se restan: se pagan con
+// ahorros, no son gasto corriente, y restarlas daba un "ahorro" negativo en los meses de obra fuerte.
+// Se devuelve aparte (inversionPromedio) para mostrarla al lado.
 // Los ingresos de Gerardo cargados en Sueldo tampoco cuentan: no son sueldo (es plata que entra
-// para pagar la Obra), y como la Obra ya no se resta, inflarían el ahorro.
+// para pagar la Obra), y como la inversión ya no se resta, inflarían el ahorro.
 // El Sueldo usa mesEfectivoSueldo (no el mes calendario de la fecha) y excluye los movimientos con
 // subcategoría "Venta USDT": ese ingreso ya se contó cuando se acreditó el USDT (más abajo), y
 // volver a sumarlo al venderlo duplicaría el mismo sueldo.
@@ -3234,7 +3250,7 @@ function capacidadAhorroPromedio(ventana){
   var usadosSet = {};
   usados.forEach(function(m){ usadosSet[m] = true; });
 
-  var ingresoPorMes = {}, egresoPorMes = {}, obraPorMes = {};
+  var ingresoPorMes = {}, egresoPorMes = {}, inversionPorMes = {};
   STATE.movimientos.forEach(function(m){
     if(esTipoCategoria(m.categoriaId,'tec')) return;
     if(esCategoriaSueldo(m.categoriaId)){
@@ -3247,8 +3263,8 @@ function capacidadAhorroPromedio(ventana){
     }
     var mes = (m.fecha||'').slice(0,7);
     if(!usadosSet[mes]) return;
-    if(esCategoriaObra(m.categoriaId)){
-      obraPorMes[mes] = (obraPorMes[mes]||0) + (Number(m.egreso)||0) - (Number(m.ingreso)||0);
+    if(esCategoriaInversion(m.categoriaId)){
+      inversionPorMes[mes] = (inversionPorMes[mes]||0) + (Number(m.egreso)||0) - (Number(m.ingreso)||0);
     } else {
       egresoPorMes[mes] = (egresoPorMes[mes]||0) + (Number(m.egreso)||0) - (Number(m.ingreso)||0);
     }
@@ -3263,8 +3279,8 @@ function capacidadAhorroPromedio(ventana){
   var suma = usados.reduce(function(s,mes){
     return s + (ingresoPorMes[mes]||0) - (egresoPorMes[mes]||0);
   },0);
-  var sumaObra = usados.reduce(function(s,mes){ return s + (obraPorMes[mes]||0); },0);
-  return { promedio: suma/usados.length, obraPromedio: sumaObra/usados.length, meses: usados };
+  var sumaInversion = usados.reduce(function(s,mes){ return s + (inversionPorMes[mes]||0); },0);
+  return { promedio: suma/usados.length, inversionPromedio: sumaInversion/usados.length, meses: usados };
 }
 function mesesRestantesDeuda(d){
   if(d.estado==='cancelada') return 0;
@@ -3394,12 +3410,12 @@ function renderFlujoCaja(){
 
   var summaryHtml = '<div class="summary-cards">'+
     '<div class="summary-card"><div class="label">Capacidad de ahorro promedio / mes</div><div class="value '+(ahorroPromedio>=0?'ingreso':'egreso')+'">'+(cap?fmtMonto(ahorroPromedio):'—')+'</div></div>'+
-    '<div class="summary-card"><div class="label">Inversión en Obra promedio / mes</div><div class="value">'+(cap?fmtMonto(cap.obraPromedio):'—')+'</div></div>'+
+    '<div class="summary-card"><div class="label">Inversión en '+esc(etiquetaInversion())+' promedio / mes</div><div class="value">'+(cap?fmtMonto(cap.inversionPromedio):'—')+'</div></div>'+
     '<div class="summary-card"><div class="label">Saldo actual total</div><div class="value">'+fmtMonto(saldos.totalGeneral)+'</div></div>'+
     '<div class="summary-card"><div class="label">Cuotas de deudas activas / mes</div><div class="value egreso">'+fmtMonto(totalCuotasActivas)+'</div></div>'+
     '<div class="summary-card"><div class="label">Margen libre / mes</div><div class="value '+(margen>=0?'ingreso':'egreso')+'">'+fmtMonto(margen)+'</div></div>'+
   '</div>'+
-  (cap ? '<div style="font-size:11px;color:var(--ink-soft);margin:-10px 0 18px">Promedio calculado sobre '+cap.meses.length+' mes(es) cerrados: '+cap.meses.map(mesLabelCorto).join(', ')+'. Sueldo menos gastos corrientes, sin contar TEC ni Obra: la Obra es inversión y se muestra aparte (a diferencia del Saldo de Resumen, que sí la resta).</div>' : '<div class="empty" style="margin:-6px 0 18px">Todavía no hay ningún mes cerrado con movimientos cargados para calcular un promedio (el mes en curso no cuenta).</div>')+
+  (cap ? '<div style="font-size:11px;color:var(--ink-soft);margin:-10px 0 18px">Promedio calculado sobre '+cap.meses.length+' mes(es) cerrados: '+cap.meses.map(mesLabelCorto).join(', ')+'. Sueldo menos gastos corrientes, sin contar TEC ni '+esc(etiquetaInversion())+': las categorías de tipo Inversión se muestran aparte (a diferencia del Saldo de Resumen, que sí las resta).</div>' : '<div class="empty" style="margin:-6px 0 18px">Todavía no hay ningún mes cerrado con movimientos cargados para calcular un promedio (el mes en curso no cuenta).</div>')+
   (cap && margen<0 ? '<div class="msg err" style="margin:-6px 0 18px">Las cuotas de las deudas activas superan la capacidad de ahorro promedio: con el ritmo actual no alcanzan para cubrirlas todas.</div>' : '');
 
   var lista = STATE.deudas.slice().sort(function(a,b){
@@ -4293,7 +4309,7 @@ async function handleAction(action, id){
   }
   if(action==='save-categoria'){
     var nombre = document.getElementById('f-categoria-nombre').value.trim();
-    var tipo = document.getElementById('f-categoria-es-tec').checked ? 'tec' : '';
+    var tipo = document.getElementById('f-categoria-tipo').value || '';
     var colorCategoriaInput = document.getElementById('f-categoria-color').value;
     if(!nombre) return;
     STATE.dbError = null;
