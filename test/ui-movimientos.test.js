@@ -242,3 +242,27 @@ describe('Movimientos: paginación', () => {
     expect(win.STATE.movPaginaActual).toBe(2);
   });
 });
+
+describe('Movimientos: edición en línea', () => {
+  it('cambiar el Centro de Costo en línea invalida el cache de Saldos', async () => {
+    const win = loadApp();
+    seedBase(win);
+    const sbMock = mockSb();
+    win.sb = sbMock.client;
+    win.STATE.movimientos = [{ id: 'm1', fecha: '2026-01-05', centroId: '', categoriaId: 'cat-super', subcategoriaId: '', proveedor: 'Super', detalle: '', ingreso: 0, egreso: 100 }];
+    win.STATE.activeTab = 'movimientos';
+    win.STATE.filtros = { centro: [], categoria: [], subcategoria: [], mes: [], texto: '', soloIncompletos: true, soloTarjeta: false };
+    win.render();
+    expect(win.calcularSaldos().saldoSinCentro).toBe(-100);
+    win.obtenerSaldos(); // deja el cache armado
+    expect(win.STATE.saldosDirty).toBe(false);
+
+    const sel = win.document.querySelector('select[data-mov-id="m1"][data-field="centroId"]');
+    sel.value = 'c-ef';
+    sel.dispatchEvent(new win.Event('change', { bubbles: true }));
+    await new Promise(r => setTimeout(r, 0));
+
+    expect(win.STATE.saldosDirty).toBe(true);
+    expect(win.obtenerSaldos().filas.find(f => f.id === 'c-ef').saldo).toBe(-100);
+  });
+});

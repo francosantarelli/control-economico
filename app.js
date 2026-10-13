@@ -4091,6 +4091,7 @@ function bindEvents(){
       } else if(campo==='centroId'){
         mov.centroId = valor;
         camposDb = { centro_id: valor||null };
+        STATE.saldosDirty = true; // el movimiento pasa a sumar en el saldo de otro Centro de Costo
       } else if(campo==='subcategoriaId'){
         mov.subcategoriaId = valor;
         camposDb = { subcategoria_id: valor||null };
