@@ -461,6 +461,54 @@ function esVentaUsdtPendiente(m){
 function esSubcategoriaVentaUsdt(subcategoriaId){
   return (nombreSubcategoria(subcategoriaId)||'').trim()==='Venta USDT';
 }
+// Todo ingreso de la pestaña USDT cuenta como Sueldo en Resumen y Flujo de caja (es como se cobra
+// el sueldo de Ani). Los pesos que después entran al vender ese USDT (movimiento vinculado a una
+// venta, o con subcategoría "Venta USDT") no se vuelven a contar: es el mismo sueldo.
+function idsMovimientosDeVentaUsdt(){
+  var ids = {};
+  STATE.usdtMovimientos.forEach(function(u){ if(u.tipo==='venta' && u.movimientoId) ids[u.movimientoId] = true; });
+  return ids;
+}
+function esIngresoPorVentaUsdt(m, idsVenta){
+  return esSubcategoriaVentaUsdt(m.subcategoriaId) || !!idsVenta[m.id];
+}
+// Valor en pesos de cada ingreso de USDT (id -> ARS). Si tiene "Valor en pesos" cargado se usa ese;
+// si no, se valúa a la cotización de las ventas que lo consumieron (FIFO: el USDT que entró primero
+// es el primero que se vende) y lo que todavía no se vendió, a la cotización de hoy (o a la de la
+// última venta, si todavía no se consultó la de hoy).
+function valoresArsIngresosUsdt(){
+  var ordenados = STATE.usdtMovimientos.slice().sort(function(a,b){
+    return (a.fecha||'').localeCompare(b.fecha||'') || (a.tipo==='ingreso'?0:1) - (b.tipo==='ingreso'?0:1);
+  });
+  var cola = [], porId = {}, ultimaCotizacion = 0;
+  ordenados.forEach(function(u){
+    var cant = Number(u.cantidad)||0;
+    if(u.tipo==='ingreso'){
+      porId[u.id] = {restante:cant, valorVendido:0};
+      cola.push(porId[u.id]);
+      return;
+    }
+    var cot = Number(u.cotizacion) || (cant ? (Number(u.montoArs)||0)/cant : 0);
+    if(cot) ultimaCotizacion = cot;
+    var porVender = cant;
+    while(porVender>1e-9 && cola.length){
+      var primero = cola[0];
+      var usado = Math.min(primero.restante, porVender);
+      primero.restante -= usado;
+      primero.valorVendido += usado*cot;
+      porVender -= usado;
+      if(primero.restante<=1e-9) cola.shift();
+    }
+  });
+  var cotizacionRestante = STATE.usdtCotizacionBid || ultimaCotizacion;
+  var out = {};
+  ordenados.forEach(function(u){
+    if(u.tipo!=='ingreso') return;
+    var montoCargado = Number(u.montoArs)||0;
+    out[u.id] = montoCargado>0 ? montoCargado : porId[u.id].valorVendido + porId[u.id].restante*cotizacionRestante;
+  });
+  return out;
+}
 // Solo cuenta lo emitido en producción: una prueba en homologación no debe mostrarse como
 // "ya facturado" ni contarse en el acumulado real de la categoría de Monotributo.
 function facturaEmitidaDeMovimiento(movId){
@@ -3012,7 +3060,8 @@ function calcularTotalesResumenKpis(centroArr, categoriaArr, mesArr){
     if(mesArr.length && mesArr.indexOf((m.fecha||'').slice(0,7))===-1) return false;
     return true;
   });
-  var movsReales = filtrados.filter(function(m){ return !esCategoriaFueraDeReportes(m.categoriaId); });
+  var idsVentaUsdt = idsMovimientosDeVentaUsdt();
+  var movsReales = filtrados.filter(function(m){ return !esCategoriaFueraDeReportes(m.categoriaId) && !esIngresoPorVentaUsdt(m, idsVentaUsdt); });
   var movsInversion = movsReales.filter(function(m){ return esCategoriaInversion(m.categoriaId); });
   var movsSinInversion = movsReales.filter(function(m){ return !esCategoriaInversion(m.categoriaId); });
   var movsResto = movsSinInversion.filter(function(m){ return !esCategoriaSueldo(m.categoriaId); });
@@ -3021,25 +3070,26 @@ function calcularTotalesResumenKpis(centroArr, categoriaArr, mesArr){
   // resto de las categorías (todo menos TEC/Sueldo/Inversión, que tienen su propio tratamiento). Inversión sigue aparte.
   // El Sueldo (en pesos o en USDT) se filtra por mes aparte (no viene de "filtrados"): usa mesEfectivoSueldo
   // en vez del mes calendario de la fecha, porque se acredita unos días antes de fin de mes y así ese pago
-  // ya cuenta para el mes al que corresponde, no para el mes en que se acreditó. Sueldo con subcategoría
-  // "Venta USDT" queda afuera: ya se contó como ingreso cuando se cargó el USDT, sumarlo de nuevo al
-  // venderlo duplicaría el mismo ingreso.
+  // ya cuenta para el mes al que corresponde, no para el mes en que se acreditó. Todo ingreso de USDT
+  // cuenta como Sueldo (ver valoresArsIngresosUsdt); los pesos de venderlo quedan afuera (ya se
+  // contaron al acreditarse el USDT, sumarlos de nuevo duplicaría el mismo ingreso).
   var movsSueldo = STATE.movimientos.filter(function(m){
-    if(!esCategoriaSueldo(m.categoriaId) || esSubcategoriaVentaUsdt(m.subcategoriaId)) return false;
+    if(!esCategoriaSueldo(m.categoriaId) || esIngresoPorVentaUsdt(m, idsVentaUsdt)) return false;
     if(centroArr.length && centroArr.indexOf(m.centroId)===-1) return false;
     if(categoriaArr.length && categoriaArr.indexOf(m.categoriaId)===-1) return false;
     if(mesArr.length && mesArr.indexOf(mesEfectivoSueldo(m.fecha))===-1) return false;
     return true;
   });
+  var valoresUsdt = valoresArsIngresosUsdt();
   var usdtSueldo = STATE.usdtMovimientos.filter(function(u){
-    if(u.tipo!=='ingreso' || !esCategoriaSueldo(u.categoriaId)) return false;
+    if(u.tipo!=='ingreso') return false;
     if(centroArr.length && centroArr.indexOf(u.centroId||'')===-1) return false;
-    if(categoriaArr.length && categoriaArr.indexOf(u.categoriaId)===-1) return false;
+    if(categoriaArr.length && categoriaArr.indexOf(u.categoriaId)===-1 && !categoriaArr.some(esCategoriaSueldo)) return false;
     if(mesArr.length && mesArr.indexOf(mesEfectivoSueldo(u.fecha))===-1) return false;
     return true;
   });
   var totalIngreso = movsSueldo.reduce(function(s,m){ return s + (Number(m.ingreso)||0); },0)
-    + usdtSueldo.reduce(function(s,u){ return s + (Number(u.montoArs)||0); },0);
+    + usdtSueldo.reduce(function(s,u){ return s + (valoresUsdt[u.id]||0); },0);
   var totalEgreso = movsResto.reduce(function(s,m){ return s + (Number(m.egreso)||0) - (Number(m.ingreso)||0); },0);
   var totalInversion = movsInversion.reduce(function(s,m){ return s + (Number(m.egreso)||0) - (Number(m.ingreso)||0); },0);
   var saldo = totalIngreso - totalEgreso - totalInversion;
@@ -3261,9 +3311,9 @@ function renderResumen(){
 // Se devuelve aparte (inversionPromedio) para mostrarla al lado.
 // Los ingresos de Gerardo cargados en Sueldo tampoco cuentan: no son sueldo (es plata que entra
 // para pagar la Obra), y como la inversión ya no se resta, inflarían el ahorro.
-// El Sueldo usa mesEfectivoSueldo (no el mes calendario de la fecha) y excluye los movimientos con
-// subcategoría "Venta USDT": ese ingreso ya se contó cuando se acreditó el USDT (más abajo), y
-// volver a sumarlo al venderlo duplicaría el mismo sueldo.
+// El Sueldo usa mesEfectivoSueldo (no el mes calendario de la fecha) e incluye todo ingreso de USDT
+// (valoresArsIngresosUsdt); los pesos de vender ese USDT quedan afuera, porque volver a sumarlos
+// duplicaría el mismo sueldo.
 // Proveedor "Gerardo", "Gera" o "CASADEI GERARDO CESAR" (así aparece cargado según el medio de pago).
 function esAporteGerardo(m){
   return /\bgera(rdo)?\b/i.test(m.proveedor||'');
@@ -3278,10 +3328,11 @@ function capacidadAhorroPromedio(ventana){
   usados.forEach(function(m){ usadosSet[m] = true; });
 
   var ingresoPorMes = {}, egresoPorMes = {}, inversionPorMes = {};
+  var idsVentaUsdt = idsMovimientosDeVentaUsdt();
   STATE.movimientos.forEach(function(m){
     if(esCategoriaFueraDeReportes(m.categoriaId)) return;
+    if(esIngresoPorVentaUsdt(m, idsVentaUsdt)) return;
     if(esCategoriaSueldo(m.categoriaId)){
-      if(esSubcategoriaVentaUsdt(m.subcategoriaId)) return;
       if(esAporteGerardo(m)) return;
       var mesSueldo = mesEfectivoSueldo(m.fecha);
       if(!usadosSet[mesSueldo]) return;
@@ -3296,11 +3347,12 @@ function capacidadAhorroPromedio(ventana){
       egresoPorMes[mes] = (egresoPorMes[mes]||0) + (Number(m.egreso)||0) - (Number(m.ingreso)||0);
     }
   });
+  var valoresUsdt = valoresArsIngresosUsdt();
   STATE.usdtMovimientos.forEach(function(u){
-    if(u.tipo!=='ingreso' || !esCategoriaSueldo(u.categoriaId)) return;
+    if(u.tipo!=='ingreso') return;
     var mesSueldo = mesEfectivoSueldo(u.fecha);
     if(!usadosSet[mesSueldo]) return;
-    ingresoPorMes[mesSueldo] = (ingresoPorMes[mesSueldo]||0) + (Number(u.montoArs)||0);
+    ingresoPorMes[mesSueldo] = (ingresoPorMes[mesSueldo]||0) + (valoresUsdt[u.id]||0);
   });
 
   var suma = usados.reduce(function(s,mes){
@@ -3650,17 +3702,16 @@ function campoUsdt(e){
     var sugerenciaCotizacion = STATE.usdtCotizacionBid && cantidadNum
       ? '<button type="button" class="link" data-action="usar-cotizacion-usdt-ingreso" style="padding:0;font-size:11px;margin-top:4px">Usar cotización de hoy ($'+fmtMonto(STATE.usdtCotizacionBid)+'/USDT → $'+fmtMonto(cantidadNum*STATE.usdtCotizacionBid)+')</button>'
       : '';
-    // Estos 3 campos solo importan si además querés que este ingreso cuente como ingreso real en
-    // pesos en el Resumen (caso puntual, ej. un sueldo cobrado en USDT) -- para el caso común
-    // (guardar la tenencia de USDT y nada más) son ruido, así que quedan colapsados por default.
+    // Todo ingreso de USDT ya cuenta como Sueldo en Resumen/Flujo de caja (ver valoresArsIngresosUsdt):
+    // estos campos solo sirven para fijar a mano su valor en pesos, así que quedan colapsados por default.
     var mostrarOpcionalesIngreso = STATE.usdtIngresoOpcionalesAbierto || !!e.categoriaId || !!e.montoArs;
     camposTipo = mostrarOpcionalesIngreso ? ''+
       '<div class="fields-row" style="margin-top:10px">'+
         categoriaSubHtml+
         '<div class="field"><label>Valor en pesos (referencial)</label><input type="number" step="0.01" id="f-usdt-monto-ars" value="'+esc(e.montoArs)+'" style="width:140px">'+sugerenciaCotizacion+'</div>'+
       '</div>'+
-      '<div style="font-size:11px;color:var(--ink-soft);margin-top:8px">Esto no crea ningún movimiento en pesos ni afecta ningún Centro de Costo: solo sirve para que, poniéndole Categoría "Sueldo" y un valor en pesos (por ejemplo con la cotización del día en que lo cobraste), el Resumen lo cuente como ingreso real.</div>'
-      : '<button type="button" class="link" data-action="toggle-usdt-opcionales" style="padding:6px 0;font-size:12px;margin-top:4px"><i class="bi bi-plus-circle"></i> ¿Este ingreso cuenta como ingreso real en pesos? (Categoría, valor de referencia)</button>';
+      '<div style="font-size:11px;color:var(--ink-soft);margin-top:8px">Todo ingreso de USDT cuenta como Sueldo en Resumen y Flujo de Caja. Si cargás un valor en pesos se usa ese; si no, se valúa a la cotización con la que se vendió (o a la de hoy, si todavía no se vendió). No crea ningún movimiento en pesos ni afecta ningún Centro de Costo.</div>'
+      : '<button type="button" class="link" data-action="toggle-usdt-opcionales" style="padding:6px 0;font-size:12px;margin-top:4px"><i class="bi bi-plus-circle"></i> Valor en pesos y categoría (opcional)</button>';
   }
   return ''+
     (STATE.usdtFormMsg ? '<div class="msg err">'+esc(STATE.usdtFormMsg)+'</div>' : '')+
@@ -3814,8 +3865,9 @@ function bindEvents(){
       var tabId = t.getAttribute('data-tab');
       STATE.activeTab = tabId; STATE.editing = null; STATE.movDraft = null; STATE.usdtDraft = null; STATE.usdtFormMsg = null; STATE.usdtIngresoOpcionalesAbierto = false; STATE.nuevoMovAbierto = false; STATE.menuMovilAbierto = false; STATE.multiSelectAbierto = null; STATE.bulkEditMovAbierto = false; STATE.movSeleccionados = [];
       render();
-      // Primera vez que se entra a USDT en esta sesión: traer la cotización sola, sin que haya que tocar "Actualizar".
-      if(tabId==='usdt' && STATE.usdtCotizacionBid===null && !STATE.usdtCotizacionCargando) obtenerCotizacionUsdt();
+      // Primera vez que se entra a USDT (o a Resumen/Flujo, que valúan a la cotización de hoy el USDT de
+      // sueldo todavía sin vender) en esta sesión: traer la cotización sola, sin que haya que tocar "Actualizar".
+      if((tabId==='usdt' || tabId==='resumen' || tabId==='flujo') && STATE.usdtCotizacionBid===null && !STATE.usdtCotizacionCargando) obtenerCotizacionUsdt();
     });
   });
 

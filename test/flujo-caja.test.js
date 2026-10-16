@@ -52,4 +52,43 @@ describe('Flujo de Caja: capacidad de ahorro promedio', () => {
 
     restore();
   });
+
+  it('cuenta todo ingreso USDT como sueldo (aunque no tenga categoría ni valor en pesos), valuado a la cotización de la venta (FIFO) o a la de hoy si no se vendió', () => {
+    const win = loadApp();
+    seedBase(win);
+    const restore = mockNow(win, '2026-04-15T12:00:00');
+
+    win.STATE.usdtCotizacionBid = 1200;
+    win.STATE.movimientos = [
+      // Sueldo de Franco en pesos
+      { id: 'm1', fecha: '2026-01-10', centroId: 'c-ef', categoriaId: 'cat-suel', proveedor: 'Trabajo', ingreso: 100000, egreso: 0 },
+      // Pesos de vender el USDT de Ani, cargados en una categoría normal: no deben sumar de nuevo
+      { id: 'm-venta', fecha: '2026-01-20', centroId: 'c-ea', categoriaId: 'cat-super', proveedor: 'Venta USDT', ingreso: 110000, egreso: 0 },
+      { id: 'm2', fecha: '2026-02-15', centroId: 'c-ea', categoriaId: 'cat-super', proveedor: 'Verduleria', ingreso: 0, egreso: 9000 }
+    ];
+    win.STATE.usdtMovimientos = [
+      // Sueldo de Ani en USDT, sin categoría ni valor en pesos
+      { id: 'u1', fecha: '2026-01-05', tipo: 'ingreso', cantidad: 100, categoriaId: '', montoArs: 0 },
+      // Vende 100 a $1100: se consume entero el ingreso u1
+      { id: 'u2', fecha: '2026-01-20', tipo: 'venta', cantidad: 100, montoArs: 110000, cotizacion: 1100, movimientoId: 'm-venta' },
+      // Febrero: cobra 50 y vende 20 a $1150 → 20*1150 + 30*1200 (hoy) = 59000
+      { id: 'u3', fecha: '2026-02-05', tipo: 'ingreso', cantidad: 50, categoriaId: '', montoArs: 0 },
+      { id: 'u4', fecha: '2026-02-10', tipo: 'venta', cantidad: 20, montoArs: 23000, cotizacion: 1150 }
+    ];
+
+    const valores = win.valoresArsIngresosUsdt();
+    expect(valores.u1).toBe(110000);
+    expect(valores.u3).toBe(59000);
+
+    // Ene: 100000 + 110000 = 210000; Feb: 59000 - 9000 = 50000 → promedio 130000
+    expect(win.capacidadAhorroPromedio('3m').promedio).toBe(130000);
+
+    const resumenEne = win.calcularTotalesResumenKpis([], [], ['2026-01']);
+    expect(resumenEne.totalIngreso).toBe(210000);
+    expect(resumenEne.totalEgreso).toBe(0);
+    // Filtrando por la categoría Sueldo, el USDT sin categoría sigue contando como sueldo
+    expect(win.calcularTotalesResumenKpis([], ['cat-suel'], ['2026-01']).totalIngreso).toBe(210000);
+
+    restore();
+  });
 });
