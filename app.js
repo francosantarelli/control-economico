@@ -3,7 +3,7 @@ var SUPABASE_URL = 'https://krgwoiufhvhoqucqjpff.supabase.co';
 var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtyZ3dvaXVmaHZob3F1Y3FqcGZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0MDA2MTIsImV4cCI6MjA5OTk3NjYxMn0.HxA7P1_LUEkZq75kMPKmiCLixeJQ2sROXcmW37gnQOE';
 var sb = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
-var STATE = { centros: [], categorias: [], subcategorias: [], movimientos: [], vencimientos: [], gimnasioVisitas: [], usdtMovimientos: [], deudas: [], facturas: [], configuracion: [], facturaLoadingId:null, activeTab: 'movimientos', editing: null, ready:false,
+var STATE = { centros: [], categorias: [], subcategorias: [], movimientos: [], vencimientos: [], gimnasioVisitas: [], usdtMovimientos: [], deudas: [], facturas: [], configuracion: [], facturaLoadingId:null, activeTab: 'resumen', editing: null, ready:false,
   importEntidad:'mp', importBanco:'nacion', importVencimiento:'', importTarjetaMarca:'', importRaw:'', importPreview:null, importPreviewExcel:null, importMsg:null,
   bulkColorCatMsg:null, confirmState:null, subDeleteState:null, vencPagarState:null, movFormMsg:null, movFieldErrors:null,
   filtros:{centro:[], categoria:[], subcategoria:[], mes:[], texto:'', soloIncompletos:false, soloTarjeta:false},
@@ -397,6 +397,9 @@ async function mostrarApp(){
   STATE.saldosDirty = true;
   STATE.ready = true;
   render();
+  // La app abre en Resumen, que valúa el USDT de sueldo sin vender a la cotización de hoy:
+  // traerla de entrada igual que cuando se entra a la pestaña con un clic.
+  if((STATE.activeTab==='usdt' || STATE.activeTab==='resumen' || STATE.activeTab==='flujo') && STATE.usdtCotizacionBid===null && !STATE.usdtCotizacionCargando) obtenerCotizacionUsdt();
 }
 
 function mostrarLogin(msg){
@@ -1413,14 +1416,16 @@ function renderInterno(){
 
   MODAL_HTML = '';
 
+  // Agrupados por intención: ver (Resumen) → día a día → consultar/analizar → herramientas.
+  // separadorAntes dibuja una línea fina entre grupos en el menú lateral.
   var tabs = [
-    {id:'movimientos', label:'Movimientos', icono:'bi-receipt'},
-    {id:'importar', label:'Importar', icono:'bi-cloud-arrow-down'},
-    {id:'vencimientos', label:'Vencimientos', icono:'bi-alarm'},
-    {id:'saldos', label:'Saldos', icono:'bi-bank'},
     {id:'resumen', label:'Resumen', icono:'bi-bar-chart-line'},
+    {id:'movimientos', label:'Movimientos', icono:'bi-receipt', separadorAntes:true},
+    {id:'vencimientos', label:'Vencimientos', icono:'bi-alarm'},
+    {id:'saldos', label:'Saldos', icono:'bi-bank', separadorAntes:true},
     {id:'flujo', label:'Flujo de Caja', icono:'bi-graph-up-arrow'},
     {id:'usdt', label:'USDT', icono:'bi-coin'},
+    {id:'importar', label:'Importar', icono:'bi-cloud-arrow-down', separadorAntes:true},
     {id:'gimnasio', label:'Gimnasio', icono:'bi-activity'},
     {id:'abm', label:'ABM', icono:'bi-gear'}
   ];
@@ -1430,6 +1435,7 @@ function renderInterno(){
     '<button data-action="abrir-nuevo-mov" title="Nuevo movimiento" style="width:100%;margin-bottom:16px;font-size:14px;padding:12px">+<span class="tab-label"> Movimiento</span></button>'+
     '<div class="tabs">';
   tabs.forEach(function(t){
+    if(t.separadorAntes) sidebarHtml += '<div class="tab-separador" role="separator"></div>';
     sidebarHtml += '<div class="tab '+(STATE.activeTab===t.id?'active':'')+'" data-tab="'+t.id+'" title="'+esc(t.label)+'"><span class="tab-icon"><i class="bi '+t.icono+'"></i></span><span class="tab-label">'+esc(t.label)+'</span></div>';
   });
   sidebarHtml += '</div>'+
