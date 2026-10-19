@@ -78,3 +78,24 @@ describe('Resumen: sin meses futuros en la Tendencia mensual ni en el filtro de 
     restore();
   });
 });
+
+describe('Resumen: Comparativa mensual separa las categorías de Inversión', () => {
+  it('las normales van arriba con su Total; Inversión en una sección aparte con "Total con …"', () => {
+    const win = loadApp();
+    seedBase(win);
+    const restore = mockNow(win, '2026-07-15T12:00:00');
+    win.STATE.categorias.push({ id: 'cat-obra', nombre: 'Obra', tipo: 'inversion' });
+    win.STATE.movimientos = [
+      { id: 'm-super', fecha: '2026-07-02', centroId: 'c-ef', categoriaId: 'cat-super', proveedor: 'Super', ingreso: 0, egreso: 200 },
+      { id: 'm-obra', fecha: '2026-07-03', centroId: 'c-ef', categoriaId: 'cat-obra', proveedor: 'Corralón', ingreso: 0, egreso: 1000 }
+    ];
+    win.STATE.activeTab = 'resumen';
+    win.STATE.grillaRango = '3m';
+    win.render();
+
+    const tablas = win.document.querySelectorAll('table');
+    const filas = [...tablas[tablas.length - 1].querySelectorAll('tbody tr')].map(tr => tr.querySelector('td').textContent);
+    expect(filas).toEqual(['Supermercado', 'Total', 'Inversión', 'Obra', 'Total con Obra']);
+    restore();
+  });
+});

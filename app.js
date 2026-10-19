@@ -3029,37 +3029,50 @@ function renderGrillaMensual(movs, rango){
     }
   });
 
-  var categoriaIds = Object.keys(datos).sort(function(a,b){ return Math.abs(totalesPorCategoria[b]||0) - Math.abs(totalesPorCategoria[a]||0); });
+  // Alfabético (mismo criterio que categoriasOrdenadas), para ubicar una categoría rápido y que no cambie de fila entre rangos.
+  // Las categorías normales van arriba; las de tipo Inversión (ej. Obra) en una sección aparte debajo,
+  // para no mezclar el gasto del día a día con la inversión.
+  var categoriaIds = Object.keys(datos).sort(function(a,b){ return nombreCategoria(a).localeCompare(nombreCategoria(b), 'es', {sensitivity:'base'}); });
   if(!categoriaIds.length) return '<div class="empty">No hay movimientos en el rango seleccionado.</div>';
+  var idsNormales = categoriaIds.filter(function(cid){ return !esCategoriaInversion(cid); });
+  var idsInversion = categoriaIds.filter(function(cid){ return esCategoriaInversion(cid); });
 
-  var maxCelda = 0;
-  categoriaIds.forEach(function(cid){ meses.forEach(function(m){ maxCelda = Math.max(maxCelda, Math.abs(datos[cid][m]||0)); }); });
+  // Intensidad del color calculada por sección: si no, los montos de Inversión (mucho más grandes)
+  // dejan casi sin color a todas las categorías normales.
+  function filasCategorias(ids){
+    var maxCelda = 0;
+    ids.forEach(function(cid){ meses.forEach(function(m){ maxCelda = Math.max(maxCelda, Math.abs(datos[cid][m]||0)); }); });
+    return ids.map(function(cid){
+      var celdas = meses.map(function(m){
+        var v = datos[cid][m]||0;
+        var intensidad = maxCelda ? (Math.abs(v)/maxCelda) : 0;
+        var colorRgb = v<0 ? '217,123,108' : '78,157,119';
+        var estilo = v!==0 ? ' style="background:rgba('+colorRgb+','+(0.08+intensidad*0.32).toFixed(2)+')"' : '';
+        return '<td class="num mono"'+estilo+'>'+(v!==0?fmtMonto(v):'—')+'</td>';
+      }).join('');
+      var totalCat = totalesPorCategoria[cid]||0;
+      return '<tr><td>'+esc(cid ? nombreCategoria(cid) : 'Sin categoría')+'</td>'+celdas+'<td class="num mono '+(totalCat>=0?'ingreso':'egreso')+'" style="font-weight:600">'+fmtMonto(totalCat)+'</td></tr>';
+    }).join('');
+  }
+  function filaTotal(etiqueta, porMes, total){
+    return '<tr style="font-weight:600"><td>'+esc(etiqueta)+'</td>'+
+      meses.map(function(m){ var v=porMes[m]||0; return '<td class="num mono '+(v>=0?'ingreso':'egreso')+'">'+fmtMonto(v)+'</td>'; }).join('')+
+      '<td class="num mono '+(total>=0?'ingreso':'egreso')+'">'+fmtMonto(total)+'</td></tr>';
+  }
 
   var headerCols = meses.map(function(m){ return '<th class="num">'+esc(mesLabelCorto(m))+'</th>'; }).join('');
-  var rows = categoriaIds.map(function(cid){
-    var celdas = meses.map(function(m){
-      var v = datos[cid][m]||0;
-      var intensidad = maxCelda ? (Math.abs(v)/maxCelda) : 0;
-      var colorRgb = v<0 ? '217,123,108' : '78,157,119';
-      var estilo = v!==0 ? ' style="background:rgba('+colorRgb+','+(0.08+intensidad*0.32).toFixed(2)+')"' : '';
-      return '<td class="num mono"'+estilo+'>'+(v!==0?fmtMonto(v):'—')+'</td>';
-    }).join('');
-    var totalCat = totalesPorCategoria[cid]||0;
-    return '<tr><td>'+esc(cid ? nombreCategoria(cid) : 'Sin categoría')+'</td>'+celdas+'<td class="num mono '+(totalCat>=0?'ingreso':'egreso')+'" style="font-weight:600">'+fmtMonto(totalCat)+'</td></tr>';
-  }).join('');
-
-  var filaTotalSinInversion = '<tr style="font-weight:600"><td>Total (sin '+esc(etiquetaInversion())+')</td>'+
-    meses.map(function(m){ var v=totalesPorMesSinInversion[m]||0; return '<td class="num mono '+(v>=0?'ingreso':'egreso')+'">'+fmtMonto(v)+'</td>'; }).join('')+
-    '<td class="num mono '+(granTotalSinInversion>=0?'ingreso':'egreso')+'">'+fmtMonto(granTotalSinInversion)+'</td></tr>';
-
-  var filaTotales = '<tr style="font-weight:600"><td>Total</td>'+
-    meses.map(function(m){ var v=totalesPorMes[m]||0; return '<td class="num mono '+(v>=0?'ingreso':'egreso')+'">'+fmtMonto(v)+'</td>'; }).join('')+
-    '<td class="num mono '+(granTotal>=0?'ingreso':'egreso')+'">'+fmtMonto(granTotal)+'</td></tr>';
+  var seccionInversion = idsInversion.length ?
+    '<tbody>'+
+      '<tr><td colspan="'+(meses.length+2)+'" style="padding-top:22px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft)">Inversión</td></tr>'+
+      filasCategorias(idsInversion)+
+      filaTotal('Total con '+etiquetaInversion(), totalesPorMes, granTotal)+
+    '</tbody>' : '';
 
   return '<div style="overflow-x:auto">'+
     '<table class="table"><thead><tr><th>Categoría</th>'+headerCols+'<th class="num">Total</th></tr></thead>'+
-    '<tbody>'+rows+'</tbody>'+
-    '<tfoot>'+filaTotalSinInversion+filaTotales+'</tfoot>'+
+    '<tbody>'+filasCategorias(idsNormales)+'</tbody>'+
+    '<tbody>'+filaTotal('Total', totalesPorMesSinInversion, granTotalSinInversion)+'</tbody>'+
+    seccionInversion+
     '</table></div>';
 }
 
@@ -3310,7 +3323,7 @@ function renderResumen(){
         '<option value="anio" '+(STATE.grillaRango==='anio'?'selected':'')+'>Este año</option>'+
       '</select></div>'+
     '</div>'+
-    '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Ingresos menos egresos por categoría, mes a mes'+(f.centro.length?' (Centro de Costo: '+f.centro.map(function(cid){ return esc(nombreCentro(cid).split(' · ')[0]); }).join(', ')+')':'')+'. Verde = neto a favor, coral = neto en contra. No incluye TEC ni Sueldo. "Total (sin '+esc(etiquetaInversion())+')" excluye las categorías de tipo Inversión del total; "Total" las incluye. Ignora el filtro de Mes/Categoría de arriba (usa el selector de rango de acá al lado).</div>'+
+    '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Ingresos menos egresos por categoría, mes a mes'+(f.centro.length?' (Centro de Costo: '+f.centro.map(function(cid){ return esc(nombreCentro(cid).split(' · ')[0]); }).join(', ')+')':'')+'. Verde = neto a favor, coral = neto en contra. No incluye TEC, Solo control ni Sueldo. Las categorías de tipo Inversión van aparte, debajo del Total. Ignora el filtro de Mes/Categoría de arriba (usa el selector de rango de acá al lado).</div>'+
     renderGrillaMensual(movsCentro, STATE.grillaRango)+
   '</div>';
 }
