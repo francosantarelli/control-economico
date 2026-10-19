@@ -423,7 +423,7 @@ async function mostrarApp(){
   render();
   // La app abre en Resumen, que valúa el USDT de sueldo sin vender a la cotización de hoy:
   // traerla de entrada igual que cuando se entra a la pestaña con un clic.
-  if((STATE.activeTab==='usdt' || STATE.activeTab==='resumen' || STATE.activeTab==='flujo') && STATE.usdtCotizacionBid===null && !STATE.usdtCotizacionCargando) obtenerCotizacionUsdt();
+  if((STATE.activeTab==='usdt' || STATE.activeTab==='resumen' || STATE.activeTab==='saldos' || STATE.activeTab==='flujo') && STATE.usdtCotizacionBid===null && !STATE.usdtCotizacionCargando) obtenerCotizacionUsdt();
   if((STATE.activeTab==='dolares' || STATE.activeTab==='resumen' || STATE.activeTab==='saldos' || STATE.activeTab==='flujo') && STATE.dolarBlueCompra===null && !STATE.dolarBlueCargando) obtenerDolarBlue();
 }
 
@@ -2872,7 +2872,17 @@ function renderSaldos(){
     saldosUsdGruposHtml(sUsd)+
   '</div>' : '';
 
-  return cards + tabla + tablaUsd;
+  // USDT: una sola billetera (sin Centro de Costo). Igual que los dólares, aparte del saldo en pesos.
+  var saldoUsdt = calcularSaldoUsdt();
+  var tablaUsdt = STATE.usdtMovimientos.length ? '<div class="card">'+
+    '<div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:10px;margin-bottom:4px">'+
+      '<h3 style="margin-bottom:0">Saldo en USDT</h3>'+
+      '<div class="mono" style="font-weight:600">'+fmtCantidadUsdt(saldoUsdt)+' USDT'+(STATE.usdtCotizacionBid?' <span style="font-size:12px;color:var(--ink-soft);font-weight:400">≈ $'+fmtMonto(saldoUsdt*STATE.usdtCotizacionBid)+' (a $'+fmtMonto(STATE.usdtCotizacionBid)+')</span>':'')+'</div>'+
+    '</div>'+
+    '<div style="font-size:11px;color:var(--ink-soft)">Aparte del saldo en pesos (no se suma al total de arriba). Se carga y se detalla en la pestaña USDT.</div>'+
+  '</div>' : '';
+
+  return cards + tabla + tablaUsd + tablaUsdt;
 }
 
 // ===================== RESUMEN =====================
@@ -3468,6 +3478,18 @@ function cotizacionUsdReferencia(){
   });
   return ultima;
 }
+// Idem para el USDT: la cotización de venta de hoy; si todavía no se pudo traer, la de la última venta cargada.
+function cotizacionUsdtReferencia(){
+  if(STATE.usdtCotizacionBid) return STATE.usdtCotizacionBid;
+  var ultima = 0, fechaUltima = '';
+  STATE.usdtMovimientos.forEach(function(u){
+    if(u.tipo!=='venta') return;
+    var cant = Number(u.cantidad)||0;
+    var cot = Number(u.cotizacion) || (cant ? (Number(u.montoArs)||0)/cant : 0);
+    if(cot && (u.fecha||'') >= fechaUltima){ fechaUltima = u.fecha||''; ultima = cot; }
+  });
+  return ultima;
+}
 function mesesRestantesDeuda(d){
   if(d.estado==='cancelada') return 0;
   var cuota = Number(d.cuotaMensual)||0;
@@ -3575,6 +3597,12 @@ function renderFlujoCaja(){
   var tenenciaUsd = calcularSaldosUsd().totalGeneral;
   var cotizUsdFlujo = cotizacionUsdReferencia();
   var saldoUsdArs = tenenciaUsd*cotizUsdFlujo;
+  var tenenciaUsdt = calcularSaldoUsdt();
+  var cotizUsdtFlujo = cotizacionUsdtReferencia();
+  var saldoUsdtArs = tenenciaUsdt*cotizUsdtFlujo;
+  var detalleSaldoTotal = [];
+  if(tenenciaUsd) detalleSaldoTotal.push(fmtUsd(tenenciaUsd)+(cotizUsdFlujo ? ' (≈ '+fmtMonto(saldoUsdArs)+' a $'+fmtMonto(cotizUsdFlujo)+')' : ' (sin cotización: no se suman)'));
+  if(tenenciaUsdt) detalleSaldoTotal.push(fmtCantidadUsdt(tenenciaUsdt)+' USDT'+(cotizUsdtFlujo ? ' (≈ '+fmtMonto(saldoUsdtArs)+' a $'+fmtMonto(cotizUsdtFlujo)+')' : ' (sin cotización: no se suman)'));
 
   var proyeccion = cap ? simularProyeccionFlujo(ahorroPromedio, horizonte) : [];
   var mesesProy = proyeccion.map(function(f){ return f.mes; });
@@ -3600,8 +3628,8 @@ function renderFlujoCaja(){
   var summaryHtml = '<div class="summary-cards">'+
     '<div class="summary-card"><div class="label">Capacidad de ahorro promedio / mes</div><div class="value '+(ahorroPromedio>=0?'ingreso':'egreso')+'">'+(cap?fmtMonto(ahorroPromedio):'—')+'</div></div>'+
     '<div class="summary-card"><div class="label">Inversión en '+esc(etiquetaInversion())+' promedio / mes</div><div class="value">'+(cap?fmtMonto(cap.inversionPromedio):'—')+'</div></div>'+
-    '<div class="summary-card"><div class="label">Saldo actual total</div><div class="value">'+fmtMonto(saldos.totalGeneral + saldoUsdArs)+'</div>'+
-      (tenenciaUsd ? '<div style="font-size:11px;color:var(--ink-soft);margin-top:2px">Pesos '+fmtMonto(saldos.totalGeneral)+' + '+fmtUsd(tenenciaUsd)+(cotizUsdFlujo ? ' (≈ '+fmtMonto(saldoUsdArs)+' a $'+fmtMonto(cotizUsdFlujo)+')' : ' (sin cotización: no se suman)')+'</div>' : '')+
+    '<div class="summary-card"><div class="label">Saldo actual total</div><div class="value">'+fmtMonto(saldos.totalGeneral + saldoUsdArs + saldoUsdtArs)+'</div>'+
+      (detalleSaldoTotal.length ? '<div style="font-size:11px;color:var(--ink-soft);margin-top:2px">Pesos '+fmtMonto(saldos.totalGeneral)+' + '+detalleSaldoTotal.join(' + ')+'</div>' : '')+
     '</div>'+
     '<div class="summary-card"><div class="label">Cuotas de deudas activas / mes</div><div class="value egreso">'+fmtMonto(totalCuotasActivas)+'</div></div>'+
     '<div class="summary-card"><div class="label">Margen libre / mes</div><div class="value '+(margen>=0?'ingreso':'egreso')+'">'+fmtMonto(margen)+'</div></div>'+
@@ -4196,9 +4224,9 @@ function bindEvents(){
       var tabId = t.getAttribute('data-tab');
       STATE.activeTab = tabId; STATE.editing = null; STATE.movDraft = null; STATE.usdtDraft = null; STATE.usdtFormMsg = null; STATE.usdtIngresoOpcionalesAbierto = false; STATE.dolaresDraft = null; STATE.dolaresFormMsg = null; STATE.nuevoMovAbierto = false; STATE.menuMovilAbierto = false; STATE.multiSelectAbierto = null; STATE.bulkEditMovAbierto = false; STATE.movSeleccionados = [];
       render();
-      // Primera vez que se entra a USDT (o a Resumen/Flujo, que valúan a la cotización de hoy el USDT de
+      // Primera vez que se entra a USDT (o a Resumen/Saldos/Flujo, que valúan a la cotización de hoy el USDT de
       // sueldo todavía sin vender) en esta sesión: traer la cotización sola, sin que haya que tocar "Actualizar".
-      if((tabId==='usdt' || tabId==='resumen' || tabId==='flujo') && STATE.usdtCotizacionBid===null && !STATE.usdtCotizacionCargando) obtenerCotizacionUsdt();
+      if((tabId==='usdt' || tabId==='resumen' || tabId==='saldos' || tabId==='flujo') && STATE.usdtCotizacionBid===null && !STATE.usdtCotizacionCargando) obtenerCotizacionUsdt();
       // Idem el dólar blue, que valúa la tenencia en USD (Dólares, Saldos y la foto de Resumen).
       if((tabId==='dolares' || tabId==='resumen' || tabId==='saldos' || tabId==='flujo') && STATE.dolarBlueCompra===null && !STATE.dolarBlueCargando) obtenerDolarBlue();
     });

@@ -40,3 +40,35 @@ describe('USDT: venta con categoría fija Sueldo › Venta USDT', () => {
     expect(win.STATE.usdtMovimientos[0].subcategoriaId).toBe('sub-venta-usdt');
   });
 });
+
+describe('Saldos: tarjeta de USDT', () => {
+  it('muestra la tenencia de USDT (ingresos menos ventas), aparte del saldo en pesos', () => {
+    const win = loadApp();
+    seedBase(win);
+    win.STATE.usdtMovimientos = [
+      { id: 'u1', tipo: 'ingreso', fecha: '2026-09-01', cantidad: 1000 },
+      { id: 'u2', tipo: 'venta', fecha: '2026-09-10', cantidad: 250, montoArs: 300000 }
+    ];
+    win.STATE.usdtCotizacionBid = 1200;
+    win.STATE.activeTab = 'saldos';
+    win.render();
+    const texto = win.document.body.textContent;
+    expect(texto).toContain('Saldo en USDT');
+    expect(texto).toContain('750,00 USDT');
+    expect(texto).toContain('≈ $900.000,00');
+  });
+});
+
+describe('Flujo de Caja: Saldo actual total incluye el USDT', () => {
+  it('suma pesos + USDT a la cotización de hoy y lo detalla debajo', () => {
+    const win = loadApp();
+    seedBase(win);
+    win.STATE.usdtMovimientos = [{ id: 'u1', tipo: 'ingreso', fecha: '2026-09-01', cantidad: 100 }];
+    win.STATE.usdtCotizacionBid = 1000;
+    win.STATE.activeTab = 'flujo';
+    win.render();
+    const card = [...win.document.querySelectorAll('.summary-card')].find(c => c.textContent.includes('Saldo actual total'));
+    expect(card.querySelector('.value').textContent).toBe('100.000,00'); // sin pesos cargados: solo los 100 USDT a $1.000
+    expect(card.textContent).toContain('100,00 USDT (≈ 100.000,00 a $1.000,00)');
+  });
+});
