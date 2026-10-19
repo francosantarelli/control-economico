@@ -52,3 +52,29 @@ describe('Resumen: selector de rango de la Comparativa mensual', () => {
     restore();
   });
 });
+
+describe('Resumen: sin meses futuros en la Tendencia mensual ni en el filtro de Mes', () => {
+  it('cuotas ya cargadas a futuro no agregan meses al gráfico ni a las opciones del filtro', () => {
+    const win = loadApp();
+    seedBase(win);
+    const restore = mockNow(win, '2026-07-15T12:00:00');
+    win.STATE.movimientos = [
+      { id: 'm-pasado', fecha: '2026-06-10', centroId: 'c-ef', categoriaId: 'cat-super', proveedor: 'Pasado', ingreso: 0, egreso: 100 },
+      { id: 'm-actual', fecha: '2026-07-02', centroId: 'c-ef', categoriaId: 'cat-super', proveedor: 'Actual', ingreso: 0, egreso: 200 },
+      { id: 'm-futuro', fecha: '2026-09-05', centroId: 'c-ef', categoriaId: 'cat-super', proveedor: 'Cuota futura', ingreso: 0, egreso: 5000 }
+    ];
+    win.STATE.activeTab = 'resumen';
+    win.render();
+
+    const etiquetasGrafico = [...win.document.querySelectorAll('svg text')].map(t => t.textContent);
+    expect(etiquetasGrafico).toContain('Jun 26');
+    expect(etiquetasGrafico).toContain('Jul 26');
+    expect(etiquetasGrafico).not.toContain('Sep 26');
+
+    win.handleAction('toggle-multiselect', 'rf-mes');
+    const opcionesMes = win.document.querySelector('[data-multiselect-wrap="rf-mes"] .multiselect-panel').textContent;
+    expect(opcionesMes).toContain('Jul 26');
+    expect(opcionesMes).not.toContain('Sep 26');
+    restore();
+  });
+});

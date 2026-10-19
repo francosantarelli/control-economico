@@ -1898,6 +1898,13 @@ function getMeses(){
   });
   return Object.keys(set).sort().reverse();
 }
+// Igual que getMeses pero sin meses futuros (cuotas ya cargadas, etc.): para filtros y gráficos
+// donde consultar meses que todavía no pasaron es raro y solo agrega ruido.
+function getMesesHastaHoy(){
+  var hoy = new Date();
+  var mesActualStr = hoy.getFullYear()+'-'+pad2(hoy.getMonth()+1);
+  return getMeses().filter(function(m){ return m <= mesActualStr; });
+}
 
 function camposFaltantes(m){
   var faltan = [];
@@ -2017,7 +2024,7 @@ function renderMovimientos(){
 
   var centroOptions = centrosOrdenados().map(function(c){ return {value:c.id, label:c.codigo}; });
   var categoriaOptions = categoriasOrdenadas().map(function(c){ return {value:c.id, label:c.nombre}; });
-  var meses = getMeses();
+  var meses = getMesesHastaHoy();
   var mesOptions = meses.map(function(m){ return {value:m, label:m}; });
   var subsParaFiltro = subcategoriasOrdenadas(f.categoria.length ? STATE.subcategorias.filter(function(s){ return f.categoria.indexOf(s.categoriaId)!==-1; }) : STATE.subcategorias);
   var subcategoriaOptions = [{value:'__vacio__', label:'(Sin subcategoría)'}].concat(subsParaFiltro.map(function(s){
@@ -3115,7 +3122,7 @@ function renderResumen(){
 
   var centroOptions = centrosOrdenados().map(function(c){ return {value:c.id, label:c.codigo}; });
   var categoriaOptions = categoriasOrdenadas().map(function(c){ return {value:c.id, label:c.nombre}; });
-  var meses = getMeses();
+  var meses = getMesesHastaHoy();
   var mesOptions = meses.map(function(m){ return {value:m, label:mesLabelCorto(m)}; });
 
   var movsCentro = STATE.movimientos.filter(function(m){ return !f.centro.length || f.centro.indexOf(m.centroId)!==-1; });
