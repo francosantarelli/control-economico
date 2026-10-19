@@ -2057,6 +2057,55 @@ function movimientosFiltrados(f){
   }).sort(function(a,b){ return (b.fecha||'').localeCompare(a.fecha||'') || (ordenCarga.get(b) - ordenCarga.get(a)); });
 }
 
+// Aviso de vencimientos y movimientos pendientes de hoy y mañana: arriba de Movimientos y de Resumen.
+function alertaVencimientosProximosHtml(){
+  // Los movimientos con tarjeta se juntan en una sola línea por resumen (Fecha + Centro, igual que en
+  // Vencimientos), en vez de listar cada consumo. La marca se muestra solo si es la misma en todos.
+  var movsProximos = [], resumenesTarjetaProximos = {};
+  STATE.movimientos.forEach(function(m){
+    if(!esMovimientoPendiente(m)) return;
+    var dias = diasHasta(m.fecha);
+    if(dias!==0 && dias!==1) return;
+    var monto = (Number(m.egreso)||0)-(Number(m.ingreso)||0);
+    if(!m.tarjeta){
+      movsProximos.push({dias:dias, concepto:m.proveedor||nombreCategoria(m.categoriaId)||m.detalle||'Movimiento', monto:monto, centroId:m.centroId});
+      return;
+    }
+    var clave = m.fecha+'|'+(m.centroId||'');
+    var r = resumenesTarjetaProximos[clave];
+    if(!r){
+      r = resumenesTarjetaProximos[clave] = {dias:dias, marcas:{}, cantidad:0, monto:0, centroId:m.centroId};
+      movsProximos.push(r);
+    }
+    if(m.tarjetaMarca) r.marcas[m.tarjetaMarca] = true;
+    r.cantidad++;
+    r.monto += monto;
+  });
+  movsProximos.forEach(function(x){
+    if(!x.cantidad) return;
+    var marcas = Object.keys(x.marcas);
+    x.concepto = 'Resumen '+(marcas.length===1 ? marcas[0] : 'tarjeta')+' · '+x.cantidad+' movimiento(s)';
+  });
+
+  var vencimientosProximos = STATE.vencimientos.filter(function(v){
+    if(v.estado==='pagado') return false;
+    var dias = diasHasta(v.fecha);
+    return dias===0 || dias===1;
+  }).map(function(v){
+    return {dias:diasHasta(v.fecha), concepto:v.concepto, monto:v.monto, centroId:v.centroId};
+  }).concat(movsProximos).sort(function(a,b){ return a.dias-b.dias; });
+
+  return vencimientosProximos.length ? ''+
+  '<div class="card" style="border-color:var(--danger);background:var(--danger-soft)">'+
+    '<h3 style="color:var(--danger)"><i class="bi bi-alarm"></i> Vencimientos próximos</h3>'+
+    '<div style="font-size:13px;margin-bottom:8px">'+
+      vencimientosProximos.map(function(x){
+        return '<div style="margin-bottom:4px">'+(x.dias===0?'<strong>Hoy</strong>':'<strong>Mañana</strong>')+' — '+esc(x.concepto)+(x.centroId?' ('+esc(nombreCentro(x.centroId).split(' · ')[0])+')':'')+' — <span class="mono">'+fmtMonto(x.monto)+'</span></div>';
+      }).join('')+
+    '</div>'+
+    '<button class="secondary" data-action="ir-a-vencimientos" style="font-size:12px;padding:6px 12px">Ver vencimientos</button>'+
+  '</div>' : '';
+}
 function renderMovimientos(){
   var f = STATE.filtros || {centro:[], categoria:[], mes:[], texto:'', subcategoria:[], soloIncompletos:false};
 
@@ -2286,52 +2335,7 @@ function renderMovimientos(){
     '</div></div>';
   }
 
-  // Los movimientos con tarjeta se juntan en una sola línea por resumen (Fecha + Centro, igual que en
-  // Vencimientos), en vez de listar cada consumo. La marca se muestra solo si es la misma en todos.
-  var movsProximos = [], resumenesTarjetaProximos = {};
-  STATE.movimientos.forEach(function(m){
-    if(!esMovimientoPendiente(m)) return;
-    var dias = diasHasta(m.fecha);
-    if(dias!==0 && dias!==1) return;
-    var monto = (Number(m.egreso)||0)-(Number(m.ingreso)||0);
-    if(!m.tarjeta){
-      movsProximos.push({dias:dias, concepto:m.proveedor||nombreCategoria(m.categoriaId)||m.detalle||'Movimiento', monto:monto, centroId:m.centroId});
-      return;
-    }
-    var clave = m.fecha+'|'+(m.centroId||'');
-    var r = resumenesTarjetaProximos[clave];
-    if(!r){
-      r = resumenesTarjetaProximos[clave] = {dias:dias, marcas:{}, cantidad:0, monto:0, centroId:m.centroId};
-      movsProximos.push(r);
-    }
-    if(m.tarjetaMarca) r.marcas[m.tarjetaMarca] = true;
-    r.cantidad++;
-    r.monto += monto;
-  });
-  movsProximos.forEach(function(x){
-    if(!x.cantidad) return;
-    var marcas = Object.keys(x.marcas);
-    x.concepto = 'Resumen '+(marcas.length===1 ? marcas[0] : 'tarjeta')+' · '+x.cantidad+' movimiento(s)';
-  });
-
-  var vencimientosProximos = STATE.vencimientos.filter(function(v){
-    if(v.estado==='pagado') return false;
-    var dias = diasHasta(v.fecha);
-    return dias===0 || dias===1;
-  }).map(function(v){
-    return {dias:diasHasta(v.fecha), concepto:v.concepto, monto:v.monto, centroId:v.centroId};
-  }).concat(movsProximos).sort(function(a,b){ return a.dias-b.dias; });
-
-  var alertaVencimientosHtml = vencimientosProximos.length ? ''+
-  '<div class="card" style="border-color:var(--danger);background:var(--danger-soft)">'+
-    '<h3 style="color:var(--danger)"><i class="bi bi-alarm"></i> Vencimientos próximos</h3>'+
-    '<div style="font-size:13px;margin-bottom:8px">'+
-      vencimientosProximos.map(function(x){
-        return '<div style="margin-bottom:4px">'+(x.dias===0?'<strong>Hoy</strong>':'<strong>Mañana</strong>')+' — '+esc(x.concepto)+(x.centroId?' ('+esc(nombreCentro(x.centroId).split(' · ')[0])+')':'')+' — <span class="mono">'+fmtMonto(x.monto)+'</span></div>';
-      }).join('')+
-    '</div>'+
-    '<button class="secondary" data-action="ir-a-vencimientos" style="font-size:12px;padding:6px 12px">Ver vencimientos</button>'+
-  '</div>' : '';
+  var alertaVencimientosHtml = alertaVencimientosProximosHtml();
 
   var controlTecHtml = (Math.abs(difTec) > 0.005 || categoriasSospechosas.length > 0) ? ''+
   '<div class="card" style="border-color:var(--danger);background:var(--danger-soft)">'+
@@ -3210,7 +3214,7 @@ function renderResumen(){
   // ingresó ese mes puntual.
   var tasaAhorro = totalIngreso>0 ? Math.round(saldo/totalIngreso*100) : null;
 
-  // "Estado actual": foto de hoy que junta números de otras pestañas (Saldos, USDT, Vencimientos,
+  // "Estado actual": foto de hoy que junta números de otras pestañas (Saldos, USDT, Dólares,
   // Flujo de Caja) -- a diferencia de las KPI cards de abajo, no depende de los filtros de Centro/
   // Categoría/Mes de esta pantalla, porque son datos globales, no del recorte que se esté mirando.
   var saldosGlobal = obtenerSaldos();
@@ -3220,9 +3224,6 @@ function renderResumen(){
   var valorUsdArs = STATE.dolarBlueCompra ? tenenciaUsd*STATE.dolarBlueCompra : null;
   var hayDolares = STATE.movimientosUsd.length>0 || STATE.centros.some(centroAdmiteDolares);
   var capAhorro = capacidadAhorroPromedio('6m');
-  var vencPendientes = STATE.vencimientos.filter(function(v){ return v.estado!=='pagado'; }).sort(function(a,b){ return (a.fecha||'').localeCompare(b.fecha||''); });
-  var proximoVenc = vencPendientes[0] || null;
-  var vencProximos7d = vencPendientes.filter(function(v){ var d=diasHasta(v.fecha); return d!==null && d>=0 && d<=7; }).length;
   var estadoActualHtml = '<div class="card">'+
     '<h3>Estado actual</h3>'+
     '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">La foto de hoy — no depende de los filtros de abajo.</div>'+
@@ -3230,9 +3231,6 @@ function renderResumen(){
       '<div class="summary-card"><div class="kpi-ic kpi-ic-accent"><i class="bi bi-bank"></i></div><div class="label">Saldo total (Saldos)</div><div class="value">'+fmtMonto(saldosGlobal.totalGeneral)+'</div></div>'+
       '<div class="summary-card"><div class="kpi-ic kpi-ic-warning"><i class="bi bi-coin"></i></div><div class="label">Tenencia USDT</div><div class="value">'+fmtCantidadUsdt(saldoUsdtCant)+' USDT'+(valorUsdtArs!==null?'<div class="mono" style="font-size:12px;color:var(--ink-soft);font-weight:400">≈ '+fmtMonto(valorUsdtArs)+'</div>':'')+'</div></div>'+
       (hayDolares ? '<div class="summary-card"><div class="kpi-ic kpi-ic-accent"><i class="bi bi-currency-dollar"></i></div><div class="label">Tenencia dólares</div><div class="value">'+fmtUsd(tenenciaUsd)+(valorUsdArs!==null?'<div class="mono" style="font-size:12px;color:var(--ink-soft);font-weight:400">≈ '+fmtMonto(valorUsdArs)+' (blue)</div>':'')+'</div></div>' : '')+
-      '<div class="summary-card"><div class="kpi-ic kpi-ic-danger"><i class="bi bi-alarm"></i></div><div class="label">Próximo vencimiento</div>'+
-        (proximoVenc ? '<div class="value" style="font-size:15px">'+esc(proximoVenc.concepto)+'</div><div class="mono" style="font-size:12px;color:var(--ink-soft)">'+fmtMonto(proximoVenc.monto)+' · '+esc(fechaISOaDDMMAAAA(proximoVenc.fecha))+(vencProximos7d>1?' · '+vencProximos7d+' en los próx. 7 días':'')+'</div>' : '<div class="value" style="font-size:15px;color:var(--ink-soft)">Ninguno pendiente</div>')+
-      '</div>'+
       '<div class="summary-card"><div class="kpi-ic kpi-ic-accent"><i class="bi bi-piggy-bank"></i></div><div class="label">Ahorro promedio / mes</div><div class="value">'+(capAhorro?fmtMonto(capAhorro.promedio):'—')+'</div>'+(capAhorro?'<div style="font-size:11px;color:var(--ink-soft);margin-top:2px">últimos 6 meses cerrados, sin '+esc(etiquetaInversion())+'</div>':'')+'</div>'+
     '</div>'+
   '</div>';
@@ -3318,7 +3316,7 @@ function renderResumen(){
   });
   var trendSvg = trendChart(mesesTrend, dataPorMes, 640, 220);
 
-  return ''+
+  return alertaVencimientosProximosHtml()+
   '<div class="card card-filtros">'+
     '<h3>Filtros</h3>'+
     '<div class="filters">'+

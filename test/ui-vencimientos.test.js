@@ -127,3 +127,21 @@ describe('Vencimientos', () => {
     restore();
   });
 });
+
+describe('Aviso de vencimientos próximos', () => {
+  it('se ve en Movimientos y en Resumen (que ya no tiene la tarjeta "Próximo vencimiento")', () => {
+    const win = loadApp();
+    seedBase(win);
+    const restoreNow = mockNow(win, new win.Date(2026, 7, 9)); // hoy = 2026-08-09
+    win.STATE.vencimientos = [{ id: 'v1', concepto: 'Expensas', fecha: '2026-08-10', monto: 50000, centroId: 'c-ef', estado: 'pendiente' }];
+    for (const tab of ['movimientos', 'resumen']) {
+      win.STATE.activeTab = tab;
+      win.render();
+      const html = win.document.getElementById('app').innerHTML;
+      expect(html, tab).toContain('Vencimientos próximos');
+      expect(html, tab).toContain('Expensas');
+    }
+    expect(win.document.getElementById('app').innerHTML).not.toContain('Próximo vencimiento');
+    restoreNow();
+  });
+});
