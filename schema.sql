@@ -19,6 +19,7 @@ create table centros (
   color text,  -- color de fondo del chip en Movimientos y ABM, ej: '#4E9D77'
   color_texto text,  -- color de texto del chip (opcional); si es null, se calcula el contraste automático
   entidad text,  -- banco/billetera para el logo en Saldos: 'santander' | 'nacion' | 'provincia' | 'icbc' | 'mercadopago' | null
+  moneda text not null default 'ARS' check (moneda in ('ARS','USD','AMBAS')),  -- 'AMBAS': la cuenta tiene un saldo en pesos y otro en dólares
   created_at timestamptz default now()
 );
 
@@ -55,8 +56,11 @@ create table movimientos (
   tarjeta boolean not null default false, -- si se pagó con tarjeta de crédito (agrupa en el resumen de tarjeta)
   tarjeta_marca text, -- Visa, Mastercard, Amex, etc. (para agrupar y titular el resumen de tarjeta correspondiente)
   cuotas text, -- texto libre, ej. "5/6"
+  moneda text not null default 'ARS' check (moneda in ('ARS','USD')),
+  cambio_id uuid, -- une las dos patas (USD y pesos) de una compra/venta de dólares
   created_at timestamptz default now()
 );
+create index movimientos_cambio_id_idx on movimientos(cambio_id);
 
 -- Vencimientos
 create table vencimientos (

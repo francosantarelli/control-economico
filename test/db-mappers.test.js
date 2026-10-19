@@ -9,7 +9,7 @@ beforeEach(() => { win = loadApp(); });
 
 describe('centro', () => {
   it('toDbCentro -> fromDbCentro conserva los datos', () => {
-    const centro = { id: 'c1', codigo: 'EF', nombre: 'Efectivo Franco', color: '#4E9D77', colorTexto: '#fff', entidad: 'santander' };
+    const centro = { id: 'c1', codigo: 'EF', nombre: 'Efectivo Franco', color: '#4E9D77', colorTexto: '#fff', entidad: 'santander', moneda: 'AMBAS' };
     expect(win.fromDbCentro(win.toDbCentro(centro))).toEqual(centro);
   });
   it('color/colorTexto/entidad ausentes se guardan como null y vuelven como string vacío', () => {
@@ -17,7 +17,11 @@ describe('centro', () => {
     expect(row.color).toBeNull();
     expect(row.color_texto).toBeNull();
     expect(row.entidad).toBeNull();
-    expect(win.fromDbCentro(row)).toEqual({ id: 'c1', codigo: 'EF', nombre: 'Efectivo Franco', color: '', colorTexto: '', entidad: '' });
+    expect(win.fromDbCentro(row)).toEqual({ id: 'c1', codigo: 'EF', nombre: 'Efectivo Franco', color: '', colorTexto: '', entidad: '', moneda: 'ARS' });
+  });
+  it('la moneda solo se manda cuando no es pesos (anda aunque falte migracion_dolares.sql)', () => {
+    expect(win.toDbCentro({ id: 'c1', codigo: 'EF', nombre: 'Efectivo Franco', moneda: 'ARS' })).not.toHaveProperty('moneda');
+    expect(win.toDbCentro({ id: 'c1', codigo: 'USA', nombre: 'Dólares Ana', moneda: 'USD' }).moneda).toBe('USD');
   });
 });
 
@@ -42,9 +46,22 @@ describe('movimiento', () => {
     const mov = {
       id: 'm1', fecha: '2026-08-09', centroId: 'c1', categoriaId: 'cat1', subcategoriaId: 's1',
       proveedor: 'Netflix', detalle: 'Suscripción mensual', ingreso: 0, egreso: 890,
-      tarjeta: true, fechaConsumo: '2026-08-01', tarjetaMarca: 'Visa', cuotas: '3/6',
+      tarjeta: true, fechaConsumo: '2026-08-01', tarjetaMarca: 'Visa', cuotas: '3/6', moneda: 'ARS', cambioId: '',
     };
     expect(win.fromDbMovimiento(win.toDbMovimiento(mov))).toEqual(mov);
+  });
+
+  it('un movimiento en dólares conserva moneda y cambio_id; uno en pesos no los manda', () => {
+    const usd = {
+      id: 'm2', fecha: '2026-08-09', centroId: 'c1', categoriaId: '', subcategoriaId: '', proveedor: 'Compra USD', detalle: '',
+      ingreso: 100, egreso: 0, tarjeta: false, fechaConsumo: '', tarjetaMarca: '', cuotas: '', moneda: 'USD', cambioId: 'k1',
+    };
+    const row = win.toDbMovimiento(usd);
+    expect(row).toMatchObject({ moneda: 'USD', cambio_id: 'k1' });
+    expect(win.fromDbMovimiento(row)).toEqual(usd);
+    const ars = win.toDbMovimiento({ id: 'm3', fecha: '2026-08-09', ingreso: 0, egreso: 10 });
+    expect(ars).not.toHaveProperty('moneda');
+    expect(ars).not.toHaveProperty('cambio_id');
   });
 
   it('ingreso/egreso siempre se guardan como número, aunque vengan como string o vacíos', () => {

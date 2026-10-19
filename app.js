@@ -3,7 +3,7 @@ var SUPABASE_URL = 'https://krgwoiufhvhoqucqjpff.supabase.co';
 var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtyZ3dvaXVmaHZob3F1Y3FqcGZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0MDA2MTIsImV4cCI6MjA5OTk3NjYxMn0.HxA7P1_LUEkZq75kMPKmiCLixeJQ2sROXcmW37gnQOE';
 var sb = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
-var STATE = { centros: [], categorias: [], subcategorias: [], movimientos: [], vencimientos: [], gimnasioVisitas: [], usdtMovimientos: [], deudas: [], facturas: [], configuracion: [], facturaLoadingId:null, activeTab: 'resumen', editing: null, ready:false,
+var STATE = { centros: [], categorias: [], subcategorias: [], movimientos: [], vencimientos: [], gimnasioVisitas: [], usdtMovimientos: [], movimientosUsd: [], deudas: [], facturas: [], configuracion: [], facturaLoadingId:null, activeTab: 'resumen', editing: null, ready:false,
   importEntidad:'mp', importBanco:'nacion', importVencimiento:'', importTarjetaMarca:'', importRaw:'', importPreview:null, importPreviewExcel:null, importMsg:null,
   bulkColorCatMsg:null, confirmState:null, subDeleteState:null, vencPagarState:null, movFormMsg:null, movFieldErrors:null,
   filtros:{centro:[], categoria:[], subcategoria:[], mes:[], texto:'', soloIncompletos:false, soloTarjeta:false},
@@ -18,6 +18,7 @@ var STATE = { centros: [], categorias: [], subcategorias: [], movimientos: [], v
   temaColor: (function(){ try{ var c = localStorage.getItem('controlTemaColor'); return (c==='azul'||c==='naranja') ? c : 'verde'; }catch(e){ return 'verde'; } })(),
   menuUsuarioAbierto:false, usdtFormMsg:null, usdtDraft:null, usdtIngresoOpcionalesAbierto:false,
   usdtCotizacionBid:null, usdtCotizacionActualizada:null, usdtCotizacionError:null, usdtCotizacionCargando:false,
+  dolaresDraft:null, dolaresFormMsg:null, dolarBlueCompra:null, dolarBlueVenta:null, dolarBlueActualizada:null, dolarBlueError:null, dolarBlueCargando:false,
   deudaFormMsg:null, flujoVentana:'6m', flujoHorizonte:12, filtrosMovAbiertos:false };
 var MOV_PAGE_SIZE = 50;
 var REGLAS_PAGE_SIZE = 15;
@@ -247,14 +248,32 @@ function uid(){
 }
 
 // ---- Mapeo entre el modelo JS (camelCase) y las columnas de Supabase (snake_case) ----
-function toDbCentro(c){ return {id:c.id, codigo:c.codigo, nombre:c.nombre, color:c.color||null, color_texto:c.colorTexto||null, entidad:c.entidad||null}; }
-function fromDbCentro(r){ return {id:r.id, codigo:r.codigo, nombre:r.nombre, color:r.color||'', colorTexto:r.color_texto||'', entidad:r.entidad||''}; }
+// "moneda" solo se manda cuando no es la default ('ARS'): así la app sigue guardando bien aunque
+// todavía no se haya corrido migracion_dolares.sql (la columna nueva no existiría).
+function toDbCentro(c){
+  var r = {id:c.id, codigo:c.codigo, nombre:c.nombre, color:c.color||null, color_texto:c.colorTexto||null, entidad:c.entidad||null};
+  if(monedaCentro(c)!=='ARS') r.moneda = monedaCentro(c);
+  return r;
+}
+function fromDbCentro(r){ return {id:r.id, codigo:r.codigo, nombre:r.nombre, color:r.color||'', colorTexto:r.color_texto||'', entidad:r.entidad||'', moneda:(r.moneda==='USD'||r.moneda==='AMBAS')?r.moneda:'ARS'}; }
+// Moneda de un Centro de Costo: 'ARS' (solo pesos), 'USD' (solo dólares) o 'AMBAS' (misma cuenta,
+// un saldo en pesos y otro en dólares).
+function monedaCentro(c){ return c && (c.moneda==='USD' || c.moneda==='AMBAS') ? c.moneda : 'ARS'; }
+function centroAdmitePesos(c){ return monedaCentro(c)!=='USD'; }
+function centroAdmiteDolares(c){ return monedaCentro(c)!=='ARS'; }
 function toDbCategoria(c){ return {id:c.id, nombre:c.nombre, tipo:c.tipo||null, color:c.color||null, color_texto:c.colorTexto||null}; }
 function fromDbCategoria(r){ return {id:r.id, nombre:r.nombre, tipo:r.tipo||'', color:r.color||'', colorTexto:r.color_texto||''}; }
 function toDbSubcategoria(s){ return {id:s.id, categoria_id:s.categoriaId||null, nombre:s.nombre}; }
 function fromDbSubcategoria(r){ return {id:r.id, categoriaId:r.categoria_id||'', nombre:r.nombre}; }
-function toDbMovimiento(m){ return {id:m.id, fecha:m.fecha, centro_id:m.centroId||null, categoria_id:m.categoriaId||null, subcategoria_id:m.subcategoriaId||null, proveedor:m.proveedor||null, detalle:m.detalle||null, ingreso:Number(m.ingreso)||0, egreso:Number(m.egreso)||0, tarjeta:!!m.tarjeta, fecha_consumo:m.fechaConsumo||null, tarjeta_marca:m.tarjetaMarca||null, cuotas:m.cuotas||null}; }
-function fromDbMovimiento(r){ return {id:r.id, fecha:r.fecha, centroId:r.centro_id||'', categoriaId:r.categoria_id||'', subcategoriaId:r.subcategoria_id||'', proveedor:r.proveedor||'', detalle:r.detalle||'', ingreso:Number(r.ingreso)||0, egreso:Number(r.egreso)||0, tarjeta:!!r.tarjeta, fechaConsumo:r.fecha_consumo||'', tarjetaMarca:r.tarjeta_marca||'', cuotas:r.cuotas||''}; }
+// Igual que en toDbCentro: "moneda" y "cambio_id" solo viajan cuando hacen falta (movimientos en
+// dólares / patas de una compra-venta), para no depender de migracion_dolares.sql en todo lo demás.
+function toDbMovimiento(m){
+  var r = {id:m.id, fecha:m.fecha, centro_id:m.centroId||null, categoria_id:m.categoriaId||null, subcategoria_id:m.subcategoriaId||null, proveedor:m.proveedor||null, detalle:m.detalle||null, ingreso:Number(m.ingreso)||0, egreso:Number(m.egreso)||0, tarjeta:!!m.tarjeta, fecha_consumo:m.fechaConsumo||null, tarjeta_marca:m.tarjetaMarca||null, cuotas:m.cuotas||null};
+  if(m.moneda==='USD') r.moneda = 'USD';
+  if(m.cambioId) r.cambio_id = m.cambioId;
+  return r;
+}
+function fromDbMovimiento(r){ return {id:r.id, fecha:r.fecha, centroId:r.centro_id||'', categoriaId:r.categoria_id||'', subcategoriaId:r.subcategoria_id||'', proveedor:r.proveedor||'', detalle:r.detalle||'', ingreso:Number(r.ingreso)||0, egreso:Number(r.egreso)||0, tarjeta:!!r.tarjeta, fechaConsumo:r.fecha_consumo||'', tarjetaMarca:r.tarjeta_marca||'', cuotas:r.cuotas||'', moneda:r.moneda==='USD'?'USD':'ARS', cambioId:r.cambio_id||''}; }
 function toDbVencimiento(v){ return {id:v.id, concepto:v.concepto, fecha:v.fecha, monto:Number(v.monto)||0, centro_id:v.centroId||null, estado:v.estado||'pendiente'}; }
 function fromDbVencimiento(r){ return {id:r.id, concepto:r.concepto, fecha:r.fecha, monto:Number(r.monto)||0, centroId:r.centro_id||'', estado:r.estado||'pendiente'}; }
 async function crearMovimientoDesdeVencimiento(v){
@@ -345,7 +364,12 @@ async function cargarTodo(){
   STATE.centros = centros.map(fromDbCentro);
   STATE.categorias = categorias.map(fromDbCategoria);
   STATE.subcategorias = subcategorias.map(fromDbSubcategoria);
-  STATE.movimientos = movimientos.map(fromDbMovimiento);
+  // Los movimientos en dólares viven en la misma tabla pero en una lista aparte: STATE.movimientos
+  // queda solo en pesos, así ningún cálculo existente (Saldos, Resumen, Flujo, Comparativa...) suma
+  // dólares como si fueran pesos. Los en USD se ven y se editan desde la pestaña Dólares.
+  var todosLosMovs = movimientos.map(fromDbMovimiento);
+  STATE.movimientos = todosLosMovs.filter(function(m){ return m.moneda!=='USD'; });
+  STATE.movimientosUsd = todosLosMovs.filter(function(m){ return m.moneda==='USD'; });
   STATE.vencimientos = vencimientos.map(fromDbVencimiento);
   try{
     // Try/catch aparte: si todavía no corriste migracion_gimnasio.sql en Supabase, que no
@@ -400,6 +424,7 @@ async function mostrarApp(){
   // La app abre en Resumen, que valúa el USDT de sueldo sin vender a la cotización de hoy:
   // traerla de entrada igual que cuando se entra a la pestaña con un clic.
   if((STATE.activeTab==='usdt' || STATE.activeTab==='resumen' || STATE.activeTab==='flujo') && STATE.usdtCotizacionBid===null && !STATE.usdtCotizacionCargando) obtenerCotizacionUsdt();
+  if((STATE.activeTab==='dolares' || STATE.activeTab==='resumen' || STATE.activeTab==='saldos') && STATE.dolarBlueCompra===null && !STATE.dolarBlueCargando) obtenerDolarBlue();
 }
 
 function mostrarLogin(msg){
@@ -635,7 +660,9 @@ async function obtenerCotizacionUsdt(){
   render();
 }
 function nombreCentro(id){ var c = STATE.centros.find(function(x){return x.id===id;}); return c ? c.codigo+' · '+c.nombre : '—'; }
-function centrosOrdenados(){ return STATE.centros.slice().sort(function(a,b){ return (a.codigo||'').localeCompare(b.codigo||'', 'es', {sensitivity:'base'}); }); }
+// Solo los CC que admiten pesos: es la lista de todos los combos/filtros de movimientos en pesos.
+// Los CC solo en dólares se eligen desde la pestaña Dólares (centrosDolaresOrdenados).
+function centrosOrdenados(){ return STATE.centros.filter(centroAdmitePesos).sort(function(a,b){ return (a.codigo||'').localeCompare(b.codigo||'', 'es', {sensitivity:'base'}); }); }
 function categoriasOrdenadas(){ return STATE.categorias.slice().sort(function(a,b){ return (a.nombre||'').localeCompare(b.nombre||'', 'es', {sensitivity:'base'}); }); }
 function subcategoriasOrdenadas(lista){ return lista.slice().sort(function(a,b){ return (a.nombre||'').localeCompare(b.nombre||'', 'es', {sensitivity:'base'}); }); }
 function nombreCategoria(id){ var c = STATE.categorias.find(function(x){return x.id===id;}); return c ? c.nombre : '—'; }
@@ -1425,6 +1452,7 @@ function renderInterno(){
     {id:'saldos', label:'Saldos', icono:'bi-bank', separadorAntes:true},
     {id:'flujo', label:'Flujo de Caja', icono:'bi-graph-up-arrow'},
     {id:'usdt', label:'USDT', icono:'bi-coin'},
+    {id:'dolares', label:'Dólares', icono:'bi-currency-dollar'},
     {id:'importar', label:'Importar', icono:'bi-cloud-arrow-down', separadorAntes:true},
     {id:'gimnasio', label:'Gimnasio', icono:'bi-activity'},
     {id:'abm', label:'ABM', icono:'bi-gear'}
@@ -1475,6 +1503,7 @@ function renderInterno(){
     else if(STATE.activeTab==='resumen') contentHtml += renderResumen();
     else if(STATE.activeTab==='flujo') contentHtml += renderFlujoCaja();
     else if(STATE.activeTab==='usdt') contentHtml += renderUsdt();
+    else if(STATE.activeTab==='dolares') contentHtml += renderDolares();
     else if(STATE.activeTab==='gimnasio') contentHtml += renderGimnasio();
     else if(STATE.activeTab==='abm') contentHtml += renderABM();
   }
@@ -1625,18 +1654,27 @@ var ENTIDADES = [
   {id:'icbc', label:'ICBC'},
   {id:'mercadopago', label:'Mercado Pago'}
 ];
-function campoCentro(codigo, nombre, color, entidad){
+var MONEDAS_CENTRO = [
+  {id:'ARS', label:'Pesos'},
+  {id:'USD', label:'Dólares'},
+  {id:'AMBAS', label:'Pesos y dólares'}
+];
+function campoCentro(codigo, nombre, color, entidad, moneda){
   return '<div class="field"><label>Código (CC)</label><input type="text" id="f-centro-codigo" placeholder="Ej: MPF" value="'+esc(codigo)+'" style="width:100px;text-transform:uppercase"></div>'+
     '<div class="field"><label>Nombre</label><input type="text" id="f-centro-nombre" placeholder="Ej: Mercado Pago" value="'+esc(nombre)+'" style="width:220px"></div>'+
     '<div class="field"><label>Color</label><input type="color" id="f-centro-color" value="'+esc(color)+'"></div>'+
     '<div class="field"><label>Entidad</label><select id="f-centro-entidad">'+
       ENTIDADES.map(function(e){ return '<option value="'+e.id+'"'+(e.id===(entidad||'')?' selected':'')+'>'+e.label+'</option>'; }).join('')+
+    '</select></div>'+
+    '<div class="field"><label>Moneda</label><select id="f-centro-moneda">'+
+      MONEDAS_CENTRO.map(function(m){ return '<option value="'+m.id+'"'+(m.id===(moneda||'ARS')?' selected':'')+'>'+m.label+'</option>'; }).join('')+
     '</select></div>';
 }
 function renderCentros(){
   var rows = STATE.centros.map(function(c){
     return '<tr><td data-label="Código">'+renderChip(c.codigo, colorCentro(c.id), colorTextoCentro(c.id))+'</td><td data-label="Nombre">'+esc(c.nombre)+'</td>'+
       '<td data-label="Entidad">'+logoEntidadHtml(c)+'</td>'+
+      '<td data-label="Moneda">'+MONEDAS_CENTRO.find(function(m){ return m.id===monedaCentro(c); }).label+'</td>'+
       '<td class="actions-cell"><button class="link" data-action="edit-centro" data-id="'+c.id+'">editar</button>'+
       '<button class="link" data-action="del-centro" data-id="'+c.id+'">borrar</button></td></tr>';
   }).join('');
@@ -1645,7 +1683,7 @@ function renderCentros(){
   if(editing){
     MODAL_HTML = '<div class="modal-overlay" data-modal-backdrop="edit"><div class="modal-card">'+
       '<h2>Editar centro de costo</h2>'+
-      '<div class="fields-row">'+ campoCentro(editing.codigo, editing.nombre, colorCentro(editing.id), editing.entidad) +'</div>'+
+      '<div class="fields-row">'+ campoCentro(editing.codigo, editing.nombre, colorCentro(editing.id), editing.entidad, monedaCentro(editing)) +'</div>'+
       '<div class="fields-row" style="margin-top:14px">'+
         '<button data-action="save-centro" data-id="'+editing.id+'">Guardar cambios</button>'+
         '<button class="secondary" data-action="cancel-edit">Cancelar</button>'+
@@ -1656,7 +1694,7 @@ function renderCentros(){
   var formNuevoCentro = editing ? '' : ''+
   '<div class="card">'+
     '<h2>Nuevo centro de costo</h2>'+
-    '<div class="fields-row">'+ campoCentro('', '', PALETA_DONUT[STATE.centros.length % PALETA_DONUT.length], '') +
+    '<div class="fields-row">'+ campoCentro('', '', PALETA_DONUT[STATE.centros.length % PALETA_DONUT.length], '', 'ARS') +
       '<button data-action="save-centro" data-id="">Agregar</button>'+
     '</div>'+
   '</div>';
@@ -1664,7 +1702,7 @@ function renderCentros(){
   return formNuevoCentro +
   '<div class="card">'+
     '<h3>Centros de costo cargados</h3>'+
-    (STATE.centros.length ? '<table class="table tabla-movil"><thead><tr><th>Código</th><th>Nombre</th><th>Entidad</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>' : '<div class="empty">Todavía no cargaste ningún centro de costo.</div>')+
+    (STATE.centros.length ? '<table class="table tabla-movil"><thead><tr><th>Código</th><th>Nombre</th><th>Entidad</th><th>Moneda</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>' : '<div class="empty">Todavía no cargaste ningún centro de costo.</div>')+
   '</div>';
 }
 
@@ -2168,7 +2206,7 @@ function renderMovimientos(){
   function camposMov(e, subOptionsArr){
     var catSel = STATE.categorias.find(function(c){return c.id===e.categoriaId;});
     var esTec = catSel && catSel.tipo === 'tec';
-    var destinoOpts = [comboOpcionVacia()].concat(STATE.centros.filter(function(c){return c.id!==e.centroId;}).map(function(c){ return {value:c.id, label:c.codigo+' · '+c.nombre}; }));
+    var destinoOpts = [comboOpcionVacia()].concat(STATE.centros.filter(function(c){return c.id!==e.centroId && centroAdmitePesos(c);}).map(function(c){ return {value:c.id, label:c.codigo+' · '+c.nombre}; }));
     var campoDestino = esTec ? ''+
       '<div class="fields-row" style="margin-top:12px">'+
         '<div class="field" style="flex:1 1 240px"><label>Centro de Costo Destino (transferencia, opcional)</label>'+renderCombo('mov-centro-destino', 'f-mov-centro-destino', destinoOpts, STATE.movDraftCentroDestinoId, 'Elegir...')+'</div>'+
@@ -2723,7 +2761,7 @@ function calcularSaldos(){
     }
   });
 
-  var filas = STATE.centros.map(function(c){
+  var filas = STATE.centros.filter(function(c){ return centroAdmitePesos(c) || saldoPorCentro[c.id]; }).map(function(c){
     return { id:c.id, codigo:c.codigo, nombre:c.nombre, entidad:c.entidad, titular: titularDeCentro(c.codigo), saldo: saldoPorCentro[c.id]||0 };
   }).sort(function(a,b){ return a.titular.localeCompare(b.titular) || a.codigo.localeCompare(b.codigo); });
 
@@ -2815,7 +2853,17 @@ function renderSaldos(){
     (filas.length || saldoSinCentro!==0 ? '<div class="saldos-grupos">'+gruposHtml+'</div>' : '<div class="empty">Todavía no cargaste ningún Centro de Costo.</div>')+
   '</div>';
 
-  return cards + tabla;
+  var sUsd = calcularSaldosUsd();
+  var tablaUsd = (sUsd.filas.length || sUsd.saldoSinCentro!==0) ? '<div class="card">'+
+    '<div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:10px;margin-bottom:4px">'+
+      '<h3 style="margin-bottom:0">Saldo en dólares</h3>'+
+      '<div class="mono" style="font-weight:600">'+fmtUsd(sUsd.totalGeneral)+(STATE.dolarBlueCompra?' <span style="font-size:12px;color:var(--ink-soft);font-weight:400">≈ $'+fmtMonto(sUsd.totalGeneral*STATE.dolarBlueCompra)+' (blue)</span>':'')+'</div>'+
+    '</div>'+
+    '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Aparte del saldo en pesos (no se suma al total de arriba). Se carga y se detalla en la pestaña Dólares.</div>'+
+    saldosUsdGruposHtml(sUsd)+
+  '</div>' : '';
+
+  return cards + tabla + tablaUsd;
 }
 
 // ===================== RESUMEN =====================
@@ -3168,6 +3216,9 @@ function renderResumen(){
   var saldosGlobal = obtenerSaldos();
   var saldoUsdtCant = calcularSaldoUsdt();
   var valorUsdtArs = STATE.usdtCotizacionBid ? saldoUsdtCant*STATE.usdtCotizacionBid : null;
+  var tenenciaUsd = calcularSaldosUsd().totalGeneral;
+  var valorUsdArs = STATE.dolarBlueCompra ? tenenciaUsd*STATE.dolarBlueCompra : null;
+  var hayDolares = STATE.movimientosUsd.length>0 || STATE.centros.some(centroAdmiteDolares);
   var capAhorro = capacidadAhorroPromedio('6m');
   var vencPendientes = STATE.vencimientos.filter(function(v){ return v.estado!=='pagado'; }).sort(function(a,b){ return (a.fecha||'').localeCompare(b.fecha||''); });
   var proximoVenc = vencPendientes[0] || null;
@@ -3178,6 +3229,7 @@ function renderResumen(){
     '<div class="summary-cards">'+
       '<div class="summary-card"><div class="kpi-ic kpi-ic-accent"><i class="bi bi-bank"></i></div><div class="label">Saldo total (Saldos)</div><div class="value">'+fmtMonto(saldosGlobal.totalGeneral)+'</div></div>'+
       '<div class="summary-card"><div class="kpi-ic kpi-ic-warning"><i class="bi bi-coin"></i></div><div class="label">Tenencia USDT</div><div class="value">'+fmtCantidadUsdt(saldoUsdtCant)+' USDT'+(valorUsdtArs!==null?'<div class="mono" style="font-size:12px;color:var(--ink-soft);font-weight:400">≈ '+fmtMonto(valorUsdtArs)+'</div>':'')+'</div></div>'+
+      (hayDolares ? '<div class="summary-card"><div class="kpi-ic kpi-ic-accent"><i class="bi bi-currency-dollar"></i></div><div class="label">Tenencia dólares</div><div class="value">'+fmtUsd(tenenciaUsd)+(valorUsdArs!==null?'<div class="mono" style="font-size:12px;color:var(--ink-soft);font-weight:400">≈ '+fmtMonto(valorUsdArs)+' (blue)</div>':'')+'</div></div>' : '')+
       '<div class="summary-card"><div class="kpi-ic kpi-ic-danger"><i class="bi bi-alarm"></i></div><div class="label">Próximo vencimiento</div>'+
         (proximoVenc ? '<div class="value" style="font-size:15px">'+esc(proximoVenc.concepto)+'</div><div class="mono" style="font-size:12px;color:var(--ink-soft)">'+fmtMonto(proximoVenc.monto)+' · '+esc(fechaISOaDDMMAAAA(proximoVenc.fecha))+(vencProximos7d>1?' · '+vencProximos7d+' en los próx. 7 días':'')+'</div>' : '<div class="value" style="font-size:15px;color:var(--ink-soft)">Ninguno pendiente</div>')+
       '</div>'+
@@ -3690,6 +3742,218 @@ function gimnasioListaUltimasVisitas(){
   }).join('');
 }
 
+// ===================== DÓLARES (tenencia en USD por Centro de Costo + compras/ventas) =====================
+// Los movimientos en dólares están en la tabla "movimientos" con moneda 'USD', pero en memoria viven
+// en STATE.movimientosUsd (ver cargarTodo): ningún informe en pesos los ve. Una compra o venta son
+// dos movimientos unidos por cambio_id: el de USD (acá) y el de pesos (en Movimientos, cuenta en Saldos).
+function fmtUsd(n){ return 'US$ '+fmtMonto(n); }
+function ordenarPorCodigo(lista){ return lista.sort(function(a,b){ return (a.codigo||'').localeCompare(b.codigo||'', 'es', {sensitivity:'base'}); }); }
+function centrosDolaresOrdenados(){ return ordenarPorCodigo(STATE.centros.filter(centroAdmiteDolares)); }
+function tipoMovimientoUsd(m){
+  var entra = (Number(m.ingreso)||0) > 0;
+  if(m.cambioId) return entra ? 'compra' : 'venta';
+  return entra ? 'ingreso' : 'egreso';
+}
+var TIPOS_USD = {compra:'Compra de dólares', venta:'Venta de dólares', ingreso:'Ingreso de dólares (o saldo inicial)', egreso:'Gasto en dólares'};
+var TIPOS_USD_CORTO = {compra:'Compra', venta:'Venta', ingreso:'Ingreso', egreso:'Gasto'};
+function movimientoPesosDeCambio(m){
+  if(!m || !m.cambioId) return null;
+  return STATE.movimientos.find(function(x){ return x.cambioId===m.cambioId; }) || null;
+}
+function montoMovimiento(m){ return (Number(m.ingreso)||0) || (Number(m.egreso)||0); }
+function calcularSaldosUsd(){
+  var saldoPorCentro = {};
+  var saldoSinCentro = 0;
+  STATE.movimientosUsd.forEach(function(m){
+    if(esMovimientoPendiente(m)) return;
+    var delta = (Number(m.ingreso)||0) - (Number(m.egreso)||0);
+    if(m.centroId && STATE.centros.some(function(c){ return c.id===m.centroId; })) saldoPorCentro[m.centroId] = (saldoPorCentro[m.centroId]||0) + delta;
+    else saldoSinCentro += delta;
+  });
+  // Un CC aparece si admite dólares o si (por un cambio de moneda posterior) todavía tiene saldo en USD.
+  var filas = STATE.centros.filter(function(c){ return centroAdmiteDolares(c) || saldoPorCentro[c.id]; }).map(function(c){
+    return { id:c.id, codigo:c.codigo, nombre:c.nombre, entidad:c.entidad, titular: titularDeCentro(c.codigo), saldo: saldoPorCentro[c.id]||0 };
+  }).sort(function(a,b){ return a.titular.localeCompare(b.titular) || a.codigo.localeCompare(b.codigo); });
+  function totalDe(t){ return filas.filter(function(f){ return f.titular===t; }).reduce(function(s,f){ return s+f.saldo; },0); }
+  var totalOtros = totalDe('Otros') + saldoSinCentro;
+  return { filas:filas, saldoSinCentro:saldoSinCentro, totalFranco:totalDe('Franco'), totalAna:totalDe('Ana'), totalOtros:totalOtros,
+    totalGeneral: totalDe('Franco') + totalDe('Ana') + totalOtros };
+}
+// Grupos Franco / Ana / Otros con el saldo en USD de cada CC (mismo formato que Saldos en pesos).
+function saldosUsdGruposHtml(s){
+  function grupo(titulo, total, filasGrupo, extraHtml){
+    if(!filasGrupo.length && !extraHtml) return '';
+    var items = filasGrupo.map(function(f){
+      return '<div class="saldo-item">'+
+        '<div class="saldo-item-encabezado">'+
+          '<div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1">'+renderChip(f.codigo, colorCentro(f.id), colorTextoCentro(f.id))+'<span class="saldo-item-nombre"> · '+esc(f.nombre)+'</span></div>'+
+          '<div style="display:flex;align-items:center;gap:10px;flex-shrink:0">'+logoEntidadHtml(f)+'</div>'+
+        '</div>'+
+        '<div class="saldo-item-monto">'+fmtUsd(f.saldo)+'</div>'+
+      '</div>';
+    }).join('');
+    return '<div class="saldos-grupo">'+
+      '<div class="saldos-grupo-encabezado"><div class="saldos-grupo-titulo">'+esc(titulo)+'</div><div class="saldos-grupo-total">'+fmtUsd(total)+'</div></div>'+
+      items+(extraHtml||'')+
+    '</div>';
+  }
+  var extraSinCentro = s.saldoSinCentro !== 0 ? '<div class="saldo-item"><div class="saldo-item-nombre">Movimientos en dólares sin Centro de Costo</div><div class="saldo-item-monto">'+fmtUsd(s.saldoSinCentro)+'</div></div>' : '';
+  return '<div class="saldos-grupos">'+
+    grupo('Franco', s.totalFranco, s.filas.filter(function(f){ return f.titular==='Franco'; }))+
+    grupo('Ana', s.totalAna, s.filas.filter(function(f){ return f.titular==='Ana'; }))+
+    grupo('Otros', s.totalOtros, s.filas.filter(function(f){ return f.titular==='Otros'; }), extraSinCentro)+
+  '</div>';
+}
+// Cotización del dólar blue (ARS) vía DolarApi (pública, sin key, CORS abierto). La tenencia se valúa
+// a "compra" (lo que te pagan si vendés hoy); "venta" es lo que pagás si comprás.
+async function obtenerDolarBlue(){
+  if(STATE.dolarBlueCargando) return;
+  STATE.dolarBlueCargando = true;
+  STATE.dolarBlueError = null;
+  render();
+  try{
+    var res = await fetch('https://dolarapi.com/v1/dolares/blue');
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    var data = await res.json();
+    var compra = Number(data && data.compra), venta = Number(data && data.venta);
+    if(!compra || compra<=0 || !venta || venta<=0) throw new Error('respuesta inesperada de la API');
+    STATE.dolarBlueCompra = compra;
+    STATE.dolarBlueVenta = venta;
+    STATE.dolarBlueActualizada = new Date();
+  }catch(e){
+    STATE.dolarBlueError = 'No se pudo obtener la cotización del dólar blue ('+(e.message||e)+').';
+  }
+  STATE.dolarBlueCargando = false;
+  render();
+}
+function dolarBlueInfoHtml(){
+  return '<div style="font-size:11px;color:var(--ink-soft);margin-top:4px">'+
+    (STATE.dolarBlueCompra ? 'Blue: compra $'+fmtMonto(STATE.dolarBlueCompra)+' / venta $'+fmtMonto(STATE.dolarBlueVenta)+' · actualizada a las '+STATE.dolarBlueActualizada.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})+' — ' : '')+
+    '<button class="link" data-action="actualizar-dolar-blue" style="padding:0;font-size:11px">↻ Actualizar</button>'+
+    (STATE.dolarBlueError ? '<div style="color:var(--danger);margin-top:2px">'+esc(STATE.dolarBlueError)+'</div>' : '')+
+  '</div>';
+}
+function getDolaresFormValues(){
+  function v(id){ return (document.getElementById(id)||{}).value || ''; }
+  return {
+    tipo: v('f-usd-tipo') || 'compra', fecha: v('f-usd-fecha'), cantidad: v('f-usd-cantidad'),
+    centroId: v('f-usd-centro'), montoArs: v('f-usd-monto-ars'), centroArsId: v('f-usd-centro-ars'),
+    categoriaId: v('f-usd-categoria'), subcategoriaId: v('f-usd-subcategoria'), detalle: v('f-usd-detalle')
+  };
+}
+function campoDolares(e){
+  var esCambio = e.tipo==='compra' || e.tipo==='venta';
+  function optsCentro(lista, sel){ return lista.map(function(c){ return '<option value="'+c.id+'" '+(sel===c.id?'selected':'')+'>'+esc(c.codigo)+' · '+esc(c.nombre)+'</option>'; }).join(''); }
+  var subOpciones = subcategoriasOrdenadas(STATE.subcategorias.filter(function(s){ return s.categoriaId === e.categoriaId; }))
+    .map(function(s){ return '<option value="'+s.id+'" '+(e.subcategoriaId===s.id?'selected':'')+'>'+esc(s.nombre)+'</option>'; }).join('');
+  var cantidadNum = parseFloat(e.cantidad)||0;
+  // Comprar dólares: pagás la punta "venta" del blue; venderlos: te pagan la punta "compra".
+  var cotizSugerida = e.tipo==='compra' ? STATE.dolarBlueVenta : STATE.dolarBlueCompra;
+  var sugerencia = (esCambio && cotizSugerida && cantidadNum)
+    ? '<button type="button" class="link" data-action="usar-dolar-blue" style="padding:0;font-size:11px;margin-top:4px">Usar blue de hoy ($'+fmtMonto(cotizSugerida)+' → $'+fmtMonto(cantidadNum*cotizSugerida)+')</button>'
+    : '';
+  var camposCambio = esCambio ? ''+
+    '<div class="fields-row" style="margin-top:10px">'+
+      '<div class="field"><label>'+(e.tipo==='compra'?'Pesos pagados (ARS)':'Pesos recibidos (ARS)')+'</label><input type="number" step="0.01" min="0" id="f-usd-monto-ars" value="'+esc(e.montoArs)+'" style="width:150px">'+sugerencia+'</div>'+
+      '<div class="field"><label>'+(e.tipo==='compra'?'CC de donde salen los pesos':'CC donde entran los pesos')+'</label><select id="f-usd-centro-ars"><option value="">Elegir...</option>'+optsCentro(centrosOrdenados(), e.centroArsId)+'</select></div>'+
+    '</div>' : '';
+  return ''+
+    (STATE.dolaresFormMsg ? '<div class="msg err">'+esc(STATE.dolaresFormMsg)+'</div>' : '')+
+    '<div class="fields-row">'+
+      '<div class="field"><label>Tipo</label><select id="f-usd-tipo">'+
+        ['compra','venta','ingreso','egreso'].map(function(t){ return '<option value="'+t+'" '+(e.tipo===t?'selected':'')+'>'+TIPOS_USD[t]+'</option>'; }).join('')+
+      '</select></div>'+
+      '<div class="field"><label>Fecha</label><input type="date" id="f-usd-fecha" value="'+esc(e.fecha)+'"></div>'+
+      '<div class="field"><label>Cantidad (US$)</label><input type="number" step="0.01" min="0" id="f-usd-cantidad" value="'+esc(e.cantidad)+'" style="width:130px"></div>'+
+      '<div class="field"><label>CC en dólares</label><select id="f-usd-centro"><option value="">Elegir...</option>'+optsCentro(centrosDolaresOrdenados(), e.centroId)+'</select></div>'+
+    '</div>'+
+    camposCambio+
+    '<div class="fields-row" style="margin-top:10px">'+
+      '<div class="field"><label>Categoría'+(esCambio?'':' (opcional)')+'</label><select id="f-usd-categoria"><option value="">'+(esCambio?'Elegir...':'Sin categoría')+'</option>'+
+        categoriasOrdenadas().map(function(c){ return '<option value="'+c.id+'" '+(e.categoriaId===c.id?'selected':'')+'>'+esc(c.nombre)+'</option>'; }).join('')+
+      '</select></div>'+
+      '<div class="field"><label>Subcategoría</label><select id="f-usd-subcategoria"><option value="">—</option>'+subOpciones+'</select></div>'+
+      '<div class="field"><label>Detalle (opcional)</label><input type="text" id="f-usd-detalle" value="'+esc(e.detalle)+'" style="width:200px"></div>'+
+    '</div>'+
+    (esCambio ? '<div style="font-size:11px;color:var(--ink-soft);margin-top:8px">Al guardar se crea (o actualiza) también el '+(e.tipo==='compra'?'egreso':'ingreso')+' en pesos en Movimientos, con la misma categoría. Para que no cuente como gasto o ingreso en Resumen, usá una categoría de tipo Inversión o Solo control.</div>' : '');
+}
+function renderDolares(){
+  var s = calcularSaldosUsd();
+  var editing = STATE.editing && STATE.editing.type==='usd' ? STATE.movimientosUsd.find(function(x){ return x.id===STATE.editing.id; }) : null;
+  var editingNormalizado = null;
+  if(editing){
+    var parEd = movimientoPesosDeCambio(editing);
+    editingNormalizado = {
+      tipo: tipoMovimientoUsd(editing), fecha: editing.fecha, cantidad: montoMovimiento(editing), centroId: editing.centroId,
+      montoArs: parEd ? montoMovimiento(parEd) : '', centroArsId: parEd ? parEd.centroId : '',
+      categoriaId: editing.categoriaId, subcategoriaId: editing.subcategoriaId, detalle: editing.detalle
+    };
+  }
+  var e = STATE.dolaresDraft || editingNormalizado || {tipo:'compra', fecha:fechaHoyISO(), cantidad:'', centroId:'', montoArs:'', centroArsId:'', categoriaId:'', subcategoriaId:'', detalle:''};
+
+  var formHtml = '';
+  if(editing){
+    MODAL_HTML = '<div class="modal-overlay" data-modal-backdrop="edit"><div class="modal-card">'+
+      '<h2>Editar movimiento en dólares</h2>'+
+      campoDolares(e)+
+      '<div class="fields-row" style="margin-top:14px">'+
+        '<button data-action="save-dolares" data-id="'+editing.id+'">Guardar cambios</button>'+
+        '<button class="secondary" data-action="cancel-edit">Cancelar</button>'+
+      '</div>'+
+    '</div></div>';
+  } else {
+    formHtml = '<div class="card">'+
+      '<h2>Nuevo movimiento en dólares</h2>'+
+      (centrosDolaresOrdenados().length ? campoDolares(e)+'<div class="fields-row" style="margin-top:14px"><button data-action="save-dolares" data-id="">Agregar</button></div>'
+        : '<div class="empty">Todavía no hay Centros de Costo en dólares. En ABM → Centros de Costo elegí la moneda "Dólares" (o "Pesos y dólares") para las cuentas que tengan caja en USD.</div>')+
+    '</div>';
+  }
+
+  var lista = STATE.movimientosUsd.slice().sort(function(a,b){ return (b.fecha||'').localeCompare(a.fecha||''); });
+  var rows = lista.map(function(m){
+    var tipo = tipoMovimientoUsd(m);
+    var entra = tipo==='compra' || tipo==='ingreso';
+    var cant = montoMovimiento(m);
+    var par = movimientoPesosDeCambio(m);
+    var montoArs = par ? montoMovimiento(par) : 0;
+    return '<tr>'+
+      '<td class="mono" data-label="Fecha">'+esc(fechaISOaDDMMAAAA(m.fecha)||m.fecha||'')+'</td>'+
+      '<td data-label="Tipo">'+(entra?'<i class="bi bi-arrow-up-circle" style="color:var(--accent)"></i> ':'<i class="bi bi-arrow-down-circle" style="color:var(--danger)"></i> ')+TIPOS_USD_CORTO[tipo]+'</td>'+
+      '<td data-label="Centro">'+(m.centroId?renderChip(nombreCentro(m.centroId).split(' · ')[0], colorCentro(m.centroId), colorTextoCentro(m.centroId)):'—')+'</td>'+
+      '<td class="num mono" data-label="US$">'+(entra?'+':'−')+fmtMonto(cant)+'</td>'+
+      '<td class="num mono" data-label="Pesos">'+(par?fmtMonto(montoArs)+' <span style="font-size:11px;color:var(--ink-soft)">'+esc(nombreCentro(par.centroId).split(' · ')[0])+'</span>':(m.cambioId?'<span title="El movimiento en pesos vinculado ya no existe">—</span>':'—'))+'</td>'+
+      '<td class="num mono" data-label="Cotización">'+(par && cant ? fmtMonto(montoArs/cant) : '—')+'</td>'+
+      '<td data-label="Categoría">'+(m.categoriaId?esc(nombreCategoria(m.categoriaId)):'—')+'</td>'+
+      '<td data-label="Detalle">'+esc(m.detalle||'')+'</td>'+
+      '<td class="actions-cell"><button class="icon-btn" data-action="edit-dolares" data-id="'+m.id+'" title="Editar" aria-label="Editar"><i class="bi bi-pencil"></i></button>'+
+      '<button class="icon-btn icon-btn-danger" data-action="del-dolares" data-id="'+m.id+'" title="Borrar" aria-label="Borrar"><i class="bi bi-trash"></i></button></td>'+
+    '</tr>';
+  }).join('');
+
+  return ''+
+  '<div class="card">'+
+    '<h2><i class="bi bi-currency-dollar"></i> Tenencia de dólares</h2>'+
+    '<div style="font-size:12px;color:var(--ink-soft);margin-top:2px">Registrá acá las compras y ventas de dólares y, si hace falta, algún ingreso o gasto en USD. Una compra o venta mueve los dólares en el CC en dólares y crea sola la contraparte en pesos en Movimientos. Los montos en dólares no se suman a ningún informe en pesos.</div>'+
+  '</div>'+
+  '<div class="summary-cards">'+
+    '<div class="summary-card"><div class="label">Tenencia total</div><div class="value">'+fmtUsd(s.totalGeneral)+'</div></div>'+
+    '<div class="summary-card"><div class="label">Valor en pesos (dólar blue)</div>'+
+      (STATE.dolarBlueCargando ? '<div class="value" style="font-size:14px;color:var(--ink-soft)">Consultando…</div>'
+        : STATE.dolarBlueCompra ? '<div class="value">$'+fmtMonto(s.totalGeneral*STATE.dolarBlueCompra)+'</div>'
+        : '<div class="value" style="font-size:14px;color:var(--ink-soft)">Sin cotización</div>')+
+      dolarBlueInfoHtml()+
+    '</div>'+
+  '</div>'+
+  '<div class="card"><h3>Saldo en dólares por Centro de Costo</h3>'+
+    (s.filas.length || s.saldoSinCentro!==0 ? saldosUsdGruposHtml(s) : '<div class="empty">Todavía no hay Centros de Costo en dólares.</div>')+
+  '</div>'+
+  formHtml+
+  '<div class="card">'+
+    '<h3>Movimientos en dólares ('+lista.length+')</h3>'+
+    (lista.length ? '<table class="table tabla-movil"><thead><tr><th>Fecha</th><th>Tipo</th><th>Centro</th><th class="num">US$</th><th class="num">Pesos</th><th class="num">Cotización</th><th>Categoría</th><th>Detalle</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>' : '<div class="empty">Todavía no cargaste ningún movimiento en dólares.</div>')+
+  '</div>';
+}
+
 // ===================== USDT (tenencia + ventas que se acreditan en pesos) =====================
 function getUsdtFormValues(){
   return {
@@ -3889,11 +4153,13 @@ function bindEvents(){
   document.querySelectorAll('.tab').forEach(function(t){
     t.addEventListener('click', function(){
       var tabId = t.getAttribute('data-tab');
-      STATE.activeTab = tabId; STATE.editing = null; STATE.movDraft = null; STATE.usdtDraft = null; STATE.usdtFormMsg = null; STATE.usdtIngresoOpcionalesAbierto = false; STATE.nuevoMovAbierto = false; STATE.menuMovilAbierto = false; STATE.multiSelectAbierto = null; STATE.bulkEditMovAbierto = false; STATE.movSeleccionados = [];
+      STATE.activeTab = tabId; STATE.editing = null; STATE.movDraft = null; STATE.usdtDraft = null; STATE.usdtFormMsg = null; STATE.usdtIngresoOpcionalesAbierto = false; STATE.dolaresDraft = null; STATE.dolaresFormMsg = null; STATE.nuevoMovAbierto = false; STATE.menuMovilAbierto = false; STATE.multiSelectAbierto = null; STATE.bulkEditMovAbierto = false; STATE.movSeleccionados = [];
       render();
       // Primera vez que se entra a USDT (o a Resumen/Flujo, que valúan a la cotización de hoy el USDT de
       // sueldo todavía sin vender) en esta sesión: traer la cotización sola, sin que haya que tocar "Actualizar".
       if((tabId==='usdt' || tabId==='resumen' || tabId==='flujo') && STATE.usdtCotizacionBid===null && !STATE.usdtCotizacionCargando) obtenerCotizacionUsdt();
+      // Idem el dólar blue, que valúa la tenencia en USD (Dólares, Saldos y la foto de Resumen).
+      if((tabId==='dolares' || tabId==='resumen' || tabId==='saldos') && STATE.dolarBlueCompra===null && !STATE.dolarBlueCargando) obtenerDolarBlue();
     });
   });
 
@@ -4045,6 +4311,23 @@ function bindEvents(){
       render();
     });
   }
+
+  // Formulario de Dólares: el Tipo muestra/oculta los campos de pesos, la Categoría refresca las
+  // subcategorías, y el CC en dólares propone el mismo CC para los pesos si es "Pesos y dólares".
+  ['f-usd-tipo','f-usd-categoria','f-usd-centro'].forEach(function(idSel){
+    var sel = document.getElementById(idSel);
+    if(!sel) return;
+    sel.addEventListener('change', function(){
+      var draft = getDolaresFormValues();
+      if(idSel==='f-usd-categoria') draft.subcategoriaId = '';
+      if(idSel==='f-usd-centro'){
+        var cUsd = STATE.centros.find(function(c){ return c.id===draft.centroId; });
+        if(!draft.centroArsId && cUsd && monedaCentro(cUsd)==='AMBAS') draft.centroArsId = cUsd.id;
+      }
+      STATE.dolaresDraft = draft;
+      render();
+    });
+  });
 
   // Formulario de USDT: mostrar/ocultar los campos de venta al cambiar el Tipo,
   // y refrescar las subcategorías disponibles al cambiar la Categoría.
@@ -4273,6 +4556,7 @@ async function handleAction(action, id){
     STATE.comboAbierto = null; STATE.comboBusqueda = '';
     STATE.bulkEditMovAbierto = false; STATE.bulkEditMovMsg = null;
     STATE.usdtFormMsg = null; STATE.movFieldErrors = null;
+    STATE.dolaresDraft = null; STATE.dolaresFormMsg = null;
     render(); return;
   }
   if(action==='abrir-nuevo-mov'){
@@ -4381,15 +4665,19 @@ async function handleAction(action, id){
     var nombre = document.getElementById('f-centro-nombre').value.trim();
     var colorCentroInput = document.getElementById('f-centro-color').value;
     var entidadCentroInput = document.getElementById('f-centro-entidad').value;
+    var monedaCentroInput = (document.getElementById('f-centro-moneda')||{}).value || 'ARS';
     if(!codigo || !nombre) return;
     STATE.dbError = null;
     try{
       if(id){
-        await dbUpdate('centros', id, {codigo:codigo, nombre:nombre, color:colorCentroInput, entidad:entidadCentroInput||null});
         var c = STATE.centros.find(function(x){return x.id===id;});
-        c.codigo = codigo; c.nombre = nombre; c.color = colorCentroInput; c.entidad = entidadCentroInput;
+        var camposCentro = {codigo:codigo, nombre:nombre, color:colorCentroInput, entidad:entidadCentroInput||null};
+        // Como en toDbCentro: la moneda solo viaja si es (o era) distinta de pesos.
+        if(monedaCentroInput!=='ARS' || monedaCentro(c)!=='ARS') camposCentro.moneda = monedaCentroInput;
+        await dbUpdate('centros', id, camposCentro);
+        c.codigo = codigo; c.nombre = nombre; c.color = colorCentroInput; c.entidad = entidadCentroInput; c.moneda = monedaCentroInput;
       } else {
-        var nuevoC = {id:uid(), codigo:codigo, nombre:nombre, color:colorCentroInput, entidad:entidadCentroInput};
+        var nuevoC = {id:uid(), codigo:codigo, nombre:nombre, color:colorCentroInput, entidad:entidadCentroInput, moneda:monedaCentroInput};
         await dbInsert('centros', toDbCentro(nuevoC));
         STATE.centros.push(nuevoC);
       }
@@ -4540,7 +4828,7 @@ async function handleAction(action, id){
       centros: STATE.centros,
       categorias: STATE.categorias,
       subcategorias: STATE.subcategorias,
-      movimientos: STATE.movimientos,
+      movimientos: STATE.movimientos.concat(STATE.movimientosUsd),
       vencimientos: STATE.vencimientos
     };
     var blob = new Blob([JSON.stringify(backupObj, null, 2)], {type:'application/json'});
@@ -4584,7 +4872,12 @@ async function handleAction(action, id){
       if((datosR.centros||[]).length) await dbUpsert('centros', datosR.centros.map(toDbCentro));
       if((datosR.categorias||[]).length) await dbUpsert('categorias', datosR.categorias.map(toDbCategoria));
       if((datosR.subcategorias||[]).length) await dbUpsert('subcategorias', datosR.subcategorias.map(toDbSubcategoria));
-      if((datosR.movimientos||[]).length) await dbUpsert('movimientos', datosR.movimientos.map(toDbMovimiento));
+      // En dos tandas (pesos / dólares): toDbMovimiento solo manda "moneda" en los USD, y un upsert
+      // mezclado dejaría esa columna en null para los de pesos.
+      var movsR = datosR.movimientos||[];
+      var movsRArs = movsR.filter(function(m){ return m.moneda!=='USD'; }), movsRUsd = movsR.filter(function(m){ return m.moneda==='USD'; });
+      if(movsRArs.length) await dbUpsert('movimientos', movsRArs.map(toDbMovimiento));
+      if(movsRUsd.length) await dbUpsert('movimientos', movsRUsd.map(toDbMovimiento));
       if((datosR.vencimientos||[]).length) await dbUpsert('vencimientos', datosR.vencimientos.map(toDbVencimiento));
       await cargarTodo();
       STATE.saldosDirty = true;
@@ -4837,7 +5130,8 @@ async function handleAction(action, id){
         var movEditado = Object.assign({}, mov, { cuotas: etiquetaCuota(1) });
         await dbUpdate('movimientos', id, toDbMovimiento(Object.assign({id:id}, movEditado)));
         var idx = STATE.movimientos.findIndex(function(m){return m.id===id;});
-        if(idx>-1) STATE.movimientos[idx] = Object.assign({id:id}, movEditado);
+        // cambioId se conserva: si es la pata en pesos de una compra/venta de dólares, sigue vinculada.
+        if(idx>-1) STATE.movimientos[idx] = Object.assign({id:id, cambioId: STATE.movimientos[idx].cambioId||''}, movEditado);
 
         if(esTecMov && centroDestino){
           // faltaba la línea espejo (típico de movimientos importados): crearla ahora, sin tocar ninguna otra existente
@@ -5271,6 +5565,93 @@ async function handleAction(action, id){
       STATE.dbError = 'No se pudo emitir la factura: '+(e.message||e);
     }
     STATE.facturaLoadingId = null;
+    render(); return;
+  }
+
+  // ---- DÓLARES ----
+  if(action==='actualizar-dolar-blue'){ await obtenerDolarBlue(); return; }
+  if(action==='usar-dolar-blue'){
+    var draftBlue = getDolaresFormValues();
+    var cotizBlue = draftBlue.tipo==='compra' ? STATE.dolarBlueVenta : STATE.dolarBlueCompra;
+    var cantBlue = parseFloat(draftBlue.cantidad)||0;
+    if(cantBlue>0 && cotizBlue) draftBlue.montoArs = String(Math.round(cantBlue*cotizBlue*100)/100);
+    STATE.dolaresDraft = draftBlue;
+    render(); return;
+  }
+  if(action==='edit-dolares'){ STATE.editing = {type:'usd', id:id}; STATE.dolaresDraft = null; STATE.dolaresFormMsg = null; render(); return; }
+  if(action==='del-dolares'){
+    var usdBorrar = STATE.movimientosUsd.find(function(x){ return x.id===id; });
+    var avisoPar = movimientoPesosDeCambio(usdBorrar) ? ' Esto también borra el movimiento en pesos vinculado en Movimientos.' : '';
+    STATE.confirmState = { message:'¿Borrar este movimiento en dólares?'+avisoPar, action:'del-dolares-do', id:id };
+    render(); return;
+  }
+  if(action==='del-dolares-do'){
+    try{
+      var parBorrar = movimientoPesosDeCambio(STATE.movimientosUsd.find(function(x){ return x.id===id; }));
+      if(parBorrar){
+        await dbDelete('movimientos', parBorrar.id);
+        STATE.movimientos = STATE.movimientos.filter(function(m){ return m.id!==parBorrar.id; });
+        STATE.saldosDirty = true;
+      }
+      await dbDelete('movimientos', id);
+      STATE.movimientosUsd = STATE.movimientosUsd.filter(function(m){ return m.id!==id; });
+    }catch(e){ STATE.dbError = 'No se pudo borrar el movimiento en dólares: '+(e.message||e); }
+    render(); return;
+  }
+  if(action==='save-dolares'){
+    var vD = getDolaresFormValues();
+    STATE.dolaresDraft = vD;
+    var cantD = Math.abs(parseFloat(vD.cantidad))||0;
+    if(!vD.fecha || !cantD || !vD.centroId){
+      STATE.dolaresFormMsg = 'Completá al menos: fecha, cantidad de dólares (mayor a 0) y CC en dólares.';
+      render(); return;
+    }
+    var esCambioD = vD.tipo==='compra' || vD.tipo==='venta';
+    var montoArsD = Math.abs(parseFloat(vD.montoArs))||0;
+    if(esCambioD && (!montoArsD || !vD.centroArsId || !vD.categoriaId)){
+      STATE.dolaresFormMsg = 'Para una '+vD.tipo+' completá también: pesos, CC en pesos y Categoría.';
+      render(); return;
+    }
+    STATE.dolaresFormMsg = null; STATE.dbError = null;
+    var entraD = vD.tipo==='compra' || vD.tipo==='ingreso';
+    var existenteD = id ? STATE.movimientosUsd.find(function(x){ return x.id===id; }) : null;
+    var parPrevio = movimientoPesosDeCambio(existenteD);
+    var cambioIdD = esCambioD ? ((existenteD && existenteD.cambioId) || uid()) : '';
+    var proveedorD = esCambioD ? (vD.tipo==='compra' ? 'Compra USD' : 'Venta USD') : '';
+    var movUsd = {
+      id: id || uid(), fecha: vD.fecha, centroId: vD.centroId, categoriaId: vD.categoriaId, subcategoriaId: vD.subcategoriaId,
+      proveedor: proveedorD, detalle: vD.detalle, ingreso: entraD?cantD:0, egreso: entraD?0:cantD, tarjeta:false,
+      fechaConsumo:'', tarjetaMarca:'', cuotas:'', moneda:'USD', cambioId: cambioIdD
+    };
+    var movArs = esCambioD ? {
+      id: parPrevio ? parPrevio.id : uid(), fecha: vD.fecha, centroId: vD.centroArsId, categoriaId: vD.categoriaId, subcategoriaId: vD.subcategoriaId,
+      proveedor: proveedorD, detalle: (vD.detalle?vD.detalle+' — ':'')+(vD.tipo==='compra'?'Compra ':'Venta ')+fmtUsd(cantD)+' (cotización $'+fmtMonto(montoArsD/cantD)+')',
+      ingreso: entraD?0:montoArsD, egreso: entraD?montoArsD:0, tarjeta:false, fechaConsumo:'', tarjetaMarca:'', cuotas:'', moneda:'ARS', cambioId: cambioIdD
+    } : null;
+    try{
+      if(existenteD){
+        var camposUsd = toDbMovimiento(movUsd);
+        if(!cambioIdD && existenteD.cambioId) camposUsd.cambio_id = null; // pasó de compra/venta a ingreso/gasto
+        await dbUpdate('movimientos', id, camposUsd);
+        Object.assign(existenteD, movUsd);
+      } else {
+        await dbInsert('movimientos', toDbMovimiento(movUsd));
+        STATE.movimientosUsd.push(movUsd);
+      }
+      if(movArs && parPrevio){
+        await dbUpdate('movimientos', parPrevio.id, toDbMovimiento(movArs));
+        Object.assign(parPrevio, movArs);
+      } else if(movArs){
+        await dbInsert('movimientos', toDbMovimiento(movArs));
+        STATE.movimientos.push(movArs);
+      } else if(parPrevio){
+        await dbDelete('movimientos', parPrevio.id);
+        STATE.movimientos = STATE.movimientos.filter(function(m){ return m.id!==parPrevio.id; });
+      }
+      STATE.saldosDirty = true;
+      STATE.editing = null;
+      STATE.dolaresDraft = null;
+    }catch(e){ STATE.dbError = 'No se pudo guardar el movimiento en dólares: '+(e.message||e); }
     render(); return;
   }
 
