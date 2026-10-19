@@ -92,3 +92,32 @@ describe('Flujo de Caja: capacidad de ahorro promedio', () => {
     restore();
   });
 });
+
+describe('Flujo de Caja: dólares', () => {
+  it('los gastos en USD restan al blue; los ingresos en USD (ahorro/saldo inicial) no suman; el saldo incluye la tenencia', () => {
+    const win = loadApp();
+    seedBase(win);
+    const restore = mockNow(win, '2026-04-15T12:00:00');
+    win.STATE.centros.push({ id: 'c-da', codigo: 'DA', nombre: 'Dólares Ana', moneda: 'USD' });
+    win.STATE.movimientos = [
+      { id: 'm1', fecha: '2026-01-10', centroId: 'c-ef', categoriaId: 'cat-suel', proveedor: 'AdvertMind', ingreso: 100000, egreso: 0 }
+    ];
+    win.STATE.usdtMovimientos = [];
+    win.STATE.movimientosUsd = [
+      { id: 'u1', fecha: '2026-01-05', centroId: 'c-da', categoriaId: '', ingreso: 500, egreso: 0, moneda: 'USD', cambioId: '' },
+      { id: 'u2', fecha: '2026-01-20', centroId: 'c-da', categoriaId: 'cat-super', ingreso: 0, egreso: 10, moneda: 'USD', cambioId: '' }
+    ];
+    win.STATE.dolarBlueCompra = 1000;
+    win.STATE.dolarBlueVenta = 1020;
+
+    expect(win.capacidadAhorroPromedio('3m').promedio).toBe(90000);
+
+    win.STATE.activeTab = 'flujo';
+    win.render();
+    const html = win.document.getElementById('app').innerHTML;
+    expect(html).toContain('US$ 490,00'); // tenencia: 500 - 10
+    expect(html).toContain('590.000,00'); // 100.000 en pesos + 490 USD a $1.000
+
+    restore();
+  });
+});

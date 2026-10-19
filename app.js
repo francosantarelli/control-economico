@@ -424,7 +424,7 @@ async function mostrarApp(){
   // La app abre en Resumen, que valúa el USDT de sueldo sin vender a la cotización de hoy:
   // traerla de entrada igual que cuando se entra a la pestaña con un clic.
   if((STATE.activeTab==='usdt' || STATE.activeTab==='resumen' || STATE.activeTab==='flujo') && STATE.usdtCotizacionBid===null && !STATE.usdtCotizacionCargando) obtenerCotizacionUsdt();
-  if((STATE.activeTab==='dolares' || STATE.activeTab==='resumen' || STATE.activeTab==='saldos') && STATE.dolarBlueCompra===null && !STATE.dolarBlueCargando) obtenerDolarBlue();
+  if((STATE.activeTab==='dolares' || STATE.activeTab==='resumen' || STATE.activeTab==='saldos' || STATE.activeTab==='flujo') && STATE.dolarBlueCompra===null && !STATE.dolarBlueCargando) obtenerDolarBlue();
 }
 
 function mostrarLogin(msg){
@@ -3430,12 +3430,36 @@ function capacidadAhorroPromedio(ventana){
     if(!usadosSet[mesSueldo]) return;
     ingresoPorMes[mesSueldo] = (ingresoPorMes[mesSueldo]||0) + (valoresUsdt[u.id]||0);
   });
+  // Gastos en dólares (no compras/ventas, que ya cuentan por su parte en pesos): son gasto corriente
+  // como cualquier otro, valuados a cotizacionUsdReferencia(). Los ingresos en USD que no vienen de
+  // una venta (saldo inicial, ahorro) no son sueldo, así que no suman.
+  var cotizUsd = cotizacionUsdReferencia();
+  STATE.movimientosUsd.forEach(function(m){
+    if(m.cambioId || !(Number(m.egreso)>0)) return;
+    if(esCategoriaFueraDeReportes(m.categoriaId)) return;
+    var mes = (m.fecha||'').slice(0,7);
+    if(!usadosSet[mes]) return;
+    var ars = (Number(m.egreso)||0)*cotizUsd;
+    if(esCategoriaInversion(m.categoriaId)) inversionPorMes[mes] = (inversionPorMes[mes]||0) + ars;
+    else egresoPorMes[mes] = (egresoPorMes[mes]||0) + ars;
+  });
 
   var suma = usados.reduce(function(s,mes){
     return s + (ingresoPorMes[mes]||0) - (egresoPorMes[mes]||0);
   },0);
   var sumaInversion = usados.reduce(function(s,mes){ return s + (inversionPorMes[mes]||0); },0);
   return { promedio: suma/usados.length, inversionPromedio: sumaInversion/usados.length, meses: usados };
+}
+// Cotización para pasar dólares a pesos en Flujo de Caja: el blue compra de hoy; si todavía no se
+// pudo traer, la de la última compra/venta cargada (0 si no hay ninguna).
+function cotizacionUsdReferencia(){
+  if(STATE.dolarBlueCompra) return STATE.dolarBlueCompra;
+  var ultima = 0, fechaUltima = '';
+  STATE.movimientosUsd.forEach(function(m){
+    var par = movimientoPesosDeCambio(m), cant = montoMovimiento(m);
+    if(par && cant && (m.fecha||'') >= fechaUltima){ fechaUltima = m.fecha||''; ultima = montoMovimiento(par)/cant; }
+  });
+  return ultima;
 }
 function mesesRestantesDeuda(d){
   if(d.estado==='cancelada') return 0;
@@ -3541,6 +3565,9 @@ function renderFlujoCaja(){
   var totalCuotasActivas = deudasActivas.reduce(function(s,d){ return s+(Number(d.cuotaMensual)||0); },0);
   var margen = ahorroPromedio - totalCuotasActivas;
   var saldos = obtenerSaldos();
+  var tenenciaUsd = calcularSaldosUsd().totalGeneral;
+  var cotizUsdFlujo = cotizacionUsdReferencia();
+  var saldoUsdArs = tenenciaUsd*cotizUsdFlujo;
 
   var proyeccion = cap ? simularProyeccionFlujo(ahorroPromedio, horizonte) : [];
   var mesesProy = proyeccion.map(function(f){ return f.mes; });
@@ -3566,11 +3593,13 @@ function renderFlujoCaja(){
   var summaryHtml = '<div class="summary-cards">'+
     '<div class="summary-card"><div class="label">Capacidad de ahorro promedio / mes</div><div class="value '+(ahorroPromedio>=0?'ingreso':'egreso')+'">'+(cap?fmtMonto(ahorroPromedio):'—')+'</div></div>'+
     '<div class="summary-card"><div class="label">Inversión en '+esc(etiquetaInversion())+' promedio / mes</div><div class="value">'+(cap?fmtMonto(cap.inversionPromedio):'—')+'</div></div>'+
-    '<div class="summary-card"><div class="label">Saldo actual total</div><div class="value">'+fmtMonto(saldos.totalGeneral)+'</div></div>'+
+    '<div class="summary-card"><div class="label">Saldo actual total</div><div class="value">'+fmtMonto(saldos.totalGeneral + saldoUsdArs)+'</div>'+
+      (tenenciaUsd ? '<div style="font-size:11px;color:var(--ink-soft);margin-top:2px">Pesos '+fmtMonto(saldos.totalGeneral)+' + '+fmtUsd(tenenciaUsd)+(cotizUsdFlujo ? ' (≈ '+fmtMonto(saldoUsdArs)+' a $'+fmtMonto(cotizUsdFlujo)+')' : ' (sin cotización: no se suman)')+'</div>' : '')+
+    '</div>'+
     '<div class="summary-card"><div class="label">Cuotas de deudas activas / mes</div><div class="value egreso">'+fmtMonto(totalCuotasActivas)+'</div></div>'+
     '<div class="summary-card"><div class="label">Margen libre / mes</div><div class="value '+(margen>=0?'ingreso':'egreso')+'">'+fmtMonto(margen)+'</div></div>'+
   '</div>'+
-  (cap ? '<div style="font-size:11px;color:var(--ink-soft);margin:-10px 0 18px">Promedio calculado sobre '+cap.meses.length+' mes(es) cerrados: '+cap.meses.map(mesLabelCorto).join(', ')+'. Sueldo menos gastos corrientes, sin contar TEC ni '+esc(etiquetaInversion())+': las categorías de tipo Inversión se muestran aparte (a diferencia del Saldo de Resumen, que sí las resta).</div>' : '<div class="empty" style="margin:-6px 0 18px">Todavía no hay ningún mes cerrado con movimientos cargados para calcular un promedio (el mes en curso no cuenta).</div>')+
+  (cap ? '<div style="font-size:11px;color:var(--ink-soft);margin:-10px 0 18px">Promedio calculado sobre '+cap.meses.length+' mes(es) cerrados: '+cap.meses.map(mesLabelCorto).join(', ')+'. Sueldo menos gastos corrientes, sin contar TEC ni '+esc(etiquetaInversion())+': las categorías de tipo Inversión se muestran aparte (a diferencia del Saldo de Resumen, que sí las resta). Los gastos en dólares se suman a los gastos, pasados a pesos al blue.</div>' : '<div class="empty" style="margin:-6px 0 18px">Todavía no hay ningún mes cerrado con movimientos cargados para calcular un promedio (el mes en curso no cuenta).</div>')+
   (cap && margen<0 ? '<div class="msg err" style="margin:-6px 0 18px">Las cuotas de las deudas activas superan la capacidad de ahorro promedio: con el ritmo actual no alcanzan para cubrirlas todas.</div>' : '');
 
   var lista = STATE.deudas.slice().sort(function(a,b){
@@ -4157,7 +4186,7 @@ function bindEvents(){
       // sueldo todavía sin vender) en esta sesión: traer la cotización sola, sin que haya que tocar "Actualizar".
       if((tabId==='usdt' || tabId==='resumen' || tabId==='flujo') && STATE.usdtCotizacionBid===null && !STATE.usdtCotizacionCargando) obtenerCotizacionUsdt();
       // Idem el dólar blue, que valúa la tenencia en USD (Dólares, Saldos y la foto de Resumen).
-      if((tabId==='dolares' || tabId==='resumen' || tabId==='saldos') && STATE.dolarBlueCompra===null && !STATE.dolarBlueCargando) obtenerDolarBlue();
+      if((tabId==='dolares' || tabId==='resumen' || tabId==='saldos' || tabId==='flujo') && STATE.dolarBlueCompra===null && !STATE.dolarBlueCargando) obtenerDolarBlue();
     });
   });
 
