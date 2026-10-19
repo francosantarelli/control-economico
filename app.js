@@ -489,6 +489,11 @@ function esVentaUsdtPendiente(m){
 function esSubcategoriaVentaUsdt(subcategoriaId){
   return (nombreSubcategoria(subcategoriaId)||'').trim()==='Venta USDT';
 }
+// Subcategoría "Venta USDT" (hoy dentro de Sueldo): el ingreso en pesos de toda venta de USDT se
+// clasifica ahí solo, sin elegirlo a mano, para que no termine en otra categoría y confunda.
+function subcategoriaVentaUsdt(){
+  return STATE.subcategorias.find(function(s){ return (s.nombre||'').trim()==='Venta USDT'; }) || null;
+}
 // Todo ingreso de la pestaña USDT cuenta como Sueldo en Resumen y Flujo de caja (es como se cobra
 // el sueldo de Ani). Los pesos que después entran al vender ese USDT (movimiento vinculado a una
 // venta, o con subcategoría "Venta USDT") no se vuelven a contar: es el mismo sueldo.
@@ -3062,9 +3067,11 @@ function renderGrillaMensual(movs, rango){
 
   var datos = {}, totalesPorMes = {}, totalesPorMesSinInversion = {}, totalesPorCategoria = {}, granTotal = 0, granTotalSinInversion = 0;
 
+  var idsVentaUsdt = idsMovimientosDeVentaUsdt();
   movs.forEach(function(m){
     if(esCategoriaFueraDeReportes(m.categoriaId)) return;
     if(esCategoriaSueldo(m.categoriaId)) return;
+    if(esIngresoPorVentaUsdt(m, idsVentaUsdt)) return; // los pesos de vender USDT son el mismo Sueldo, aunque tengan otra categoría
     var neto = (Number(m.ingreso)||0) - (Number(m.egreso)||0);
     if(neto===0) return;
     var mes = (m.fecha||'').slice(0,7);
@@ -3983,7 +3990,7 @@ function renderDolares(){
 
 // ===================== USDT (tenencia + ventas que se acreditan en pesos) =====================
 function getUsdtFormValues(){
-  return {
+  var v = {
     tipo: (document.getElementById('f-usdt-tipo')||{}).value || 'ingreso',
     fecha: (document.getElementById('f-usdt-fecha')||{}).value || '',
     cantidad: (document.getElementById('f-usdt-cantidad')||{}).value || '',
@@ -3993,6 +4000,9 @@ function getUsdtFormValues(){
     categoriaId: (document.getElementById('f-usdt-categoria')||{}).value || '',
     subcategoriaId: (document.getElementById('f-usdt-subcategoria')||{}).value || ''
   };
+  var subVenta = v.tipo==='venta' ? subcategoriaVentaUsdt() : null;
+  if(subVenta){ v.categoriaId = subVenta.categoriaId; v.subcategoriaId = subVenta.id; }
+  return v;
 }
 function campoUsdt(e){
   var esVenta = e.tipo === 'venta';
@@ -4003,6 +4013,10 @@ function campoUsdt(e){
       categoriasOrdenadas().map(function(c){ return '<option value="'+c.id+'" '+(e.categoriaId===c.id?'selected':'')+'>'+esc(c.nombre)+'</option>'; }).join('')+
     '</select></div>'+
     '<div class="field"><label>Subcategoría</label><select id="f-usdt-subcategoria"><option value="">—</option>'+subOpciones+'</select></div>';
+  var subVenta = esVenta ? subcategoriaVentaUsdt() : null;
+  if(subVenta){
+    categoriaSubHtml = '<div class="field"><label>Categoría</label><div style="padding:9px 0;font-size:13px">'+esc(nombreCategoria(subVenta.categoriaId))+' › '+esc(subVenta.nombre)+'</div></div>';
+  }
   var camposTipo;
   if(esVenta){
     camposTipo = ''+
@@ -4013,7 +4027,7 @@ function campoUsdt(e){
         '</select></div>'+
         categoriaSubHtml+
       '</div>'+
-      '<div style="font-size:11px;color:var(--ink-soft);margin-top:8px">Al guardar se crea (o actualiza) automáticamente un ingreso en pesos en Movimientos, por el monto recibido, en el Centro de Costo y Categoría elegidos acá.</div>';
+      '<div style="font-size:11px;color:var(--ink-soft);margin-top:8px">Al guardar se crea (o actualiza) automáticamente un ingreso en pesos en Movimientos, por el monto recibido, en el Centro de Costo elegido acá'+(subVenta?' y con categoría '+esc(nombreCategoria(subVenta.categoriaId))+' › '+esc(subVenta.nombre)+' (no se cuenta de nuevo como Sueldo: ya se contó al ingresar el USDT)':' y la Categoría elegida')+'.</div>';
   } else {
     var cantidadNum = parseFloat(e.cantidad)||0;
     var sugerenciaCotizacion = STATE.usdtCotizacionBid && cantidadNum
