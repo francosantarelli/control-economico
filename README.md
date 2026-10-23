@@ -2,6 +2,10 @@
 
 App de control de ingresos/egresos, movimientos, vencimientos y resumen, conectada a Supabase.
 
+## Documentación
+- [Guía de uso](docs/GUIA-DE-USO.md) - cómo usar cada pestaña de la app (para quien la usa a diario).
+- [Instalación y operación](docs/INSTALACION-Y-OPERACION.md) - levantar la base, usuarios, deploy, backup diario a Drive, facturación ARCA y tests (para quien la administra).
+
 ## Archivos
 - `index.html` - estructura de la página (login + contenedor de la app). Se publica directo con GitHub Pages.
 - `style.css` - estilos de toda la app.
