@@ -143,7 +143,7 @@ Proyecta tu ahorro acumulado a futuro.
 Registra tu tenencia de USDT.
 
 - **Ingreso:** cantidad de USDT recibida (con datos opcionales).
-- **Venta:** indicás cuántos USDT vendiste y cuántos pesos recibiste; la app **resta de la tenencia y crea sola el ingreso en pesos** en Movimientos (Sueldo › Venta USDT). No hay que cargarlo dos veces.
+- **Venta:** indicás cuántos USDT vendiste y cuántos pesos recibiste; la app **resta de la tenencia y crea sola el ingreso en pesos** en Movimientos (categoría Venta USDT). No hay que cargarlo dos veces.
 - **Desde un movimiento existente:** si ya tenés el ingreso en pesos, usá “Generar movimiento USDT” sobre ese movimiento e indicá cuántos USDT eran; la app calcula la cotización.
 - **Cotización:** botón para actualizarla; se usa para valuar la tenencia en pesos.
 - **Facturación ARCA:** en Movimientos, las ventas de USDT tienen un botón para emitir una **Factura C a Consumidor Final** ante ARCA. Antes de emitir valida que no se supere el tope de facturación de tu categoría de Monotributo (acumulado de los últimos 12 meses). Una vez emitida podés ver el comprobante. Requiere la configuración descripta en [INSTALACION-Y-OPERACION.md](INSTALACION-Y-OPERACION.md#facturación-arca).

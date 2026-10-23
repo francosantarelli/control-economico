@@ -72,3 +72,29 @@ describe('Flujo de Caja: Saldo actual total incluye el USDT', () => {
     expect(card.textContent).toContain('100,00 USDT (≈ 100.000,00 a $1.000,00)');
   });
 });
+
+describe('USDT: venta con categoría propia "Venta USDT"', () => {
+  it('con la categoría nueva, el movimiento queda en esa categoría sin subcategoría y no se cuenta como Sueldo', async () => {
+    const win = loadApp();
+    seedBase(win);
+    win.STATE.categorias.push({ id: 'cat-venta-usdt', nombre: 'Venta USDT', tipo: 'sueldo' });
+    win.STATE.usdtMovimientos = [];
+    win.sb = mockSb().client;
+    win.STATE.activeTab = 'usdt';
+    win.STATE.usdtDraft = { tipo: 'venta', fecha: '', cantidad: '', detalle: '', montoArs: '', centroId: '', categoriaId: '', subcategoriaId: '' };
+    win.render();
+    expect(win.document.body.textContent).toContain('Venta USDT');
+
+    setVal(win, 'f-usdt-fecha', '2026-10-01');
+    setVal(win, 'f-usdt-cantidad', '100');
+    setVal(win, 'f-usdt-monto-ars', '130000');
+    setVal(win, 'f-usdt-centro', 'c-ef');
+    await win.handleAction('save-usdt', '');
+
+    expect(win.STATE.usdtFormMsg).toBeNull();
+    expect(win.STATE.movimientos[0].categoriaId).toBe('cat-venta-usdt');
+    expect(win.STATE.movimientos[0].subcategoriaId).toBeFalsy();
+    expect(win.esIngresoPorVentaUsdt(win.STATE.movimientos[0], {})).toBe(true);
+    expect(win.esVentaUsdtFacturable({ id: 'x', categoriaId: 'cat-venta-usdt', ingreso: 1000 })).toBe(true);
+  });
+});

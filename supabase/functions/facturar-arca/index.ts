@@ -288,9 +288,11 @@ Deno.serve(async (req) => {
 
   try {
     const { data: mov, error: errMov } = await sb
-      .from("movimientos").select("*, subcategorias(nombre)").eq("id", movimientoId).single();
+      .from("movimientos").select("*, subcategorias(nombre), categorias(nombre)").eq("id", movimientoId).single();
     if (errMov || !mov) return jsonRes(400, { factura: null, error: "No se encontró el movimiento" });
-    const esVentaUsdt = (mov.subcategorias?.nombre || "").trim() === "Venta USDT";
+    // Venta USDT es una categoría; se acepta también la subcategoría anterior (dentro de Sueldo).
+    const esVentaUsdt = (mov.categorias?.nombre || "").trim() === "Venta USDT" ||
+      (mov.subcategorias?.nombre || "").trim() === "Venta USDT";
     const importe = Number(mov.ingreso) || 0;
     if (!esVentaUsdt || importe <= 0) {
       return jsonRes(400, { factura: null, error: "Este movimiento no es una Venta USDT facturable" });
