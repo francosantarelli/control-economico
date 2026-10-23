@@ -11,7 +11,7 @@ var STATE = { centros: [], categorias: [], subcategorias: [], movimientos: [], v
   vencFormMsg:null, dbError:null, saldosCache:null, saldosDirty:true, gimnasioMsg:null,
   usuarioEmail:null, efectivoAbierto:false, efectivoMsg:null, efectivoCategoriaId:'', efectivoDraft:null, backupMsg:null, backupPendiente:null, menuMovilAbierto:false, incompletosSnapshotIds:null,
   usdtVentaMovId:null, usdtVentaMovMsg:null, usdtVentaMovCantidad:'',
-  reglas: [], reglaFormMsg:null, reglasPaginaActual:1,
+  reglas: [], reglaFormMsg:null, reglasPaginaActual:1, reglasPorPagina:leerTamPagina('controlReglasPorPagina', [15,30,50,100], 15), movPorPagina:leerTamPagina('controlMovPorPagina', [25,50,100,200], 50),
   nuevoMovAbierto:false, movDraftCentroDestinoId:'', comboAbierto:null, comboBusqueda:'', comboHighlight:0,
   movSeleccionados:[], bulkEditMovAbierto:false, bulkEditMovMsg:null, movPaginaActual:1, gruposAbiertos:{},
   tema: (function(){ try{ return localStorage.getItem('controlTema')==='oscuro' ? 'oscuro' : 'claro'; }catch(e){ return 'claro'; } })(),
@@ -22,6 +22,23 @@ var STATE = { centros: [], categorias: [], subcategorias: [], movimientos: [], v
   deudaFormMsg:null, flujoVentana:'6m', flujoHorizonte:12, filtrosMovAbiertos:false };
 var MOV_PAGE_SIZE = 50;
 var REGLAS_PAGE_SIZE = 15;
+// Cantidad de registros por página elegible desde el paginador; se recuerda en el navegador.
+var OPCIONES_POR_PAGINA_MOV = [25, 50, 100, 200];
+var OPCIONES_POR_PAGINA_REGLAS = [15, 30, 50, 100];
+function leerTamPagina(clave, opciones, porDefecto){
+  try{
+    var n = parseInt(localStorage.getItem(clave), 10);
+    if(opciones.indexOf(n) !== -1) return n;
+  }catch(e){}
+  return porDefecto;
+}
+function guardarTamPagina(clave, n){ try{ localStorage.setItem(clave, String(n)); }catch(e){} }
+function selectorPorPagina(id, opciones, actual){
+  return '<label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-soft)">Por página '+
+    '<select id="'+id+'" style="width:auto;padding:4px 8px;font-size:12px">'+
+    opciones.map(function(n){ return '<option value="'+n+'"'+(n===actual?' selected':'')+'>'+n+'</option>'; }).join('')+
+    '</select></label>';
+}
 
 // ===================== FILTROS MÚLTIPLES (selects convertidos a checkboxes) =====================
 var MULTISELECT_MAP = {
@@ -1820,11 +1837,11 @@ function renderABM(){
 // Categorías, no una acción puntual de importar.
 function renderReglas(){
   var reglasOrdenadas = (STATE.reglas||[]).slice().sort(function(a,b){ return (a.proveedor||'').localeCompare(b.proveedor||'', 'es', {sensitivity:'base'}); });
-  var totalPaginasReglas = Math.max(1, Math.ceil(reglasOrdenadas.length / REGLAS_PAGE_SIZE));
+  var totalPaginasReglas = Math.max(1, Math.ceil(reglasOrdenadas.length / STATE.reglasPorPagina));
   if(STATE.reglasPaginaActual > totalPaginasReglas) STATE.reglasPaginaActual = totalPaginasReglas;
   if(STATE.reglasPaginaActual < 1) STATE.reglasPaginaActual = 1;
-  var inicioPaginaReglas = (STATE.reglasPaginaActual-1) * REGLAS_PAGE_SIZE;
-  var reglasPagina = reglasOrdenadas.slice(inicioPaginaReglas, inicioPaginaReglas + REGLAS_PAGE_SIZE);
+  var inicioPaginaReglas = (STATE.reglasPaginaActual-1) * STATE.reglasPorPagina;
+  var reglasPagina = reglasOrdenadas.slice(inicioPaginaReglas, inicioPaginaReglas + STATE.reglasPorPagina);
 
   var filasReglas = reglasPagina.map(function(r){
     return '<tr><td>'+esc(r.proveedor)+'</td><td>'+esc(r.categoria)+'</td><td>'+esc(r.subcategoria||'—')+'</td>'+
@@ -1832,8 +1849,9 @@ function renderReglas(){
   }).join('');
   var categoriaOptsRegla = categoriasOrdenadas().map(function(c){ return '<option value="'+c.id+'">'+esc(c.nombre)+'</option>'; }).join('');
 
-  var paginadorReglas = totalPaginasReglas>1 ? ''+
+  var paginadorReglas = reglasOrdenadas.length ? ''+
     '<div class="fields-row" style="margin-top:10px;align-items:center">'+
+      selectorPorPagina('reglas-por-pagina', OPCIONES_POR_PAGINA_REGLAS, STATE.reglasPorPagina)+
       '<button class="secondary" data-action="reglas-pagina-anterior" style="font-size:12px;padding:6px 12px"'+(STATE.reglasPaginaActual<=1?' disabled':'')+'>« Anterior</button>'+
       '<span style="font-size:12px;color:var(--ink-soft)">Página '+STATE.reglasPaginaActual+' de '+totalPaginasReglas+'</span>'+
       '<button class="secondary" data-action="reglas-pagina-siguiente" style="font-size:12px;padding:6px 12px"'+(STATE.reglasPaginaActual>=totalPaginasReglas?' disabled':'')+'>Siguiente »</button>'+
@@ -2211,11 +2229,11 @@ function renderMovimientos(){
     g.movs.push(m);
   });
 
-  var totalPaginasMov = Math.max(1, Math.ceil(vista.length / MOV_PAGE_SIZE));
+  var totalPaginasMov = Math.max(1, Math.ceil(vista.length / STATE.movPorPagina));
   if(STATE.movPaginaActual > totalPaginasMov) STATE.movPaginaActual = totalPaginasMov;
   if(STATE.movPaginaActual < 1) STATE.movPaginaActual = 1;
-  var inicioPaginaMov = (STATE.movPaginaActual-1) * MOV_PAGE_SIZE;
-  var vistaPagina = vista.slice(inicioPaginaMov, inicioPaginaMov + MOV_PAGE_SIZE);
+  var inicioPaginaMov = (STATE.movPaginaActual-1) * STATE.movPorPagina;
+  var vistaPagina = vista.slice(inicioPaginaMov, inicioPaginaMov + STATE.movPorPagina);
 
   var seleccionados = STATE.movSeleccionados || [];
   var idsCheckboxVisibles = [];
@@ -2445,7 +2463,8 @@ function renderMovimientos(){
     '</div>' : '';
 
   var paginacionHtml = vista.length ? ''+
-    '<div style="display:flex;align-items:center;justify-content:center;gap:14px;margin-top:12px;font-size:13px">'+
+    '<div style="display:flex;align-items:center;justify-content:center;gap:14px;margin-top:12px;font-size:13px;flex-wrap:wrap">'+
+      selectorPorPagina('mov-por-pagina', OPCIONES_POR_PAGINA_MOV, STATE.movPorPagina)+
       '<button class="secondary" data-action="mov-pagina-anterior" style="font-size:12px;padding:6px 12px"'+(STATE.movPaginaActual<=1?' disabled':'')+'>« Anterior</button>'+
       '<span>Página '+STATE.movPaginaActual+' de '+totalPaginasMov+'</span>'+
       '<button class="secondary" data-action="mov-pagina-siguiente" style="font-size:12px;padding:6px 12px"'+(STATE.movPaginaActual>=totalPaginasMov?' disabled':'')+'>Siguiente »</button>'+
@@ -4310,6 +4329,18 @@ function bindEvents(){
       render();
     });
   }
+  var movPorPaginaSel = document.getElementById('mov-por-pagina');
+  if(movPorPaginaSel){ movPorPaginaSel.addEventListener('change', function(){
+    STATE.movPorPagina = parseInt(movPorPaginaSel.value, 10) || MOV_PAGE_SIZE;
+    guardarTamPagina('controlMovPorPagina', STATE.movPorPagina);
+    STATE.movPaginaActual = 1; render();
+  }); }
+  var reglasPorPaginaSel = document.getElementById('reglas-por-pagina');
+  if(reglasPorPaginaSel){ reglasPorPaginaSel.addEventListener('change', function(){
+    STATE.reglasPorPagina = parseInt(reglasPorPaginaSel.value, 10) || REGLAS_PAGE_SIZE;
+    guardarTamPagina('controlReglasPorPagina', STATE.reglasPorPagina);
+    STATE.reglasPaginaActual = 1; render();
+  }); }
   var ffSoloTarjeta = document.getElementById('ff-solo-tarjeta');
   if(ffSoloTarjeta){ ffSoloTarjeta.addEventListener('change', function(){ STATE.filtros.soloTarjeta = ffSoloTarjeta.checked; STATE.movPaginaActual = 1; render(); }); }
 
