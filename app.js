@@ -357,6 +357,57 @@ async function dbUpsert(table, rows){
   return res.data;
 }
 
+// ---- BACKUP ----
+// Tablas que entran en el backup (botón "Descargar backup" y el backup diario de
+// scripts/backup-a-drive/backup.js, que tiene que listar exactamente las mismas). El orden importa
+// al restaurar: primero las que otras referencian (centros antes que movimientos, movimientos antes
+// que usdt_movimientos/facturas). arca_ta queda afuera a propósito: es un token temporal de ARCA.
+var TABLAS_BACKUP = ['centros', 'categorias', 'subcategorias', 'movimientos', 'vencimientos', 'deudas',
+  'usdt_movimientos', 'facturas', 'gimnasio_visitas', 'reglas_categorizacion', 'configuracion'];
+var BACKUP_LOTE = 500; // filas por upsert al restaurar, para no mandar un request gigante
+
+// Backup versión 2: las filas tal cual están en la base (snake_case), igual que el backup diario a
+// Drive, así cualquiera de los dos se restaura desde la app. Lee de la base y no de STATE para no
+// perder columnas que la app no mapea (created_at, etc.).
+async function armarBackup(){
+  var backupObj = { version: 2, exportadoEn: new Date().toISOString() };
+  for(var i=0; i<TABLAS_BACKUP.length; i++){
+    backupObj[TABLAS_BACKUP[i]] = await dbFetchAll(TABLAS_BACKUP[i]);
+  }
+  return backupObj;
+}
+
+// Versión 1 (backups viejos descargados desde la app): solo 5 tablas y en el formato de STATE
+// (camelCase), así que hay que pasarlas por los mappers. Se devuelve en el formato de la base para
+// que la restauración sea una sola.
+function backupV1AFilasDb(datos){
+  var movs = datos.movimientos||[];
+  return {
+    centros: (datos.centros||[]).map(toDbCentro),
+    categorias: (datos.categorias||[]).map(toDbCategoria),
+    subcategorias: (datos.subcategorias||[]).map(toDbSubcategoria),
+    // En dos tandas (pesos / dólares): toDbMovimiento solo manda "moneda" en los USD, y un upsert
+    // mezclado dejaría esa columna en null para los de pesos.
+    movimientos: movs.filter(function(m){ return m.moneda!=='USD'; }).map(toDbMovimiento),
+    movimientosUsd: movs.filter(function(m){ return m.moneda==='USD'; }).map(toDbMovimiento),
+    vencimientos: (datos.vencimientos||[]).map(toDbVencimiento)
+  };
+}
+
+async function restaurarBackup(datos){
+  var filas = Number(datos.version) >= 2 ? datos : backupV1AFilasDb(datos);
+  for(var i=0; i<TABLAS_BACKUP.length; i++){
+    var tabla = TABLAS_BACKUP[i];
+    var lotes = [filas[tabla]||[]];
+    if(tabla==='movimientos' && filas.movimientosUsd) lotes.push(filas.movimientosUsd);
+    for(var l=0; l<lotes.length; l++){
+      for(var desde=0; desde<lotes[l].length; desde+=BACKUP_LOTE){
+        await dbUpsert(tabla, lotes[l].slice(desde, desde+BACKUP_LOTE));
+      }
+    }
+  }
+}
+
 async function cargarTodo(){
   var [centros, categorias, subcategorias, movimientos, vencimientos] = await Promise.all([
     dbFetchAll('centros'), dbFetchAll('categorias'), dbFetchAll('subcategorias'), dbFetchAll('movimientos', 'created_at'), dbFetchAll('vencimientos')
@@ -1586,7 +1637,7 @@ function renderInterno(){
         '<div class="field" style="flex:1 1 100%"><label>Monto</label><input type="number" step="0.01" id="ef-monto" placeholder="0.00" value="'+esc(efd.monto||'')+'" style="font-size:18px"></div>'+
       '</div>'+
       '<div class="fields-row" style="margin-top:10px">'+
-        '<div class="field"><label>Proveedor (opcional)</label><input type="text" id="ef-proveedor" placeholder="Ej: Kiosco" value="'+esc(efd.proveedor||'')+'"></div>'+
+        '<div class="field"><label>Contraparte (opcional)</label><input type="text" id="ef-proveedor" placeholder="Ej: Kiosco" value="'+esc(efd.proveedor||'')+'"></div>'+
         '<div class="field"><label>Detalle (opcional)</label><input type="text" id="ef-detalle" value="'+esc(efd.detalle||'')+'"></div>'+
       '</div>'+
       '<div class="fields-row" style="margin-top:10px">'+
@@ -1791,10 +1842,10 @@ function renderReglas(){
   return ''+
   '<div class="card">'+
     '<h2>Nueva regla</h2>'+
-    '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Al previsualizar una importación (pestaña Importar), si el proveedor de una fila coincide (parcialmente, sin importar mayúsculas) con el texto de una regla, se precargan su Categoría y Subcategoría. También se crean solas al tildar "Guardar como regla" en una fila de la previsualización.</div>'+
+    '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Al previsualizar una importación (pestaña Importar), si la contraparte de una fila coincide (parcialmente, sin importar mayúsculas) con el texto de una regla, se precargan su Categoría y Subcategoría. También se crean solas al tildar "Guardar como regla" en una fila de la previsualización.</div>'+
     (STATE.reglaFormMsg ? '<div class="msg err">'+esc(STATE.reglaFormMsg)+'</div>' : '')+
     '<div class="fields-row">'+
-      '<div class="field"><label>Proveedor (texto parcial)</label><input type="text" id="regla-proveedor" placeholder="Ej: Barrientos"></div>'+
+      '<div class="field"><label>Contraparte (texto parcial)</label><input type="text" id="regla-proveedor" placeholder="Ej: Barrientos"></div>'+
       '<div class="field"><label>Categoría</label><select id="regla-categoria"><option value="">Elegir...</option>'+categoriaOptsRegla+'</select></div>'+
       '<div class="field"><label>Subcategoría (opcional)</label><input type="text" id="regla-subcategoria" placeholder="Ej: Limpieza"></div>'+
       '<div class="field" style="justify-content:flex-end"><button data-action="agregar-regla">Agregar regla</button></div>'+
@@ -1803,7 +1854,7 @@ function renderReglas(){
   '<div class="card">'+
     '<h3>Reglas guardadas ('+reglasOrdenadas.length+')</h3>'+
     (reglasOrdenadas.length ? ''+
-      '<div style="overflow-x:auto"><table class="table"><thead><tr><th>Proveedor</th><th>Categoría</th><th>Subcategoría</th><th></th></tr></thead>'+
+      '<div style="overflow-x:auto"><table class="table"><thead><tr><th>Contraparte</th><th>Categoría</th><th>Subcategoría</th><th></th></tr></thead>'+
       '<tbody>'+filasReglas+'</tbody></table></div>'+paginadorReglas
       : '<div class="empty">Todavía no hay reglas guardadas.</div>')+
   '</div>';
@@ -1814,13 +1865,13 @@ function renderBackup(){
   return ''+
   '<div class="card">'+
     '<h2>Descargar backup</h2>'+
-    '<div style="font-size:12px;color:var(--ink-soft);margin-bottom:12px">Genera un archivo con todo lo que hay cargado hoy (Centros, Categorías, Subcategorías, Movimientos y Vencimientos). Guardalo en Google Drive, tu mail, o donde prefieras — te sirve para restaurar todo si algún día se pierde algo en la base de datos. El plan gratis de Supabase no hace backups automáticos, así que conviene descargar uno de tanto en tanto (por ejemplo, una vez al mes).</div>'+
+    '<div style="font-size:12px;color:var(--ink-soft);margin-bottom:12px">Genera un archivo con todo lo que hay cargado hoy (Centros, Categorías, Subcategorías, Movimientos, Vencimientos, Deudas, USDT, Facturas, Gimnasio, Reglas y Configuración). Te sirve para restaurar todo si algún día se pierde algo en la base de datos. Además, todos los días se sube uno automático a Google Drive con el mismo formato.</div>'+
     '<button data-action="descargar-backup"><i class="bi bi-download"></i> Descargar backup completo (.json)</button>'+
   '</div>'+
   '<div class="card">'+
     '<h2>Restaurar desde un backup</h2>'+
     msgHtml+
-    '<div style="font-size:12px;color:var(--ink-soft);margin-bottom:12px">Elegí un archivo .json descargado antes con "Descargar backup". Esto <strong>no borra</strong> lo que ya tenés cargado: agrega lo que falte y actualiza lo que coincida por ID. Te va a pedir confirmación antes de aplicar nada.</div>'+
+    '<div style="font-size:12px;color:var(--ink-soft);margin-bottom:12px">Elegí un archivo .json descargado antes con "Descargar backup" o uno de los backups diarios de Google Drive. Esto <strong>no borra</strong> lo que ya tenés cargado: agrega lo que falte y actualiza lo que coincida por ID. Te va a pedir confirmación antes de aplicar nada.</div>'+
     '<div class="fields-row">'+
       '<input type="file" id="backup-file" accept="application/json,.json">'+
       '<button data-action="restaurar-backup-preview">Restaurar</button>'+
@@ -1954,7 +2005,7 @@ function camposFaltantes(m){
   if(!m.fecha) faltan.push('Fecha');
   if(!m.centroId) faltan.push('Centro de Costo');
   if(!m.categoriaId) faltan.push('Categoría');
-  if(!m.proveedor) faltan.push('Proveedor');
+  if(!m.proveedor) faltan.push('Contraparte');
   if(Number(m.ingreso)===0 && Number(m.egreso)===0) faltan.push('Ingreso/Egreso');
   return faltan;
 }
@@ -1972,7 +2023,7 @@ function celdasEditablesMov(m){
       categoriasOrdenadas().map(function(c){ return '<option value="'+c.id+'" '+(m.categoriaId===c.id?'selected':'')+'>'+esc(c.nombre)+'</option>'; }).join('')+
       '</select></td>',
     subcategoria: '<td data-label="Subcategoría"><select data-mov-id="'+m.id+'" data-field="subcategoriaId"><option value="">—</option>'+subOpcionesFila+'</select></td>',
-    proveedor: '<td data-label="Proveedor">'+(m.tarjeta?'<span title="Pagado con tarjeta de crédito"><i class="bi bi-credit-card"></i></span> ':'')+'<input type="text" data-mov-id="'+m.id+'" data-field="proveedor" value="'+esc(m.proveedor||'')+'" style="width:100%;box-sizing:border-box"></td>',
+    proveedor: '<td data-label="Contraparte">'+(m.tarjeta?'<span title="Pagado con tarjeta de crédito"><i class="bi bi-credit-card"></i></span> ':'')+'<input type="text" data-mov-id="'+m.id+'" data-field="proveedor" value="'+esc(m.proveedor||'')+'" style="width:100%;box-sizing:border-box"></td>',
     detalle: '<td data-label="Detalle"><input type="text" data-mov-id="'+m.id+'" data-field="detalle" value="'+esc(m.detalle||'')+'" style="width:100%;box-sizing:border-box"></td>'
   };
 }
@@ -1986,7 +2037,7 @@ function celdasSoloLecturaMov(m){
     centro: '<td'+(m.centroId?' class="celda-filtrable" data-filter-field="centro" data-filter-value="'+esc(m.centroId)+'" title="Filtrar por este Centro de Costo"':'')+' data-label="Centro">'+(m.centroId?renderChip(nombreCentro(m.centroId).split(' · ')[0], colorCentro(m.centroId), colorTextoCentro(m.centroId)):'—')+'</td>',
     categoria: '<td'+(m.categoriaId?' class="celda-filtrable" data-filter-field="categoria" data-filter-value="'+esc(m.categoriaId)+'" title="Filtrar por esta Categoría"':'')+' data-label="Categoría">'+(m.categoriaId?renderChip(nombreCategoria(m.categoriaId), colorCategoria(m.categoriaId), colorTextoCategoria(m.categoriaId)):'—')+'</td>',
     subcategoria: '<td class="celda-filtrable" data-filter-field="subcategoria" data-filter-value="'+esc(subValorFiltro)+'" title="Filtrar por esta Subcategoría" data-label="Subcategoría">'+esc(nombreSubcategoria(m.subcategoriaId))+'</td>',
-    proveedor: '<td'+(m.proveedor?' class="celda-filtrable" data-filter-field="texto" data-filter-value="'+esc(m.proveedor)+'" title="Filtrar por este Proveedor"':'')+' data-label="Proveedor">'+(m.tarjeta?'<span title="Pagado con tarjeta de crédito"><i class="bi bi-credit-card"></i></span> ':'')+esc(m.proveedor||'')+'</td>',
+    proveedor: '<td'+(m.proveedor?' class="celda-filtrable" data-filter-field="texto" data-filter-value="'+esc(m.proveedor)+'" title="Filtrar por esta Contraparte"':'')+' data-label="Contraparte">'+(m.tarjeta?'<span title="Pagado con tarjeta de crédito"><i class="bi bi-credit-card"></i></span> ':'')+esc(m.proveedor||'')+'</td>',
     detalle: '<td data-label="Detalle">'+esc(m.detalle||'')+'</td>'
   };
 }
@@ -2017,7 +2068,7 @@ function renderBulkEditMovModal(){
       '</select></div>'+
     '</div>'+
     '<div class="form-grid">'+
-      '<div class="field"><label>Proveedor'+labelVaciar('bem-proveedor-vaciar')+'</label><input type="text" id="bem-proveedor" placeholder="— Sin cambios —"></div>'+
+      '<div class="field"><label>Contraparte'+labelVaciar('bem-proveedor-vaciar')+'</label><input type="text" id="bem-proveedor" placeholder="— Sin cambios —"></div>'+
       '<div class="field"><label>Detalle'+labelVaciar('bem-detalle-vaciar')+'</label><input type="text" id="bem-detalle" placeholder="— Sin cambios —"></div>'+
     '</div>'+
     '<div class="form-grid">'+
@@ -2312,7 +2363,7 @@ function renderMovimientos(){
       '</div>'+
       campoDestino+
       '<div class="form-grid" style="margin-top:12px">'+
-        '<div class="'+claseCampo('proveedor')+'"><label>Proveedor</label><input type="text" id="f-mov-proveedor" value="'+esc(e.proveedor)+'">'+msgCampo('proveedor')+'</div>'+
+        '<div class="'+claseCampo('proveedor')+'"><label>Contraparte</label><input type="text" id="f-mov-proveedor" value="'+esc(e.proveedor)+'">'+msgCampo('proveedor')+'</div>'+
         '<div class="field"><label>Detalle</label><input type="text" id="f-mov-detalle" value="'+esc(e.detalle)+'"></div>'+
       '</div>'+
       '<div class="form-grid">'+
@@ -2375,7 +2426,7 @@ function renderMovimientos(){
       '<div class="field"><label>Categoría</label>'+renderMultiSelect('ff-categoria', categoriaOptions, f.categoria)+'</div>'+
       '<div class="field"><label>Mes</label>'+renderMultiSelect('ff-mes', mesOptions, f.mes)+'</div>'+
       '<div class="field"><label>Subcategoría</label>'+renderMultiSelect('ff-subcategoria', subcategoriaOptions, f.subcategoria)+'</div>'+
-      '<div class="field"><label>Buscar</label><input type="text" id="ff-texto" placeholder="proveedor o detalle" value="'+esc(f.texto)+'" style="width:180px"></div>'+
+      '<div class="field"><label>Buscar</label><input type="text" id="ff-texto" placeholder="contraparte o detalle" value="'+esc(f.texto)+'" style="width:180px"></div>'+
       '<div class="field"><label>&nbsp;</label><label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:normal;white-space:nowrap;padding:7px 0">'+
         '<input type="checkbox" id="ff-solo-incompletos" '+(f.soloIncompletos?'checked':'')+' style="width:auto"> Solo incompletos ('+cantidadIncompletos+')'+
       '</label></div>'+
@@ -2408,7 +2459,7 @@ function renderMovimientos(){
     '</div>'+
     barraSeleccionHtml+
     (lista.length ? ''+
-    '<table id="tabla-movimientos" class="table tabla-movil"><thead><tr><th><input type="checkbox" id="chk-select-all-mov" '+(todosVisiblesSeleccionados?'checked':'')+'></th><th>Fecha</th><th>CC</th><th>Categoría</th><th>Subcategoría</th><th>Proveedor</th><th>Detalle</th><th class="num">Ingreso</th><th class="num">Egreso</th><th></th></tr></thead>'+
+    '<table id="tabla-movimientos" class="table tabla-movil"><thead><tr><th><input type="checkbox" id="chk-select-all-mov" '+(todosVisiblesSeleccionados?'checked':'')+'></th><th>Fecha</th><th>CC</th><th>Categoría</th><th>Subcategoría</th><th>Contraparte</th><th>Detalle</th><th class="num">Ingreso</th><th class="num">Egreso</th><th></th></tr></thead>'+
     '<tbody>'+rows+'</tbody>'+
     '<tfoot><tr><td colspan="7" data-label="">'+esc(etiquetaTotales)+'</td><td class="num ingreso" data-label="Total Ingreso">'+fmtMonto(totalIngreso)+'</td><td class="num egreso" data-label="Total Egreso">'+fmtMonto(totalEgreso)+'</td><td class="num '+(totalIngreso-totalEgreso>=0?'ingreso':'egreso')+'" data-label="Ingresos - Egresos">'+fmtMonto(totalIngreso-totalEgreso)+'</td></tr></tfoot>'+
     '</table>' : '<div class="empty">No hay movimientos que coincidan con los filtros.</div>')+
@@ -2436,7 +2487,7 @@ function renderImportar(){
       '<div class="field"><label>Marca de tarjeta (opcional)</label><input type="text" id="imp-tarjeta-marca" autocomplete="off" placeholder="Visa, Mastercard, Amex..." value="'+esc(STATE.importTarjetaMarca||'')+'" style="width:150px"></div>';
   }
 
-  var excelHint = e==='excel' ? '<div class="msg ok" style="margin-top:8px">Pegá las filas copiadas de tu Excel, en este orden de columnas (separadas por tab): Periodo, Cuenta, Categoría, Subcategoría, CC, Fecha, Proveedor, Detalle, Ingresos, Egresos. Si falta un Centro de Costo, Categoría o Subcategoría, se crea automáticamente al importar.</div>' : '';
+  var excelHint = e==='excel' ? '<div class="msg ok" style="margin-top:8px">Pegá las filas copiadas de tu Excel, en este orden de columnas (separadas por tab): Periodo, Cuenta, Categoría, Subcategoría, CC, Fecha, Contraparte, Detalle, Ingresos, Egresos. Si falta un Centro de Costo, Categoría o Subcategoría, se crea automáticamente al importar.</div>' : '';
 
   var formHtml = ''+
   '<div class="card">'+
@@ -2494,7 +2545,7 @@ function renderImportar(){
         '<td>'+cuotasInput+'</td>'+
         '<td class="num ingreso">'+(r.monto>0?fmtMonto(r.monto):'')+'</td>'+
         '<td class="num egreso">'+(r.monto<0?fmtMonto(-r.monto):'')+'</td>'+
-        '<td style="text-align:center"><input type="checkbox" data-rowid="'+r.id+'" data-field="guardarRegla" '+(r.guardarRegla?'checked':'')+' title="Guardar esta relación proveedor → categoría como regla para futuras importaciones"></td>'+
+        '<td style="text-align:center"><input type="checkbox" data-rowid="'+r.id+'" data-field="guardarRegla" '+(r.guardarRegla?'checked':'')+' title="Guardar esta relación contraparte → categoría como regla para futuras importaciones"></td>'+
       '</tr>';
     }).join('');
 
@@ -2513,7 +2564,7 @@ function renderImportar(){
     '<div class="card">'+
       '<h3>Previsualización ('+STATE.importPreview.length+' movimiento(s), '+incluidos+' seleccionado(s))</h3>'+
       (duplicados>0 ? '<div class="msg err"><i class="bi bi-exclamation-triangle"></i> '+duplicados+' fila(s) marcada(s) como posible duplicado (mismo Centro, fecha y monto que otro movimiento). Revisalas antes de confirmar.</div>' : '')+
-      '<table id="import-preview-table" class="table"><thead><tr><th></th><th>Fecha</th><th>Fecha de consumo</th><th>Centro</th><th>Categoría</th><th>Subcategoría</th><th>Proveedor</th><th>Detalle</th><th>Cuotas</th><th class="num">Ingreso</th><th class="num">Egreso</th><th title="Guardar la relación proveedor → categoría como regla para futuras importaciones">Regla</th></tr></thead>'+
+      '<table id="import-preview-table" class="table"><thead><tr><th></th><th>Fecha</th><th>Fecha de consumo</th><th>Centro</th><th>Categoría</th><th>Subcategoría</th><th>Contraparte</th><th>Detalle</th><th>Cuotas</th><th class="num">Ingreso</th><th class="num">Egreso</th><th title="Guardar la relación contraparte → categoría como regla para futuras importaciones">Regla</th></tr></thead>'+
       '<tbody>'+rows+'</tbody></table>'+
       '<div class="fields-row" style="margin-top:14px">'+
         '<button data-action="confirm-import">Importar '+incluidos+' movimiento(s)</button>'+
@@ -2557,7 +2608,7 @@ function renderImportar(){
       '<h3>Previsualización ('+STATE.importPreviewExcel.length+' movimiento(s), '+incluidosExcel+' seleccionado(s))</h3>'+
       (nuevosCC>0||nuevasCat>0 ? '<div class="msg ok">Se van a crear automáticamente: '+nuevosCC+' Centro(s) de Costo nuevo(s), '+nuevasCat+' Categoría(s) nueva(s) (marcados en rojo abajo). Revisá que no sean errores de tipeo antes de confirmar.</div>' : '')+
       (duplicadosExcel>0 ? '<div class="msg err"><i class="bi bi-exclamation-triangle"></i> '+duplicadosExcel+' fila(s) marcada(s) como posible duplicado (mismo Centro, fecha y monto que otro movimiento). Revisalas antes de confirmar.</div>' : '')+
-      '<table id="import-preview-excel-table" class="table"><thead><tr><th></th><th>Fecha</th><th>CC</th><th>Categoría</th><th>Subcategoría</th><th>Proveedor</th><th>Detalle</th><th class="num">Ingreso</th><th class="num">Egreso</th></tr></thead>'+
+      '<table id="import-preview-excel-table" class="table"><thead><tr><th></th><th>Fecha</th><th>CC</th><th>Categoría</th><th>Subcategoría</th><th>Contraparte</th><th>Detalle</th><th class="num">Ingreso</th><th class="num">Egreso</th></tr></thead>'+
       '<tbody>'+rowsExcel+'</tbody></table>'+
       '<div class="fields-row" style="margin-top:14px">'+
         '<button data-action="confirm-import-excel">Importar '+incluidosExcel+' movimiento(s)</button>'+
@@ -2569,7 +2620,7 @@ function renderImportar(){
   var cantidadReglas = (STATE.reglas||[]).length;
   var reglasHtml = ''+
   '<div class="card" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">'+
-    '<div style="font-size:12px;color:var(--ink-soft)">'+cantidadReglas+' regla(s) de categorización guardada(s) — al previsualizar, si el proveedor de una fila coincide con una regla se precargan Categoría y Subcategoría.</div>'+
+    '<div style="font-size:12px;color:var(--ink-soft)">'+cantidadReglas+' regla(s) de categorización guardada(s) — al previsualizar, si la contraparte de una fila coincide con una regla se precargan Categoría y Subcategoría.</div>'+
     '<button type="button" class="secondary" data-action="ir-a-reglas" style="font-size:12px;padding:6px 12px">Administrar reglas (ABM)</button>'+
   '</div>';
 
@@ -2692,7 +2743,7 @@ function renderVencimientos(){
       '<td class="mono" data-label="Vence">'+diasTxt+'</td>'+
       '<td class="mono" data-label="Centro">'+esc(nombreCentro(m.centroId)).split(' · ')[0]+'</td>'+
       '<td data-label="Categoría">'+esc(nombreCategoria(m.categoriaId))+'</td>'+
-      '<td data-label="Proveedor">'+(m.tarjeta?'<span title="Pagado con tarjeta de crédito"><i class="bi bi-credit-card"></i></span> ':'')+esc(m.proveedor||'')+'</td>'+
+      '<td data-label="Contraparte">'+(m.tarjeta?'<span title="Pagado con tarjeta de crédito"><i class="bi bi-credit-card"></i></span> ':'')+esc(m.proveedor||'')+'</td>'+
       '<td data-label="Detalle">'+esc(m.detalle||'')+'</td>'+
       '<td class="num ingreso" data-label="Ingreso">'+(Number(m.ingreso)?fmtMonto(m.ingreso):'')+'</td>'+
       '<td class="num egreso" data-label="Egreso">'+(Number(m.egreso)?fmtMonto(m.egreso):'')+'</td>'+
@@ -2730,7 +2781,7 @@ function renderVencimientos(){
         '<span style="font-size:12px;color:var(--ink-soft)">'+g.movs.length+' movimiento(s)</span>'+
         '<span class="mono egreso" style="margin-left:auto;font-weight:600">'+fmtMonto(g.total)+'</span>'+
       '</summary>'+
-      '<div style="overflow-x:auto;margin-top:10px"><table class="table tabla-movil"><thead><tr><th>Fecha</th><th>Vence</th><th>Centro</th><th>Categoría</th><th>Proveedor</th><th>Detalle</th><th class="num">Ingreso</th><th class="num">Egreso</th><th></th></tr></thead><tbody>'+filasGrupo+'</tbody></table></div>'+
+      '<div style="overflow-x:auto;margin-top:10px"><table class="table tabla-movil"><thead><tr><th>Fecha</th><th>Vence</th><th>Centro</th><th>Categoría</th><th>Contraparte</th><th>Detalle</th><th class="num">Ingreso</th><th class="num">Egreso</th><th></th></tr></thead><tbody>'+filasGrupo+'</tbody></table></div>'+
     '</details>';
   }).join('');
 
@@ -2740,7 +2791,7 @@ function renderVencimientos(){
     (gruposTarjetaHtml ? gruposTarjetaHtml : '')+
     (pendientesOtros.length ? ''+
       (gruposTarjetaHtml ? '<div style="font-size:11px;color:var(--ink-soft);margin:14px 0 8px;text-transform:uppercase;letter-spacing:.04em">Otros movimientos pendientes</div>' : '')+
-      '<table class="table tabla-movil"><thead><tr><th>Fecha</th><th>Vence</th><th>Centro</th><th>Categoría</th><th>Proveedor</th><th>Detalle</th><th class="num">Ingreso</th><th class="num">Egreso</th><th></th></tr></thead><tbody>'+rowsPendientesOtros+'</tbody></table>'
+      '<table class="table tabla-movil"><thead><tr><th>Fecha</th><th>Vence</th><th>Centro</th><th>Categoría</th><th>Contraparte</th><th>Detalle</th><th class="num">Ingreso</th><th class="num">Egreso</th><th></th></tr></thead><tbody>'+rowsPendientesOtros+'</tbody></table>'
       : '')+
     (!pendientesMov.length ? '<div class="empty">No hay movimientos con fecha futura.</div>' : '')+
   '</div>';
@@ -3283,12 +3334,12 @@ function renderResumen(){
       '<div class="amt '+claseColorTotalLista+'">'+fmtMonto(totalLista)+'</div>'+
     '</div>' : '';
 
-  // Top proveedores: mismo recorte que "Total por Categoría/Centro" (movsResto: sin TEC/Sueldo/Inversión)
+  // Top contrapartes: mismo recorte que "Total por Categoría/Centro" (movsResto: sin TEC/Sueldo/Inversión)
   // pero agrupado por proveedor en vez de por categoría -- suele ser más accionable ("Coto: -$65.000
   // en 3 compras" dice más que "Supermercado: -$120.000").
   var porProveedor = {};
   movsResto.forEach(function(m){
-    var key = (m.proveedor||'').trim() || 'Sin proveedor';
+    var key = (m.proveedor||'').trim() || 'Sin contraparte';
     if(!porProveedor[key]) porProveedor[key] = {monto:0, cant:0};
     porProveedor[key].monto += (Number(m.ingreso)||0) - (Number(m.egreso)||0);
     porProveedor[key].cant++;
@@ -3369,8 +3420,8 @@ function renderResumen(){
     (lista.length ? bars+totalListaHtml : '<div class="empty">Todavía no hay movimientos cargados.</div>')+
   '</div>'+
   '<div class="card">'+
-    '<h3>Top proveedores</h3>'+
-    '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Los 8 proveedores con mayor movimiento neto en el período filtrado (mismo recorte que "Total por '+(f.vista==='centro'?'Centro de Costo':'Categoría')+'" de arriba: sin TEC, Sueldo ni '+esc(etiquetaInversion())+').</div>'+
+    '<h3>Top contrapartes</h3>'+
+    '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Las 8 contrapartes con mayor movimiento neto en el período filtrado (mismo recorte que "Total por '+(f.vista==='centro'?'Centro de Costo':'Categoría')+'" de arriba: sin TEC, Sueldo ni '+esc(etiquetaInversion())+').</div>'+
     (listaProveedores.length ? barsProveedores : '<div class="empty">Todavía no hay movimientos cargados.</div>')+
   '</div>'+
   '<div class="card">'+
@@ -4835,7 +4886,7 @@ async function handleAction(action, id){
         { header:'Centro de Costo', key:'centro', width:22 },
         { header:'Categoría', key:'categoria', width:20 },
         { header:'Subcategoría', key:'subcategoria', width:20 },
-        { header:'Proveedor', key:'proveedor', width:24 },
+        { header:'Contraparte', key:'proveedor', width:24 },
         { header:'Detalle', key:'detalle', width:30 },
         { header:'Ingreso', key:'ingreso', width:14 },
         { header:'Egreso', key:'egreso', width:14 },
@@ -4891,15 +4942,9 @@ async function handleAction(action, id){
 
   // ---- BACKUP ----
   if(action==='descargar-backup'){
-    var backupObj = {
-      version: 1,
-      exportadoEn: new Date().toISOString(),
-      centros: STATE.centros,
-      categorias: STATE.categorias,
-      subcategorias: STATE.subcategorias,
-      movimientos: STATE.movimientos.concat(STATE.movimientosUsd),
-      vencimientos: STATE.vencimientos
-    };
+    try{
+      var backupObj = await armarBackup();
+    }catch(e){ STATE.backupMsg = {type:'err', text:'No se pudo generar el backup: '+(e.message||e)}; render(); return; }
     var blob = new Blob([JSON.stringify(backupObj, null, 2)], {type:'application/json'});
     var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
@@ -4920,14 +4965,13 @@ async function handleAction(action, id){
       var texto = await archivo.text();
       var datos = JSON.parse(texto);
       if(!datos || typeof datos !== 'object'){ throw new Error('El archivo no tiene el formato esperado.'); }
-      var nCentros = (datos.centros||[]).length;
-      var nCategorias = (datos.categorias||[]).length;
-      var nSubcategorias = (datos.subcategorias||[]).length;
-      var nMovimientos = (datos.movimientos||[]).length;
-      var nVencimientos = (datos.vencimientos||[]).length;
+      var detalleTablas = TABLAS_BACKUP.map(function(t){ return (datos[t]||[]).length; })
+        .map(function(n, i){ return n ? n+' de '+TABLAS_BACKUP[i] : null; })
+        .filter(Boolean);
+      if(!detalleTablas.length) throw new Error('El archivo no tiene datos para restaurar.');
       STATE.backupPendiente = datos;
       STATE.confirmState = {
-        message: '¿Restaurar este backup (del '+(datos.exportadoEn ? new Date(datos.exportadoEn).toLocaleString('es-AR') : 'fecha desconocida')+')? Se van a agregar o actualizar: '+nCentros+' centro(s), '+nCategorias+' categoría(s), '+nSubcategorias+' subcategoría(s), '+nMovimientos+' movimiento(s) y '+nVencimientos+' vencimiento(s). No se borra nada de lo que ya tenés.',
+        message: '¿Restaurar este backup (del '+(datos.exportadoEn ? new Date(datos.exportadoEn).toLocaleString('es-AR') : 'fecha desconocida')+')? Se van a agregar o actualizar filas: '+detalleTablas.join(', ')+'. No se borra nada de lo que ya tenés.',
         action: 'restaurar-backup-confirmado'
       };
     }catch(e){ STATE.backupMsg = {type:'err', text:'No se pudo leer el archivo: '+(e.message||e)}; }
@@ -4938,16 +4982,7 @@ async function handleAction(action, id){
     STATE.backupPendiente = null;
     if(!datosR){ render(); return; }
     try{
-      if((datosR.centros||[]).length) await dbUpsert('centros', datosR.centros.map(toDbCentro));
-      if((datosR.categorias||[]).length) await dbUpsert('categorias', datosR.categorias.map(toDbCategoria));
-      if((datosR.subcategorias||[]).length) await dbUpsert('subcategorias', datosR.subcategorias.map(toDbSubcategoria));
-      // En dos tandas (pesos / dólares): toDbMovimiento solo manda "moneda" en los USD, y un upsert
-      // mezclado dejaría esa columna en null para los de pesos.
-      var movsR = datosR.movimientos||[];
-      var movsRArs = movsR.filter(function(m){ return m.moneda!=='USD'; }), movsRUsd = movsR.filter(function(m){ return m.moneda==='USD'; });
-      if(movsRArs.length) await dbUpsert('movimientos', movsRArs.map(toDbMovimiento));
-      if(movsRUsd.length) await dbUpsert('movimientos', movsRUsd.map(toDbMovimiento));
-      if((datosR.vencimientos||[]).length) await dbUpsert('vencimientos', datosR.vencimientos.map(toDbVencimiento));
+      await restaurarBackup(datosR);
       await cargarTodo();
       STATE.saldosDirty = true;
       STATE.backupMsg = { type:'ok', text:'Backup restaurado correctamente.' };
@@ -5153,7 +5188,7 @@ async function handleAction(action, id){
     else if(!/^\d{4}-\d{2}-\d{2}$/.test(v.fecha)) errores.fecha = 'La fecha no es válida (revisá el año).';
     if(!v.centroId && !esFechaFutura) errores.centroId = 'Seleccioná un centro de costo.';
     if(!v.categoriaId) errores.categoriaId = 'Seleccioná una categoría.';
-    if(!v.proveedor) errores.proveedor = 'El proveedor es obligatorio.';
+    if(!v.proveedor) errores.proveedor = 'La contraparte es obligatoria.';
     if(!v.monto) errores.monto = 'Ingresá un monto válido.';
     if(Object.keys(errores).length){
       STATE.movFieldErrors = errores;
@@ -5401,7 +5436,7 @@ async function handleAction(action, id){
     if(entidadImp === 'excel'){
       var filasExcel = parseExcelHistorico(STATE.importRaw||'');
       if(!filasExcel.length){
-        STATE.importMsg = {type:'err', text:'No se encontraron filas con el formato esperado (10 columnas separadas por tab: Periodo, Cuenta, Categoría, Subcategoría, CC, Fecha, Proveedor, Detalle, Ingresos, Egresos).'};
+        STATE.importMsg = {type:'err', text:'No se encontraron filas con el formato esperado (10 columnas separadas por tab: Periodo, Cuenta, Categoría, Subcategoría, CC, Fecha, Contraparte, Detalle, Ingresos, Egresos).'};
         STATE.importPreviewExcel = null; render(); return;
       }
       STATE.importPreviewExcel = filasExcel.map(function(r){
@@ -5558,7 +5593,7 @@ async function handleAction(action, id){
     var rCatId = document.getElementById('regla-categoria').value;
     var rSub = document.getElementById('regla-subcategoria').value.trim();
     if(!rProv || !rCatId){
-      STATE.reglaFormMsg = 'Completá al menos el proveedor y la categoría.';
+      STATE.reglaFormMsg = 'Completá al menos la contraparte y la categoría.';
       render(); return;
     }
     try{
