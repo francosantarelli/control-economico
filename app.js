@@ -3899,7 +3899,10 @@ function tipoMovimientoUsd(m){
   if(m.cambioId) return entra ? 'compra' : 'venta';
   return entra ? 'ingreso' : 'egreso';
 }
-var TIPOS_USD = {compra:'Compra de dólares', venta:'Venta de dólares', ingreso:'Ingreso de dólares (o saldo inicial)', egreso:'Gasto en dólares'};
+// "transferencia" solo existe en el formulario: se guarda como un gasto en el CC origen y un ingreso
+// en el CC destino, los dos con la categoría TEC (después cada uno se ve y se edita por separado).
+var TIPOS_USD = {compra:'Compra de dólares', venta:'Venta de dólares', ingreso:'Ingreso de dólares (o saldo inicial)', egreso:'Gasto en dólares', transferencia:'Transferencia entre cuentas'};
+function categoriaTecUsd(){ return categoriasOrdenadas().find(function(c){ return c.tipo==='tec'; }) || null; }
 var TIPOS_USD_CORTO = {compra:'Compra', venta:'Venta', ingreso:'Ingreso', egreso:'Gasto'};
 function movimientoPesosDeCambio(m){
   if(!m || !m.cambioId) return null;
@@ -3983,11 +3986,15 @@ function getDolaresFormValues(){
   return {
     tipo: v('f-usd-tipo') || 'compra', fecha: v('f-usd-fecha'), cantidad: v('f-usd-cantidad'),
     centroId: v('f-usd-centro'), montoArs: v('f-usd-monto-ars'), centroArsId: v('f-usd-centro-ars'),
-    categoriaId: v('f-usd-categoria'), subcategoriaId: v('f-usd-subcategoria'), detalle: v('f-usd-detalle')
+    categoriaId: v('f-usd-categoria'), subcategoriaId: v('f-usd-subcategoria'), detalle: v('f-usd-detalle'),
+    centroDestinoId: v('f-usd-centro-destino')
   };
 }
-function campoDolares(e){
+function campoDolares(e, editando){
   var esCambio = e.tipo==='compra' || e.tipo==='venta';
+  var esTransf = e.tipo==='transferencia';
+  // TEC en dólares (ingreso/gasto): igual que en pesos, se puede elegir un CC destino para crear el espejo.
+  var esTec = !esCambio && !esTransf && esTipoCategoria(e.categoriaId, 'tec');
   function optsCentro(lista, sel){ return lista.map(function(c){ return '<option value="'+c.id+'" '+(sel===c.id?'selected':'')+'>'+esc(c.codigo)+' · '+esc(c.nombre)+'</option>'; }).join(''); }
   var subOpciones = subcategoriasOrdenadas(STATE.subcategorias.filter(function(s){ return s.categoriaId === e.categoriaId; }))
     .map(function(s){ return '<option value="'+s.id+'" '+(e.subcategoriaId===s.id?'selected':'')+'>'+esc(s.nombre)+'</option>'; }).join('');
@@ -4002,24 +4009,46 @@ function campoDolares(e){
       '<div class="field"><label>'+(e.tipo==='compra'?'Pesos pagados (ARS)':'Pesos recibidos (ARS)')+'</label><input type="number" step="0.01" min="0" id="f-usd-monto-ars" value="'+esc(e.montoArs)+'" style="width:150px">'+sugerencia+'</div>'+
       '<div class="field"><label>'+(e.tipo==='compra'?'CC de donde salen los pesos':'CC donde entran los pesos')+'</label><select id="f-usd-centro-ars"><option value="">Elegir...</option>'+optsCentro(centrosOrdenados(), e.centroArsId)+'</select></div>'+
     '</div>' : '';
-  return ''+
-    (STATE.dolaresFormMsg ? '<div class="msg err">'+esc(STATE.dolaresFormMsg)+'</div>' : '')+
-    '<div class="fields-row">'+
-      '<div class="field"><label>Tipo</label><select id="f-usd-tipo">'+
-        ['compra','venta','ingreso','egreso'].map(function(t){ return '<option value="'+t+'" '+(e.tipo===t?'selected':'')+'>'+TIPOS_USD[t]+'</option>'; }).join('')+
-      '</select></div>'+
-      '<div class="field"><label>Fecha</label><input type="date" id="f-usd-fecha" value="'+esc(e.fecha)+'"></div>'+
-      '<div class="field"><label>Cantidad (US$)</label><input type="number" step="0.01" min="0" id="f-usd-cantidad" value="'+esc(e.cantidad)+'" style="width:130px"></div>'+
-      '<div class="field"><label>CC en dólares</label><select id="f-usd-centro"><option value="">Elegir...</option>'+optsCentro(centrosDolaresOrdenados(), e.centroId)+'</select></div>'+
+  var campoDestino = esTec ? ''+
+    '<div class="fields-row" style="margin-top:10px">'+
+      '<div class="field"><label>CC en dólares destino (transferencia, opcional)</label><select id="f-usd-centro-destino"><option value="">Elegir...</option>'+
+        optsCentro(centrosDolaresOrdenados().filter(function(c){ return c.id!==e.centroId; }), e.centroDestinoId)+'</select></div>'+
+      '<div class="field" style="flex:1 1 260px;justify-content:flex-end"><div style="font-size:11px;color:var(--ink-soft);padding-bottom:8px">'+(editando ?
+        'Si lo completás, se crea un movimiento espejo nuevo en ese CC (misma fecha y categoría, misma cantidad, tipo contrario). No hace falta si ya lo cargaste.' :
+        'Si lo completás, se crea automáticamente el movimiento espejo en ese CC (misma fecha y categoría, misma cantidad, tipo contrario). Si lo dejás vacío, se carga solo este movimiento.'
+      )+'</div></div>'+
+    '</div>' : '';
+  var catTec = categoriaTecUsd();
+  var filaCategoria = esTransf ? ''+
+    '<div class="fields-row" style="margin-top:10px">'+
+      '<div class="field"><label>CC en dólares destino (donde entran)</label><select id="f-usd-centro-destino"><option value="">Elegir...</option>'+
+        optsCentro(centrosDolaresOrdenados().filter(function(c){ return c.id!==e.centroId; }), e.centroDestinoId)+'</select></div>'+
+      '<div class="field"><label>Detalle (opcional)</label><input type="text" id="f-usd-detalle" value="'+esc(e.detalle)+'" style="width:200px"></div>'+
     '</div>'+
-    camposCambio+
+    '<div style="font-size:11px;color:var(--ink-soft);margin-top:8px">'+(catTec ?
+      'Se crean dos movimientos con la categoría '+esc(catTec.nombre)+': un gasto en el CC origen y un ingreso en el CC destino.' :
+      'Para usar este tipo creá primero una categoría de tipo TEC en ABM → Categorías.')+'</div>'
+  : ''+
     '<div class="fields-row" style="margin-top:10px">'+
       '<div class="field"><label>Categoría'+(esCambio?'':' (opcional)')+'</label><select id="f-usd-categoria"><option value="">'+(esCambio?'Elegir...':'Sin categoría')+'</option>'+
         categoriasOrdenadas().map(function(c){ return '<option value="'+c.id+'" '+(e.categoriaId===c.id?'selected':'')+'>'+esc(c.nombre)+'</option>'; }).join('')+
       '</select></div>'+
       '<div class="field"><label>Subcategoría</label><select id="f-usd-subcategoria"><option value="">—</option>'+subOpciones+'</select></div>'+
       '<div class="field"><label>Detalle (opcional)</label><input type="text" id="f-usd-detalle" value="'+esc(e.detalle)+'" style="width:200px"></div>'+
+    '</div>';
+  return ''+
+    (STATE.dolaresFormMsg ? '<div class="msg err">'+esc(STATE.dolaresFormMsg)+'</div>' : '')+
+    '<div class="fields-row">'+
+      '<div class="field"><label>Tipo</label><select id="f-usd-tipo">'+
+        ['compra','venta','ingreso','egreso','transferencia'].map(function(t){ return '<option value="'+t+'" '+(e.tipo===t?'selected':'')+'>'+TIPOS_USD[t]+'</option>'; }).join('')+
+      '</select></div>'+
+      '<div class="field"><label>Fecha</label><input type="date" id="f-usd-fecha" value="'+esc(e.fecha)+'"></div>'+
+      '<div class="field"><label>Cantidad (US$)</label><input type="number" step="0.01" min="0" id="f-usd-cantidad" value="'+esc(e.cantidad)+'" style="width:130px"></div>'+
+      '<div class="field"><label>'+(esTransf?'CC en dólares origen (de donde salen)':'CC en dólares')+'</label><select id="f-usd-centro"><option value="">Elegir...</option>'+optsCentro(centrosDolaresOrdenados(), e.centroId)+'</select></div>'+
     '</div>'+
+    camposCambio+
+    filaCategoria+
+    campoDestino+
     (esCambio ? '<div style="font-size:11px;color:var(--ink-soft);margin-top:8px">Al guardar se crea (o actualiza) también el '+(e.tipo==='compra'?'egreso':'ingreso')+' en pesos en Movimientos, con la misma categoría. Para que no cuente como gasto o ingreso en Resumen, usá una categoría de tipo Inversión o Solo control.</div>' : '');
 }
 function renderDolares(){
@@ -4040,7 +4069,7 @@ function renderDolares(){
   if(editing){
     MODAL_HTML = '<div class="modal-overlay" data-modal-backdrop="edit"><div class="modal-card">'+
       '<h2>Editar movimiento en dólares</h2>'+
-      campoDolares(e)+
+      campoDolares(e, true)+
       '<div class="fields-row" style="margin-top:14px">'+
         '<button data-action="save-dolares" data-id="'+editing.id+'">Guardar cambios</button>'+
         '<button class="secondary" data-action="cancel-edit">Cancelar</button>'+
@@ -4478,6 +4507,7 @@ function bindEvents(){
 
   // Formulario de Dólares: el Tipo muestra/oculta los campos de pesos, la Categoría refresca las
   // subcategorías, y el CC en dólares propone el mismo CC para los pesos si es "Pesos y dólares".
+  // El CC de origen también refresca la lista de CC destino de una TEC.
   ['f-usd-tipo','f-usd-categoria','f-usd-centro'].forEach(function(idSel){
     var sel = document.getElementById(idSel);
     if(!sel) return;
@@ -5754,10 +5784,22 @@ async function handleAction(action, id){
       STATE.dolaresFormMsg = 'Completá al menos: fecha, cantidad de dólares (mayor a 0) y CC en dólares.';
       render(); return;
     }
+    if(vD.tipo==='transferencia'){
+      var catTecD = categoriaTecUsd();
+      if(!catTecD){ STATE.dolaresFormMsg = 'Creá primero una categoría de tipo TEC en ABM → Categorías.'; render(); return; }
+      if(!vD.centroDestinoId){ STATE.dolaresFormMsg = 'Elegí el CC en dólares destino.'; render(); return; }
+      // Se guarda como gasto TEC en el origen; el espejo (ingreso en el destino) lo crea el bloque de abajo.
+      vD = Object.assign({}, vD, { tipo:'egreso', categoriaId: catTecD.id, subcategoriaId:'' });
+    }
     var esCambioD = vD.tipo==='compra' || vD.tipo==='venta';
     var montoArsD = Math.abs(parseFloat(vD.montoArs))||0;
     if(esCambioD && (!montoArsD || !vD.centroArsId || !vD.categoriaId)){
       STATE.dolaresFormMsg = 'Para una '+vD.tipo+' completá también: pesos, CC en pesos y Categoría.';
+      render(); return;
+    }
+    var destinoD = (!esCambioD && esTipoCategoria(vD.categoriaId, 'tec')) ? vD.centroDestinoId : '';
+    if(destinoD && destinoD===vD.centroId){
+      STATE.dolaresFormMsg = 'El CC destino tiene que ser distinto al de origen.';
       render(); return;
     }
     STATE.dolaresFormMsg = null; STATE.dbError = null;
@@ -5795,6 +5837,16 @@ async function handleAction(action, id){
       } else if(parPrevio){
         await dbDelete('movimientos', parPrevio.id);
         STATE.movimientos = STATE.movimientos.filter(function(m){ return m.id!==parPrevio.id; });
+      }
+      if(destinoD){
+        var espejoUsd = {
+          id: uid(), fecha: vD.fecha, centroId: destinoD, categoriaId: vD.categoriaId, subcategoriaId: vD.subcategoriaId,
+          proveedor: '', detalle: (vD.detalle ? vD.detalle+' ' : '')+'(transferencia automática)',
+          ingreso: entraD?0:cantD, egreso: entraD?cantD:0, tarjeta:false,
+          fechaConsumo:'', tarjetaMarca:'', cuotas:'', moneda:'USD', cambioId:''
+        };
+        await dbInsert('movimientos', toDbMovimiento(espejoUsd));
+        STATE.movimientosUsd.push(espejoUsd);
       }
       STATE.saldosDirty = true;
       STATE.editing = null;

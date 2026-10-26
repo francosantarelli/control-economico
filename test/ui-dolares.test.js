@@ -73,6 +73,39 @@ describe('Dólares', () => {
     expect(win.calcularSaldosUsd().totalFranco).toBe(-20);
   });
 
+  it('una TEC en dólares con CC destino crea el espejo en USD, sin nada en pesos', async () => {
+    win.STATE.dolaresDraft = { tipo: 'egreso', fecha: '2026-10-03', cantidad: '50', centroId: 'c-ef', montoArs: '', centroArsId: '', categoriaId: 'cat-tec', subcategoriaId: '', detalle: '', centroDestinoId: '' };
+    win.render();
+    expect(win.document.getElementById('f-usd-centro-destino')).toBeTruthy();
+    setVal(win, 'f-usd-centro-destino', 'c-da');
+    await win.handleAction('save-dolares', '');
+
+    expect(win.STATE.dolaresFormMsg).toBeNull();
+    expect(win.STATE.movimientosUsd).toHaveLength(2);
+    expect(win.STATE.movimientosUsd[1]).toMatchObject({ centroId: 'c-da', ingreso: 50, egreso: 0, categoriaId: 'cat-tec', moneda: 'USD' });
+    expect(win.STATE.movimientos).toHaveLength(0);
+    expect(win.calcularSaldosUsd().totalFranco).toBe(-50);
+    expect(win.calcularSaldosUsd().totalAna).toBe(50);
+  });
+
+  it('el tipo Transferencia entre cuentas crea gasto en origen e ingreso en destino con la categoría TEC', async () => {
+    win.STATE.dolaresDraft = { tipo: 'transferencia', fecha: '2026-10-04', cantidad: '30', centroId: 'c-ef', montoArs: '', centroArsId: '', categoriaId: '', subcategoriaId: '', detalle: '', centroDestinoId: '' };
+    win.render();
+    expect(win.document.getElementById('f-usd-categoria')).toBeNull();
+    await win.handleAction('save-dolares', '');
+    expect(win.STATE.dolaresFormMsg).toMatch(/destino/);
+    expect(sbMock.calls).toHaveLength(0);
+
+    setVal(win, 'f-usd-centro-destino', 'c-da');
+    await win.handleAction('save-dolares', '');
+    expect(win.STATE.dolaresFormMsg).toBeNull();
+    expect(win.STATE.movimientosUsd).toEqual([
+      expect.objectContaining({ centroId: 'c-ef', egreso: 30, ingreso: 0, categoriaId: 'cat-tec' }),
+      expect.objectContaining({ centroId: 'c-da', ingreso: 30, egreso: 0, categoriaId: 'cat-tec' })
+    ]);
+    expect(win.STATE.movimientos).toHaveLength(0);
+  });
+
   it('editar una compra a ingreso borra la contraparte en pesos y limpia cambio_id', async () => {
     win.STATE.movimientosUsd = [{ id: 'u1', fecha: '2026-10-01', centroId: 'c-da', categoriaId: 'cat-inv', subcategoriaId: '', proveedor: 'Compra USD', detalle: '', ingreso: 100, egreso: 0, moneda: 'USD', cambioId: 'k1' }];
     win.STATE.movimientos = [{ id: 'a1', fecha: '2026-10-01', centroId: 'c-ef', categoriaId: 'cat-inv', subcategoriaId: '', proveedor: 'Compra USD', detalle: '', ingreso: 0, egreso: 130000, moneda: 'ARS', cambioId: 'k1' }];

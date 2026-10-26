@@ -154,6 +154,7 @@ Para compras y ventas de dólares y algún ingreso/gasto en USD.
 
 - Los **Centros de Costo en dólares** (o “Pesos y dólares”) llevan su saldo en USD, visible en la pestaña.
 - **Compra/Venta:** indicá CC en dólares, cantidad (US$), CC en pesos y pesos pagados/recibidos. Se mueven los dólares y se crea (o actualiza) sola la **contraparte en pesos** en Movimientos. Para que no cuente como gasto o ingreso, usá una categoría de tipo *Inversión* o *Solo control*.
+- **Transferencia entre cuentas:** elegí CC origen y CC destino (los dos en dólares). Se crean un gasto en el origen y un ingreso en el destino con la categoría de tipo *TEC*. También se puede cargar un Ingreso/Gasto con una categoría TEC y completar el **CC destino** para que se cree el espejo.
 - El botón **“Usar blue de hoy”** sugiere el monto en pesos con la cotización del dólar blue.
 - Los montos en dólares no se suman a ningún informe en pesos, salvo al Flujo de Caja y al total de Saldos de la proyección (a cotización blue).
 
