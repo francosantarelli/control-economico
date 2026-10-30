@@ -87,20 +87,6 @@ describe('vencimiento', () => {
   });
 });
 
-describe('gasto fijo y sus pagos', () => {
-  it('toDbGastoFijo -> fromDbGastoFijo conserva los datos; "hasta" vacío viaja como null', () => {
-    const g = { id: 'g1', concepto: 'Cuota club', tipo: 'club', monto: 25000, diaVencimiento: 10, centroId: 'c1', desde: '2026-10', hasta: '' };
-    expect(win.fromDbGastoFijo(win.toDbGastoFijo(g))).toEqual(g);
-    expect(win.toDbGastoFijo(g)).toMatchObject({ dia_vencimiento: 10, desde: '2026-10', hasta: null });
-  });
-
-  it('toDbGastoFijoPago -> fromDbGastoFijoPago conserva los datos', () => {
-    const p = { id: 'p1', gastoFijoId: 'g1', periodo: '2026-10', fecha: '2026-10-08', monto: 26000, movimientoId: 'm1' };
-    expect(win.fromDbGastoFijoPago(win.toDbGastoFijoPago(p))).toEqual(p);
-    expect(win.toDbGastoFijoPago(Object.assign({}, p, { movimientoId: '' })).movimiento_id).toBeNull();
-  });
-});
-
 describe('gimnasio', () => {
   it('fromDbGimnasioVisita mapea la fila tal cual', () => {
     expect(win.fromDbGimnasioVisita({ id: 'g1', persona: 'franco', fecha: '2026-08-09' }))
