@@ -3,8 +3,8 @@ var SUPABASE_URL = 'https://krgwoiufhvhoqucqjpff.supabase.co';
 var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtyZ3dvaXVmaHZob3F1Y3FqcGZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0MDA2MTIsImV4cCI6MjA5OTk3NjYxMn0.HxA7P1_LUEkZq75kMPKmiCLixeJQ2sROXcmW37gnQOE';
 var sb = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
-var STATE = { centros: [], categorias: [], subcategorias: [], movimientos: [], vencimientos: [], tarjetas: [], resumenesTarjeta: [], gimnasioVisitas: [], usdtMovimientos: [], movimientosUsd: [], deudas: [], gastosFijos: [], gastosFijosPagos: [], facturas: [], configuracion: [], facturaLoadingId:null, activeTab: 'resumen', editing: null, ready:false,
-  importEntidad:'mp', importBanco:'nacion', importVencimiento:'', importCierre:'', importTarjetaId:'', importTarjetaMarca:'', importRaw:'', importPreview:null, importPreviewExcel:null, importMsg:null,
+var STATE = { centros: [], categorias: [], subcategorias: [], movimientos: [], vencimientos: [], gimnasioVisitas: [], usdtMovimientos: [], movimientosUsd: [], deudas: [], gastosFijos: [], gastosFijosPagos: [], facturas: [], configuracion: [], facturaLoadingId:null, activeTab: 'resumen', editing: null, ready:false,
+  importEntidad:'mp', importBanco:'nacion', importVencimiento:'', importTarjetaMarca:'', importRaw:'', importPreview:null, importPreviewExcel:null, importMsg:null,
   bulkColorCatMsg:null, confirmState:null, subDeleteState:null, vencPagarState:null, movFormMsg:null, movFieldErrors:null,
   filtros:{centro:[], categoria:[], subcategoria:[], mes:[], texto:'', soloIncompletos:false, soloTarjeta:false},
   resumenFiltros:{centro:[], categoria:[], mes:[fechaHoyISO().slice(0,7)], vista:'categoria'}, multiSelectAbierto:null, multiSelectBusqueda:'', abmSubTab:'categorias', grillaRango:'3m',
@@ -19,7 +19,7 @@ var STATE = { centros: [], categorias: [], subcategorias: [], movimientos: [], v
   menuUsuarioAbierto:false, usdtFormMsg:null, usdtDraft:null, usdtIngresoOpcionalesAbierto:false,
   usdtCotizacionBid:null, usdtCotizacionActualizada:null, usdtCotizacionError:null, usdtCotizacionCargando:false,
   dolaresDraft:null, dolaresFormMsg:null, dolarBlueCompra:null, dolarBlueVenta:null, dolarBlueActualizada:null, dolarBlueError:null, dolarBlueCargando:false,
-  deudaFormMsg:null, vencDraft:null, gfFormMsg:null, gfPeriodo:fechaHoyISO().slice(0,7), gfPagarState:null, gfPagarMsg:null, tarjetaFormMsg:null, resumenFormMsg:null, flujoVentana:'6m', flujoHorizonte:12, filtrosMovAbiertos:false };
+  deudaFormMsg:null, vencDraft:null, gfFormMsg:null, gfPeriodo:fechaHoyISO().slice(0,7), gfPagarState:null, gfPagarMsg:null, flujoVentana:'6m', flujoHorizonte:12, filtrosMovAbiertos:false };
 var MOV_PAGE_SIZE = 50;
 var REGLAS_PAGE_SIZE = 15;
 // Cantidad de registros por página elegible desde el paginador; se recuerda en el navegador.
@@ -288,17 +288,9 @@ function toDbMovimiento(m){
   var r = {id:m.id, fecha:m.fecha, centro_id:m.centroId||null, categoria_id:m.categoriaId||null, subcategoria_id:m.subcategoriaId||null, proveedor:m.proveedor||null, detalle:m.detalle||null, ingreso:Number(m.ingreso)||0, egreso:Number(m.egreso)||0, tarjeta:!!m.tarjeta, fecha_consumo:m.fechaConsumo||null, tarjeta_marca:m.tarjetaMarca||null, cuotas:m.cuotas||null};
   if(m.moneda==='USD') r.moneda = 'USD';
   if(m.cambioId) r.cambio_id = m.cambioId;
-  // Idem con la tarjeta/resumen (migracion_tarjetas_resumenes.sql): al editar, el handler manda null
-  // a mano si el movimiento dejó de tenerlos.
-  if(m.tarjetaId) r.tarjeta_id = m.tarjetaId;
-  if(m.resumenId) r.resumen_id = m.resumenId;
   return r;
 }
-function fromDbMovimiento(r){ return {id:r.id, fecha:r.fecha, centroId:r.centro_id||'', categoriaId:r.categoria_id||'', subcategoriaId:r.subcategoria_id||'', proveedor:r.proveedor||'', detalle:r.detalle||'', ingreso:Number(r.ingreso)||0, egreso:Number(r.egreso)||0, tarjeta:!!r.tarjeta, fechaConsumo:r.fecha_consumo||'', tarjetaMarca:r.tarjeta_marca||'', cuotas:r.cuotas||'', moneda:r.moneda==='USD'?'USD':'ARS', cambioId:r.cambio_id||'', tarjetaId:r.tarjeta_id||'', resumenId:r.resumen_id||''}; }
-function toDbTarjeta(t){ return {id:t.id, nombre:t.nombre, banco:t.banco||null, marca:t.marca||null, centro_id:t.centroId||null, dia_cierre:Number(t.diaCierre)||25, dia_vencimiento:Number(t.diaVencimiento)||5, activa:t.activa!==false}; }
-function fromDbTarjeta(r){ return {id:r.id, nombre:r.nombre, banco:r.banco||'', marca:r.marca||'', centroId:r.centro_id||'', diaCierre:Number(r.dia_cierre)||25, diaVencimiento:Number(r.dia_vencimiento)||5, activa:r.activa!==false}; }
-function toDbResumenTarjeta(r){ return {id:r.id, tarjeta_id:r.tarjetaId, fecha_cierre:r.fechaCierre, fecha_vencimiento:r.fechaVencimiento, total_real:(r.totalReal===null||r.totalReal===undefined||r.totalReal==='') ? null : Number(r.totalReal), estado:r.estado||'abierto'}; }
-function fromDbResumenTarjeta(r){ return {id:r.id, tarjetaId:r.tarjeta_id, fechaCierre:r.fecha_cierre, fechaVencimiento:r.fecha_vencimiento, totalReal:(r.total_real===null||r.total_real===undefined) ? null : Number(r.total_real), estado:r.estado||'abierto'}; }
+function fromDbMovimiento(r){ return {id:r.id, fecha:r.fecha, centroId:r.centro_id||'', categoriaId:r.categoria_id||'', subcategoriaId:r.subcategoria_id||'', proveedor:r.proveedor||'', detalle:r.detalle||'', ingreso:Number(r.ingreso)||0, egreso:Number(r.egreso)||0, tarjeta:!!r.tarjeta, fechaConsumo:r.fecha_consumo||'', tarjetaMarca:r.tarjeta_marca||'', cuotas:r.cuotas||'', moneda:r.moneda==='USD'?'USD':'ARS', cambioId:r.cambio_id||''}; }
 function toDbVencimiento(v){ return {id:v.id, concepto:v.concepto, fecha:v.fecha, monto:Number(v.monto)||0, centro_id:v.centroId||null, estado:v.estado||'pendiente'}; }
 function fromDbVencimiento(r){ return {id:r.id, concepto:r.concepto, fecha:r.fecha, monto:Number(r.monto)||0, centroId:r.centro_id||'', estado:r.estado||'pendiente'}; }
 // Gastos fijos (servicios, club, biblioteca, colaboraciones...): se cargan una vez y se ven siempre
@@ -436,7 +428,7 @@ async function dbUpsert(table, rows){
 // scripts/backup-a-drive/backup.js, que tiene que listar exactamente las mismas). El orden importa
 // al restaurar: primero las que otras referencian (centros antes que movimientos, movimientos antes
 // que usdt_movimientos/facturas). arca_ta queda afuera a propósito: es un token temporal de ARCA.
-var TABLAS_BACKUP = ['centros', 'categorias', 'subcategorias', 'tarjetas', 'resumenes_tarjeta', 'movimientos', 'vencimientos', 'deudas', 'gastos_fijos', 'gastos_fijos_pagos',
+var TABLAS_BACKUP = ['centros', 'categorias', 'subcategorias', 'movimientos', 'vencimientos', 'deudas', 'gastos_fijos', 'gastos_fijos_pagos',
   'usdt_movimientos', 'facturas', 'gimnasio_visitas', 'reglas_categorizacion', 'configuracion'];
 var BACKUP_LOTE = 500; // filas por upsert al restaurar, para no mandar un request gigante
 
@@ -496,14 +488,6 @@ async function cargarTodo(){
   STATE.movimientos = todosLosMovs.filter(function(m){ return m.moneda!=='USD'; });
   STATE.movimientosUsd = todosLosMovs.filter(function(m){ return m.moneda==='USD'; });
   STATE.vencimientos = vencimientos.map(fromDbVencimiento);
-  try{
-    // Idem: si todavía no corriste migracion_tarjetas_resumenes.sql, arranca sin tarjetas y los
-    // movimientos de tarjeta se agrupan como antes (por fecha + centro).
-    var tarjetas = await dbFetchAll('tarjetas');
-    var resumenesTarjeta = await dbFetchAll('resumenes_tarjeta');
-    STATE.tarjetas = tarjetas.map(fromDbTarjeta);
-    STATE.resumenesTarjeta = resumenesTarjeta.map(fromDbResumenTarjeta);
-  }catch(e){ STATE.tarjetas = []; STATE.resumenesTarjeta = []; }
   try{
     // Try/catch aparte: si todavía no corriste migracion_gimnasio.sql en Supabase, que no
     // reviente la carga de toda la app — el bonus track simplemente arranca vacío.
@@ -1349,8 +1333,6 @@ function fechaCortaAISO(fCorta){
 }
 
 function findDefaultCentroId(){
-  var tarjetaImp = STATE.importEntidad === 'tarjeta' ? tarjetaPorId(STATE.importTarjetaId) : null;
-  if(tarjetaImp && tarjetaImp.centroId) return tarjetaImp.centroId;
   var code = STATE.importEntidad === 'tarjeta' ? (TARJETA_CC[STATE.importBanco]||'') : (CC_MAP[STATE.importEntidad]||'');
   if(!code) return '';
   var c = STATE.centros.find(function(x){ return (x.codigo||'').toUpperCase() === code.toUpperCase(); });
@@ -1411,13 +1393,10 @@ function montoSignedMovimiento(m){
 function normalizarProveedor(p){ return (p||'').trim().toLowerCase(); }
 function montosIguales(a, b){ return Math.round((Number(a)||0)*100) === Math.round((Number(b)||0)*100); }
 
-// Con resumenId (importación de una tarjeta cargada), también es "el mismo" un movimiento de ese
-// resumen con igual monto aunque tenga otra fecha: típicamente una cuota ya proyectada con la fecha
-// estimada, que al importar el resumen real pasa a la fecha exacta.
-function existeMovimientoIgual(fecha, centroId, proveedor, monto, resumenId){
+function existeMovimientoIgual(fecha, centroId, proveedor, monto){
+  if(!fecha || !centroId) return false;
   return STATE.movimientos.some(function(m){
-    if(resumenId && m.resumenId===resumenId && montosIguales(montoSignedMovimiento(m), monto)) return true;
-    return !!fecha && !!centroId && m.fecha===fecha && m.centroId===centroId && montosIguales(montoSignedMovimiento(m), monto);
+    return m.fecha===fecha && m.centroId===centroId && montosIguales(montoSignedMovimiento(m), monto);
   });
 }
 
@@ -1427,7 +1406,7 @@ function existeMovimientoIgual(fecha, centroId, proveedor, monto, resumenId){
 function calcularDuplicados(filasNormalizadas){
   var dupIds = {};
   filasNormalizadas.forEach(function(f, i){
-    if(existeMovimientoIgual(f.fecha, f.centroId, f.proveedor, f.monto, f.resumenId)){ dupIds[f.id] = true; return; }
+    if(existeMovimientoIgual(f.fecha, f.centroId, f.proveedor, f.monto)){ dupIds[f.id] = true; return; }
     for(var j=0;j<filasNormalizadas.length;j++){
       if(j===i) continue;
       var o = filasNormalizadas[j];
@@ -1550,8 +1529,7 @@ function runParser(){
   if(entidad === 'tarjeta'){
     var venc = STATE.importVencimiento || '';
     if(!venc.trim()) return { rows: [], error: 'Ingresá la fecha de vencimiento del resumen.' };
-    var tarjetaImp = tarjetaPorId(STATE.importTarjetaId);
-    var banco = (tarjetaImp && tarjetaImp.banco) || STATE.importBanco || 'nacion';
+    var banco = STATE.importBanco || 'nacion';
     if(banco === 'mercadopago'){
       // el resumen de MP trae fecha propia por fila (dd/mmm, sin año): se usa como Fecha de consumo,
       // y el Vencimiento tipeado (con el que también se deduce el año de esas fechas) queda como fecha
@@ -1672,10 +1650,6 @@ function renderInterno(){
     else if(STATE.activeTab==='abm') contentHtml += renderABM();
   }
   contentHtml += '</div>';
-
-  // El modal de un resumen de tarjeta se abre desde Vencimientos o Movimientos: se arma acá, aparte.
-  var resumenEditando = STATE.editing && STATE.editing.type==='resumen' ? resumenPorId(STATE.editing.id) : null;
-  if(resumenEditando) MODAL_HTML = renderResumenModal(resumenEditando);
 
   contentHtml += '<footer class="small">Los datos se guardan en la base de datos compartida: vos y quien tenga usuario ven y editan la misma información.</footer>';
 
@@ -1813,245 +1787,6 @@ function renderInterno(){
 
 var MODAL_HTML = '';
 
-// ===================== TARJETAS DE CRÉDITO Y RESÚMENES =====================
-// Cada tarjeta tiene un día de cierre y uno de vencimiento aproximados: con eso se estima el ciclo
-// de cada mes (cierre → vencimiento) y cada consumo cae en el resumen que corresponde a su fecha de
-// consumo. Si ya hay un resumen guardado cerca de esa estimación (p. ej. el real, importado con sus
-// fechas exactas), se usa ese en vez de crear otro. Cada cuota siguiente va al resumen del mes siguiente.
-// La "fecha" de un movimiento de tarjeta es siempre el vencimiento de su resumen.
-var BANCOS_TARJETA = [
-  {id:'nacion', label:'Nación'},
-  {id:'santander', label:'Santander'},
-  {id:'provincia', label:'Provincia'},
-  {id:'mercadopago', label:'Mercado Pago'}
-];
-// Un resumen guardado "es" el del ciclo estimado si su cierre cae a menos de estos días de la estimación.
-var TOLERANCIA_CIERRE_DIAS = 12;
-function tarjetaPorId(id){ return id ? (STATE.tarjetas.find(function(t){ return t.id===id; }) || null) : null; }
-function resumenPorId(id){ return id ? (STATE.resumenesTarjeta.find(function(r){ return r.id===id; }) || null) : null; }
-function tarjetasActivas(){
-  return STATE.tarjetas.filter(function(t){ return t.activa!==false; })
-    .sort(function(a,b){ return (a.nombre||'').localeCompare(b.nombre||'', 'es', {sensitivity:'base'}); });
-}
-// 'YYYY-MM' + n meses.
-function periodoSumarMeses(periodo, n){
-  var p = periodo.split('-').map(Number);
-  var d = new Date(p[0], p[1]-1+n, 1);
-  return d.getFullYear()+'-'+pad2(d.getMonth()+1);
-}
-// Día "dia" del mes 'YYYY-MM'; si el mes no tiene ese día (ej. 31 en noviembre), el último.
-function fechaDiaDelMes(periodo, dia){
-  var p = periodo.split('-').map(Number);
-  var ultimoDia = new Date(p[0], p[1], 0).getDate();
-  return periodo+'-'+pad2(Math.min(dia, ultimoDia));
-}
-function diasEntreFechas(desdeISO, hastaISO){
-  var a = desdeISO.split('-').map(Number), b = hastaISO.split('-').map(Number);
-  return Math.round((Date.UTC(b[0], b[1]-1, b[2]) - Date.UTC(a[0], a[1]-1, a[2])) / 86400000);
-}
-// Ciclo estimado de la tarjeta que cierra en el mes "periodo": el vencimiento es el primer día de
-// vencimiento posterior al cierre (el mismo mes si vence después del día de cierre, si no el siguiente).
-function cicloDelMes(tarjeta, periodo){
-  var fechaCierre = fechaDiaDelMes(periodo, Number(tarjeta.diaCierre)||25);
-  var diaVenc = Number(tarjeta.diaVencimiento)||5;
-  var fechaVencimiento = fechaDiaDelMes(periodo, diaVenc);
-  if(fechaVencimiento <= fechaCierre) fechaVencimiento = fechaDiaDelMes(periodoSumarMeses(periodo, 1), diaVenc);
-  return {fechaCierre:fechaCierre, fechaVencimiento:fechaVencimiento};
-}
-function resumenGuardadoCerca(tarjetaId, fechaCierre, excluirId){
-  var mejor = null, mejorDist = Infinity;
-  STATE.resumenesTarjeta.forEach(function(r){
-    if(r.tarjetaId!==tarjetaId || r.id===excluirId) return;
-    var dist = Math.abs(diasEntreFechas(r.fechaCierre, fechaCierre));
-    if(dist<=TOLERANCIA_CIERRE_DIAS && dist<mejorDist){ mejor = r; mejorDist = dist; }
-  });
-  return mejor;
-}
-// Resúmenes en los que se pagan las "cantidad" cuotas de un consumo (uno solo si no es en cuotas).
-// Los que todavía no existen vuelven con nuevo:true y sin guardar (ver guardarResumenesNuevos).
-function resumenesParaConsumo(tarjeta, fechaConsumo, cantidad){
-  var periodoConsumo = fechaConsumo.slice(0,7);
-  var periodo = null, primero = null;
-  // Primero, el resumen guardado que cierra en o después del consumo, si coincide con el ciclo de
-  // este mes o, si el consumo es posterior al cierre estimado de este mes, con el del siguiente (el
-  // real puede cerrar unos días antes o después que la estimación).
-  var siguienteGuardado = STATE.resumenesTarjeta.filter(function(r){ return r.tarjetaId===tarjeta.id && r.fechaCierre>=fechaConsumo; })
-    .sort(function(a,b){ return a.fechaCierre.localeCompare(b.fechaCierre); })[0];
-  if(siguienteGuardado){
-    var mesesAProbar = fechaConsumo > cicloDelMes(tarjeta, periodoConsumo).fechaCierre ? [0,1] : [0];
-    mesesAProbar.some(function(k){
-      var p = periodoSumarMeses(periodoConsumo, k);
-      if(Math.abs(diasEntreFechas(siguienteGuardado.fechaCierre, cicloDelMes(tarjeta, p).fechaCierre)) > TOLERANCIA_CIERRE_DIAS) return false;
-      periodo = p; primero = siguienteGuardado;
-      return true;
-    });
-  }
-  if(!periodo){
-    periodo = periodoConsumo;
-    if(fechaConsumo > cicloDelMes(tarjeta, periodo).fechaCierre) periodo = periodoSumarMeses(periodo, 1);
-    // si el resumen guardado de ese ciclo ya cerró antes del consumo, el consumo entra en el siguiente
-    var cerca = resumenGuardadoCerca(tarjeta.id, cicloDelMes(tarjeta, periodo).fechaCierre);
-    if(cerca && cerca.fechaCierre < fechaConsumo) periodo = periodoSumarMeses(periodo, 1);
-  }
-  var out = [];
-  for(var k=0; k<Math.max(1, cantidad||1); k++){
-    var ciclo = cicloDelMes(tarjeta, periodoSumarMeses(periodo, k));
-    var r = (k===0 && primero) || resumenGuardadoCerca(tarjeta.id, ciclo.fechaCierre);
-    out.push(r || {id:uid(), tarjetaId:tarjeta.id, fechaCierre:ciclo.fechaCierre, fechaVencimiento:ciclo.fechaVencimiento, totalReal:null, estado:'abierto', nuevo:true});
-  }
-  return out;
-}
-// Resumen al que va una importación con sus fechas reales: el guardado que coincide (por cierre si se
-// cargó, si no por vencimiento) o, si no hay, las fechas para crear uno nuevo (cierre estimado si no
-// se cargó). Devuelve {existente, fechaCierre, fechaVencimiento}, o null si falta el vencimiento.
-function resumenParaImportacion(tarjeta, vencimiento, cierre){
-  if(!/^\d{4}-\d{2}-\d{2}$/.test(vencimiento||'')) return null;
-  var tieneCierre = /^\d{4}-\d{2}-\d{2}$/.test(cierre||'');
-  var existente = null;
-  if(tieneCierre) existente = resumenGuardadoCerca(tarjeta.id, cierre);
-  else {
-    var mejorDist = Infinity;
-    STATE.resumenesTarjeta.forEach(function(r){
-      if(r.tarjetaId!==tarjeta.id) return;
-      var dist = Math.abs(diasEntreFechas(r.fechaVencimiento, vencimiento));
-      if(dist<=TOLERANCIA_CIERRE_DIAS && dist<mejorDist){ existente = r; mejorDist = dist; }
-    });
-  }
-  var fechaCierre = tieneCierre ? cierre : (existente ? existente.fechaCierre : null);
-  if(!fechaCierre){
-    // el ciclo estimado (que cierra este mes o el anterior) cuyo vencimiento queda más cerca del real
-    var candidatos = [0,-1].map(function(k){ return cicloDelMes(tarjeta, periodoSumarMeses(vencimiento.slice(0,7), k)); })
-      .filter(function(c){ return c.fechaCierre < vencimiento; })
-      .sort(function(a,b){ return Math.abs(diasEntreFechas(a.fechaVencimiento, vencimiento)) - Math.abs(diasEntreFechas(b.fechaVencimiento, vencimiento)); });
-    fechaCierre = candidatos.length ? candidatos[0].fechaCierre : vencimiento;
-  }
-  return {existente:existente, fechaCierre:fechaCierre, fechaVencimiento:vencimiento};
-}
-async function guardarResumenesNuevos(resumenes){
-  var nuevos = resumenes.filter(function(r){ return r.nuevo; });
-  if(!nuevos.length) return;
-  await dbInsert('resumenes_tarjeta', nuevos.map(toDbResumenTarjeta));
-  nuevos.forEach(function(r){ delete r.nuevo; STATE.resumenesTarjeta.push(r); });
-}
-function movimientosDelResumen(resumenId){
-  return STATE.movimientos.filter(function(m){ return m.resumenId===resumenId; });
-}
-function totalProyectadoResumen(resumenId){
-  return movimientosDelResumen(resumenId).reduce(function(s,m){ return s + (Number(m.egreso)||0) - (Number(m.ingreso)||0); }, 0);
-}
-// Cambia las fechas de un resumen y corre la fecha de todos sus movimientos al nuevo vencimiento.
-async function actualizarFechasResumen(resumen, fechaCierre, fechaVencimiento){
-  if(resumen.fechaCierre!==fechaCierre || resumen.fechaVencimiento!==fechaVencimiento){
-    await dbUpdate('resumenes_tarjeta', resumen.id, {fecha_cierre:fechaCierre, fecha_vencimiento:fechaVencimiento});
-    resumen.fechaCierre = fechaCierre; resumen.fechaVencimiento = fechaVencimiento;
-  }
-  var aMover = movimientosDelResumen(resumen.id).filter(function(m){ return m.fecha!==fechaVencimiento; });
-  for(var i=0; i<aMover.length; i++){
-    await dbUpdate('movimientos', aMover[i].id, {fecha:fechaVencimiento});
-    aMover[i].fecha = fechaVencimiento;
-  }
-  if(aMover.length) STATE.saldosDirty = true;
-}
-function tituloResumen(resumen){
-  var t = tarjetaPorId(resumen.tarjetaId);
-  return (t ? t.nombre : 'Tarjeta')+' · cierre '+fechaISOaDDMMAAAA(resumen.fechaCierre);
-}
-
-function campoTarjeta(t, mostrarEstado){
-  var centroOpts = '<option value="">—</option>'+centrosOrdenados().filter(centroAdmitePesos).map(function(c){
-    return '<option value="'+c.id+'"'+(t.centroId===c.id?' selected':'')+'>'+esc(c.codigo)+' · '+esc(c.nombre)+'</option>';
-  }).join('');
-  return '<div class="field"><label>Nombre</label><input type="text" id="f-tarjeta-nombre" placeholder="Ej: Visa Nación" value="'+esc(t.nombre||'')+'" style="width:180px"></div>'+
-    '<div class="field"><label>Banco (formato del resumen)</label><select id="f-tarjeta-banco">'+
-      BANCOS_TARJETA.map(function(b){ return '<option value="'+b.id+'"'+((t.banco||'nacion')===b.id?' selected':'')+'>'+b.label+'</option>'; }).join('')+
-    '</select></div>'+
-    '<div class="field"><label>Marca</label><input type="text" id="f-tarjeta-marca" autocomplete="off" placeholder="Visa, Mastercard..." value="'+esc(t.marca||'')+'" style="width:130px"></div>'+
-    '<div class="field"><label>Se paga desde</label><select id="f-tarjeta-centro">'+centroOpts+'</select></div>'+
-    '<div class="field"><label>Día de cierre</label><input type="number" min="1" max="31" id="f-tarjeta-dia-cierre" value="'+esc(t.diaCierre||25)+'" style="width:80px"></div>'+
-    '<div class="field"><label>Día de vencimiento</label><input type="number" min="1" max="31" id="f-tarjeta-dia-venc" value="'+esc(t.diaVencimiento||5)+'" style="width:80px"></div>'+
-    (mostrarEstado ? '<div class="field"><label>Estado</label><select id="f-tarjeta-activa">'+
-      '<option value="1"'+(t.activa!==false?' selected':'')+'>Activa</option>'+
-      '<option value="0"'+(t.activa===false?' selected':'')+'>Dada de baja</option>'+
-    '</select></div>' : '');
-}
-function ayudaTarjeta(){
-  return '<div style="font-size:11px;color:var(--ink-soft);margin-top:10px;line-height:1.5">'+
-    'El día de cierre y el de vencimiento son los de un mes típico: con eso la app calcula en qué resumen cae cada consumo según su fecha de consumo, y cada cuota en el resumen del mes siguiente. '+
-    'Cuando importás el resumen real (pestaña Importar) sus fechas exactas reemplazan la estimación. "Banco" indica con qué formato se lee el resumen al importarlo.'+
-  '</div>';
-}
-function renderTarjetas(){
-  var editing = STATE.editing && STATE.editing.type==='tarjeta' ? tarjetaPorId(STATE.editing.id) : null;
-  if(editing){
-    MODAL_HTML = '<div class="modal-overlay" data-modal-backdrop="edit"><div class="modal-card">'+
-      '<h2>Editar tarjeta</h2>'+
-      (STATE.tarjetaFormMsg ? '<div class="msg err">'+esc(STATE.tarjetaFormMsg)+'</div>' : '')+
-      '<div class="fields-row">'+ campoTarjeta(editing, true) +'</div>'+
-      ayudaTarjeta()+
-      '<div class="fields-row" style="margin-top:14px">'+
-        '<button data-action="save-tarjeta" data-id="'+editing.id+'">Guardar cambios</button>'+
-        '<button class="secondary" data-action="cancel-edit">Cancelar</button>'+
-      '</div>'+
-    '</div></div>';
-  }
-  var formNueva = editing ? '' : ''+
-  '<div class="card">'+
-    '<h2>Nueva tarjeta</h2>'+
-    (STATE.tarjetaFormMsg ? '<div class="msg err">'+esc(STATE.tarjetaFormMsg)+'</div>' : '')+
-    '<div class="fields-row">'+ campoTarjeta({}, false) +
-      '<button data-action="save-tarjeta" data-id="">Agregar</button>'+
-    '</div>'+
-    ayudaTarjeta()+
-  '</div>';
-
-  var lista = STATE.tarjetas.slice().sort(function(a,b){ return (a.activa===false)-(b.activa===false) || (a.nombre||'').localeCompare(b.nombre||'', 'es', {sensitivity:'base'}); });
-  var rows = lista.map(function(t){
-    var banco = BANCOS_TARJETA.find(function(b){ return b.id===t.banco; });
-    var abiertos = STATE.resumenesTarjeta.filter(function(r){ return r.tarjetaId===t.id && r.estado!=='pagado'; }).length;
-    return '<tr'+(t.activa===false?' style="opacity:.6"':'')+'>'+
-      '<td data-label="Nombre"><i class="bi bi-credit-card"></i> '+esc(t.nombre)+(t.activa===false?' <span style="font-size:11px;color:var(--ink-soft)">(dada de baja)</span>':'')+'</td>'+
-      '<td data-label="Banco">'+esc(banco?banco.label:'—')+'</td>'+
-      '<td data-label="Marca">'+esc(t.marca||'—')+'</td>'+
-      '<td class="mono" data-label="Se paga desde">'+esc(t.centroId?nombreCentro(t.centroId).split(' · ')[0]:'—')+'</td>'+
-      '<td class="mono" data-label="Cierre / vence">día '+t.diaCierre+' / día '+t.diaVencimiento+'</td>'+
-      '<td class="mono" data-label="Resúmenes abiertos">'+abiertos+'</td>'+
-      '<td class="actions-cell"><button class="link" data-action="edit-tarjeta" data-id="'+t.id+'">editar</button>'+
-      '<button class="link" data-action="del-tarjeta" data-id="'+t.id+'">borrar</button></td>'+
-    '</tr>';
-  }).join('');
-  return formNueva +
-  '<div class="card">'+
-    '<h3>Tarjetas cargadas</h3>'+
-    (lista.length ? '<table class="table tabla-movil"><thead><tr><th>Nombre</th><th>Banco</th><th>Marca</th><th>Se paga desde</th><th>Cierre / vence</th><th>Resúmenes abiertos</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>' : '<div class="empty">Todavía no cargaste ninguna tarjeta.</div>')+
-  '</div>';
-}
-
-// Modal de un resumen (desde Vencimientos): corregir sus fechas reales y cargar el total que vino
-// para compararlo con lo proyectado (la suma de sus consumos cargados) y marcarlo pagado.
-function renderResumenModal(resumen){
-  var proyectado = totalProyectadoResumen(resumen.id);
-  var totalInicial = resumen.totalReal!==null ? resumen.totalReal : '';
-  return '<div class="modal-overlay" data-modal-backdrop="edit"><div class="modal-card">'+
-    '<h2><i class="bi bi-credit-card"></i> '+esc(tituloResumen(resumen))+'</h2>'+
-    (STATE.resumenFormMsg ? '<div class="msg err">'+esc(STATE.resumenFormMsg)+'</div>' : '')+
-    '<div style="font-size:13px;margin-bottom:12px">Proyectado (consumos cargados): <strong class="mono">'+fmtMonto(proyectado)+'</strong> · '+movimientosDelResumen(resumen.id).length+' movimiento(s)</div>'+
-    '<div class="fields-row">'+
-      '<div class="field"><label>Fecha de cierre</label><input type="date" id="f-resumen-cierre" value="'+esc(resumen.fechaCierre)+'"></div>'+
-      '<div class="field"><label>Fecha de vencimiento</label><input type="date" id="f-resumen-venc" value="'+esc(resumen.fechaVencimiento)+'"></div>'+
-      '<div class="field"><label>Total real del resumen</label><input type="number" step="0.01" id="f-resumen-total" value="'+esc(totalInicial)+'" placeholder="'+esc(proyectado.toFixed(2))+'"></div>'+
-    '</div>'+
-    '<div style="font-size:11px;color:var(--ink-soft);margin-top:8px">Al cambiar el vencimiento, todos los consumos de este resumen pasan a esa fecha. La diferencia entre el total real y lo proyectado suele ser intereses, impuestos o algún consumo que falta cargar.</div>'+
-    '<div class="fields-row" style="margin-top:14px">'+
-      (resumen.estado==='pagado' ?
-        '<button data-action="save-resumen" data-id="'+resumen.id+'">Guardar cambios</button>'+
-        '<button class="secondary" data-action="reabrir-resumen" data-id="'+resumen.id+'">Marcar como no pagado</button>' :
-        '<button data-action="pagar-resumen" data-id="'+resumen.id+'">Guardar y marcar pagado</button>'+
-        '<button class="secondary" data-action="save-resumen" data-id="'+resumen.id+'">Solo guardar</button>')+
-      '<button class="secondary" data-action="cancel-edit">Cancelar</button>'+
-    '</div>'+
-  '</div></div>';
-}
-
 // ===================== CENTROS DE COSTO =====================
 var ENTIDADES = [
   {id:'', label:'(sin asignar)'},
@@ -2148,7 +1883,6 @@ function renderABM(){
     {id:'categorias', label:'Categorías'},
     {id:'subcategorias', label:'Subcategorías'},
     {id:'centros', label:'Centros de Costo'},
-    {id:'tarjetas', label:'Tarjetas'},
     {id:'reglas', label:'Reglas de categorización'},
     {id:'backup', label:'Backup'}
   ];
@@ -2160,7 +1894,6 @@ function renderABM(){
 
   if(STATE.abmSubTab === 'subcategorias') html += renderSubcategorias();
   else if(STATE.abmSubTab === 'centros') html += renderCentros();
-  else if(STATE.abmSubTab === 'tarjetas') html += renderTarjetas();
   else if(STATE.abmSubTab === 'reglas') html += renderReglas();
   else if(STATE.abmSubTab === 'backup') html += renderBackup();
   else html += renderCategorias();
@@ -2219,7 +1952,7 @@ function renderBackup(){
   return ''+
   '<div class="card">'+
     '<h2>Descargar backup</h2>'+
-    '<div style="font-size:12px;color:var(--ink-soft);margin-bottom:12px">Genera un archivo con todo lo que hay cargado hoy (Centros, Categorías, Subcategorías, Tarjetas y sus resúmenes, Movimientos, Vencimientos, Deudas, USDT, Facturas, Gimnasio, Reglas y Configuración). Te sirve para restaurar todo si algún día se pierde algo en la base de datos. Además, todos los días se sube uno automático a Google Drive con el mismo formato.</div>'+
+    '<div style="font-size:12px;color:var(--ink-soft);margin-bottom:12px">Genera un archivo con todo lo que hay cargado hoy (Centros, Categorías, Subcategorías, Movimientos, Vencimientos, Deudas, USDT, Facturas, Gimnasio, Reglas y Configuración). Te sirve para restaurar todo si algún día se pierde algo en la base de datos. Además, todos los días se sube uno automático a Google Drive con el mismo formato.</div>'+
     '<button data-action="descargar-backup"><i class="bi bi-download"></i> Descargar backup completo (.json)</button>'+
   '</div>'+
   '<div class="card">'+
@@ -2481,16 +2214,13 @@ function alertaVencimientosProximosHtml(){
       movsProximos.push({dias:dias, concepto:m.proveedor||nombreCategoria(m.categoriaId)||m.detalle||'Movimiento', monto:monto, centroId:m.centroId});
       return;
     }
-    var resumenM = resumenPorId(m.resumenId);
-    var clave = resumenM ? 'r|'+resumenM.id : m.fecha+'|'+(m.centroId||'');
+    var clave = m.fecha+'|'+(m.centroId||'');
     var r = resumenesTarjetaProximos[clave];
     if(!r){
       r = resumenesTarjetaProximos[clave] = {dias:dias, marcas:{}, cantidad:0, monto:0, centroId:m.centroId};
       movsProximos.push(r);
     }
-    var tarjetaM = resumenM ? tarjetaPorId(resumenM.tarjetaId) : null;
-    if(tarjetaM) r.marcas[tarjetaM.nombre] = true;
-    else if(m.tarjetaMarca) r.marcas[m.tarjetaMarca] = true;
+    if(m.tarjetaMarca) r.marcas[m.tarjetaMarca] = true;
     r.cantidad++;
     r.monto += monto;
   });
@@ -2558,13 +2288,10 @@ function renderMovimientos(){
   var vista = [];
   lista.forEach(function(m){
     if(!agruparTarjeta || !m.tarjeta){ vista.push({tipo:'mov', mov:m}); return; }
-    // Con tarjeta cargada en ABM, el grupo es su resumen; sin ella, Fecha + Centro + Marca como antes.
-    var resumenM = resumenPorId(m.resumenId);
-    var clave = resumenM ? 'mov-resumen|'+resumenM.id : 'mov-tarjeta|'+m.fecha+'|'+(m.centroId||'')+'|'+(m.tarjetaMarca||'');
+    var clave = 'mov-tarjeta|'+m.fecha+'|'+(m.centroId||'')+'|'+(m.tarjetaMarca||'');
     var g = gruposTarjetaMap[clave];
     if(!g){
-      var tarjetaM = resumenM ? tarjetaPorId(resumenM.tarjetaId) : null;
-      g = {tipo:'grupo', clave:clave, fecha:m.fecha, centroId:m.centroId||'', marca: tarjetaM ? tarjetaM.nombre : (m.tarjetaMarca||''), resumen:resumenM, movs:[]};
+      g = {tipo:'grupo', clave:clave, fecha:m.fecha, centroId:m.centroId||'', marca:m.tarjetaMarca||'', movs:[]};
       gruposTarjetaMap[clave] = g;
       vista.push(g);
     }
@@ -2639,7 +2366,7 @@ function renderMovimientos(){
     var totalEgresoG = g.movs.reduce(function(s,m){ return s+(Number(m.egreso)||0); },0);
     var faltantesGrupo = g.movs.filter(function(m){ return camposFaltantes(m).length>0; }).length;
     var caret = abierto ? '▾' : '▸';
-    var leyenda = 'Resumen '+(g.marca ? esc(g.marca) : 'tarjeta')+' · '+g.movs.length+' movimiento(s)'+(g.resumen && g.resumen.estado==='pagado'?' · pagado':'')+(faltantesGrupo?' · <i class="bi bi-exclamation-triangle"></i> '+faltantesGrupo+' por categorizar':'');
+    var leyenda = 'Resumen '+(g.marca ? esc(g.marca) : 'tarjeta')+' · '+g.movs.length+' movimiento(s)'+(faltantesGrupo?' · <i class="bi bi-exclamation-triangle"></i> '+faltantesGrupo+' por categorizar':'');
     var filaResumen = '<tr class="fila-grupo-tarjeta">'+
       '<td data-label=""></td>'+
       '<td class="mono" data-label="Fecha">'+esc(fechaISOaDDMMAAAA(g.fecha)||g.fecha)+'</td>'+
@@ -2647,7 +2374,7 @@ function renderMovimientos(){
       '<td colspan="4" data-label="Detalle"><button class="link" data-action="toggle-grupo-tarjeta-mov" data-id="'+esc(g.clave)+'">'+caret+' <i class="bi bi-credit-card"></i> '+leyenda+'</button></td>'+
       '<td class="num ingreso" data-label="Ingreso">'+(totalIngresoG?fmtMonto(totalIngresoG):'')+'</td>'+
       '<td class="num egreso" data-label="Egreso">'+(totalEgresoG?fmtMonto(totalEgresoG):'')+'</td>'+
-      '<td class="actions-cell">'+(g.resumen ? '<button class="icon-btn" data-action="abrir-resumen" data-id="'+g.resumen.id+'" title="Fechas, total real y pago del resumen" aria-label="Ver resumen"><i class="bi bi-receipt"></i></button>' : '')+'</td>'+
+      '<td class="actions-cell"></td>'+
     '</tr>';
     if(!abierto) return filaResumen;
     return filaResumen + g.movs.map(filaDetalleTarjeta).join('');
@@ -2662,9 +2389,9 @@ function renderMovimientos(){
     proveedor: editing.proveedor, detalle: editing.detalle,
     tipo: Number(editing.ingreso) > 0 ? 'ingreso' : 'egreso',
     monto: Number(editing.ingreso) > 0 ? editing.ingreso : editing.egreso,
-    tarjeta: !!editing.tarjeta, fechaConsumo: editing.fechaConsumo||'', tarjetaMarca: editing.tarjetaMarca||'', tarjetaId: editing.tarjetaId||'', cuotas:1, cuotasInfo: editing.cuotas||''
+    tarjeta: !!editing.tarjeta, fechaConsumo: editing.fechaConsumo||'', tarjetaMarca: editing.tarjetaMarca||'', cuotas:1, cuotasInfo: editing.cuotas||''
   } : null;
-  var e = STATE.movDraft || editingNormalizado || {fecha:'', centroId:'', categoriaId:'', subcategoriaId:'', proveedor:'', detalle:'', tipo:'egreso', monto:'', tarjeta:false, fechaConsumo:'', tarjetaMarca:'', tarjetaId:'', cuotas:1, cuotasInfo:''};
+  var e = STATE.movDraft || editingNormalizado || {fecha:'', centroId:'', categoriaId:'', subcategoriaId:'', proveedor:'', detalle:'', tipo:'egreso', monto:'', tarjeta:false, fechaConsumo:'', tarjetaMarca:'', cuotas:1, cuotasInfo:''};
   var subOptionsArr = subcategoriasOrdenadas(STATE.subcategorias.filter(function(s){ return s.categoriaId === e.categoriaId; }))
     .map(function(s){ return {value:s.id, label:s.nombre}; });
 
@@ -2680,61 +2407,35 @@ function renderMovimientos(){
           'Si lo completás, se va a crear automáticamente el movimiento espejo en ese centro (misma fecha y categoría, mismo monto, tipo contrario). Si lo dejás vacío, se carga solo este movimiento.'
         )+'</div></div>'+
       '</div>' : '';
-    function claseCampo(nombre){ return 'field'+(STATE.movFieldErrors && STATE.movFieldErrors[nombre] ? ' invalid' : ''); }
-    function msgCampo(nombre){ return (STATE.movFieldErrors && STATE.movFieldErrors[nombre]) ? '<div class="field-error">'+esc(STATE.movFieldErrors[nombre])+'</div>' : ''; }
     var cuotasNum = Math.max(1, parseInt(e.cuotas,10)||1);
-    // Tarjeta cargada en ABM → Tarjetas: la Fecha sale del resumen en que cae la fecha de consumo.
-    var tarjetaSel = e.tarjeta ? tarjetaPorId(e.tarjetaId) : null;
-    var resumenesPrevia = (tarjetaSel && /^\d{4}-\d{2}-\d{2}$/.test(e.fechaConsumo||'')) ? resumenesParaConsumo(tarjetaSel, e.fechaConsumo, cuotasNum) : null;
     var textoAyudaCuotas;
-    if(tarjetaSel){
-      if(!resumenesPrevia) textoAyudaCuotas = 'Cargá la fecha de consumo: con ella se calcula en qué resumen de '+tarjetaSel.nombre+' cae'+(cuotasNum>1?' cada cuota':'')+'.';
-      else if(cuotasNum<=1) textoAyudaCuotas = 'Va al resumen que cierra el '+fechaISOaDDMMAAAA(resumenesPrevia[0].fechaCierre)+' y vence el '+fechaISOaDDMMAAAA(resumenesPrevia[0].fechaVencimiento)+'.';
-      else textoAyudaCuotas = (editing ? 'Este movimiento queda como la cuota 1/'+cuotasNum+' y se crean '+(cuotasNum-1)+' más' : 'Se van a crear '+cuotasNum+' movimientos')+', con este mismo monto cada uno, en los resúmenes que vencen el '+
-        resumenesPrevia.map(function(r){ return fechaISOaDDMMAAAA(r.fechaVencimiento); }).join(', ')+'.';
-    } else if(cuotasNum<=1){
+    if(cuotasNum<=1){
       textoAyudaCuotas = 'La Fecha de arriba se toma como vencimiento del resumen en que se paga.';
     } else if(editing){
       textoAyudaCuotas = 'Este movimiento queda como la cuota 1/'+cuotasNum+'. Se van a crear '+(cuotasNum-1)+' movimiento(s) más para las cuotas siguientes, uno por mes a partir de la Fecha de arriba, con este mismo monto cada uno.';
     } else {
       textoAyudaCuotas = 'La Fecha de arriba se toma como vencimiento de la 1ª cuota. Se van a crear '+cuotasNum+' movimientos, uno por mes, con este mismo monto cada uno.';
     }
-    // La tarjeta del movimiento editado se ofrece aunque esté dada de baja, para no perderla al guardar.
-    var opcionesTarjeta = tarjetasActivas();
-    var tarjetaEditada = editing ? tarjetaPorId(editing.tarjetaId) : null;
-    if(tarjetaEditada && opcionesTarjeta.indexOf(tarjetaEditada)===-1) opcionesTarjeta.push(tarjetaEditada);
-    var campoTarjetaSel = opcionesTarjeta.length ? ''+
-        '<div class="form-grid">'+
-          '<div class="field"><label>Tarjeta</label><select id="f-mov-tarjeta-id">'+
-            '<option value="">(otra — fecha y marca a mano)</option>'+
-            opcionesTarjeta.map(function(t){ return '<option value="'+t.id+'"'+(e.tarjetaId===t.id?' selected':'')+'>'+esc(t.nombre)+'</option>'; }).join('')+
-          '</select></div>'+
-          '<div class="field"></div>'+
-        '</div>' : '';
     var campoCuotas = e.tarjeta ? ''+
       '<div class="form-section">'+
         '<div class="form-section-title"><i class="bi bi-credit-card"></i> Tarjeta de crédito</div>'+
-        campoTarjetaSel+
         '<div class="form-grid">'+
-          '<div class="'+claseCampo('fechaConsumo')+'"><label>Fecha de consumo'+(tarjetaSel?'':' (opcional)')+'</label><input type="date" id="f-mov-fecha-consumo" value="'+esc(e.fechaConsumo||'')+'">'+msgCampo('fechaConsumo')+'</div>'+
-          (tarjetaSel ? '<div class="field"></div>' :
-          '<div class="field"><label>Marca de tarjeta (opcional)</label><input type="text" id="f-mov-tarjeta-marca" autocomplete="off" placeholder="Visa, Mastercard, Amex..." value="'+esc(e.tarjetaMarca||'')+'"></div>')+
+          '<div class="field"><label>Fecha de consumo (opcional)</label><input type="date" id="f-mov-fecha-consumo" value="'+esc(e.fechaConsumo||'')+'"></div>'+
+          '<div class="field"><label>Marca de tarjeta (opcional)</label><input type="text" id="f-mov-tarjeta-marca" autocomplete="off" placeholder="Visa, Mastercard, Amex..." value="'+esc(e.tarjetaMarca||'')+'"></div>'+
         '</div>'+
         '<div class="form-grid">'+
           '<div class="field"><label>Cuotas a generar</label><input type="text" inputmode="numeric" pattern="[0-9]*" id="f-mov-cuotas" value="'+cuotasNum+'"></div>'+
           '<div class="field"><label>Cuota manual (si no generás arriba)</label><input type="text" autocomplete="off" placeholder="ej. 5/6" id="f-mov-cuotas-info" value="'+esc(e.cuotasInfo||'')+'"></div>'+
         '</div>'+
-        '<div style="font-size:11px;color:var(--ink-soft);margin-top:8px">'+esc(textoAyudaCuotas)+' "Cuota manual" es solo para escribir la etiqueta a mano en un movimiento suelto — dejala vacía si ya pusiste una cantidad arriba.</div>'+
-        '<div class="info-box warning" style="margin-top:10px"><i class="bi bi-pin-angle"></i> <strong>Pendiente:</strong> este consumo va a figurar como pendiente hasta '+(tarjetaSel?'el vencimiento de su resumen':'la Fecha de arriba (el vencimiento del resumen en que se paga)')+'.</div>'+
+        '<div style="font-size:11px;color:var(--ink-soft);margin-top:8px">'+textoAyudaCuotas+' "Cuota manual" es solo para escribir la etiqueta a mano en un movimiento suelto — dejala vacía si ya pusiste una cantidad arriba.</div>'+
+        '<div class="info-box warning" style="margin-top:10px"><i class="bi bi-pin-angle"></i> <strong>Pendiente:</strong> este consumo va a figurar como pendiente hasta la Fecha de arriba (el vencimiento del resumen en que se paga).</div>'+
       '</div>' : '';
-    // Con tarjeta cargada, la Fecha se muestra calculada y no se edita.
-    var campoFecha = tarjetaSel ?
-      '<div class="field"><label>Fecha (vencimiento del resumen, se calcula)</label><input type="date" id="f-mov-fecha" disabled value="'+esc(resumenesPrevia ? resumenesPrevia[0].fechaVencimiento : '')+'"></div>' :
-      '<div class="'+claseCampo('fecha')+'"><label>Fecha</label><input type="date" id="f-mov-fecha" max="9999-12-31" value="'+esc(e.fecha)+'">'+msgCampo('fecha')+'</div>';
+    function claseCampo(nombre){ return 'field'+(STATE.movFieldErrors && STATE.movFieldErrors[nombre] ? ' invalid' : ''); }
+    function msgCampo(nombre){ return (STATE.movFieldErrors && STATE.movFieldErrors[nombre]) ? '<div class="field-error">'+esc(STATE.movFieldErrors[nombre])+'</div>' : ''; }
     return ''+
       (STATE.movFormMsg ? '<div class="msg err">'+esc(STATE.movFormMsg)+'</div>' : '')+
       '<div class="form-grid">'+
-        campoFecha+
+        '<div class="'+claseCampo('fecha')+'"><label>Fecha</label><input type="date" id="f-mov-fecha" max="9999-12-31" value="'+esc(e.fecha)+'">'+msgCampo('fecha')+'</div>'+
         '<div class="'+claseCampo('centroId')+'"><label>Centro de Costo'+((e.fecha && e.fecha>fechaHoyISO())?' (opcional, fecha futura)':'')+'</label>'+
           renderCombo('mov-centro', 'f-mov-centro', [comboOpcionVacia()].concat(centrosOrdenados().map(function(c){ return {value:c.id, label:c.codigo+' · '+c.nombre}; })), e.centroId, 'Elegir...')+msgCampo('centroId')+
         '</div>'+
@@ -2862,19 +2563,8 @@ function renderImportar(){
   var msgHtml = STATE.importMsg ? '<div class="msg '+(STATE.importMsg.type==='ok'?'ok':'err')+'">'+esc(STATE.importMsg.text)+'</div>' : '';
 
   var subFieldsHtml = '';
-  var tarjetaImp = e === 'tarjeta' ? tarjetaPorId(STATE.importTarjetaId) : null;
-  var selectorTarjetaImp = (e === 'tarjeta' && tarjetasActivas().length) ? ''+
-    '<div class="field"><label>Tarjeta</label><select id="imp-tarjeta-id">'+
-      '<option value="">(otra — elegir banco)</option>'+
-      tarjetasActivas().map(function(t){ return '<option value="'+t.id+'"'+(STATE.importTarjetaId===t.id?' selected':'')+'>'+esc(t.nombre)+'</option>'; }).join('')+
-    '</select></div>' : '';
-  if(tarjetaImp){
-    // Tarjeta cargada: el banco (formato) y la marca salen de la tarjeta; las fechas son las reales del resumen.
-    subFieldsHtml = selectorTarjetaImp+
-      '<div class="field"><label>Cierre (opcional)</label><input type="date" id="imp-cierre" value="'+esc(STATE.importCierre||'')+'"></div>'+
-      '<div class="field"><label>Vencimiento</label><input type="date" id="imp-vencimiento" value="'+esc(STATE.importVencimiento||'')+'"></div>';
-  } else if(e === 'tarjeta'){
-    subFieldsHtml = selectorTarjetaImp+
+  if(e === 'tarjeta'){
+    subFieldsHtml = ''+
       '<div class="field"><label>Banco</label><select id="imp-banco">'+
         '<option value="nacion" '+(STATE.importBanco==='nacion'?'selected':'')+'>Nación</option>'+
         '<option value="santander" '+(STATE.importBanco==='santander'?'selected':'')+'>Santander</option>'+
@@ -2883,14 +2573,6 @@ function renderImportar(){
       '</select></div>'+
       '<div class="field"><label>Vencimiento</label><input type="date" id="imp-vencimiento" value="'+esc(STATE.importVencimiento||'')+'"></div>'+
       '<div class="field"><label>Marca de tarjeta (opcional)</label><input type="text" id="imp-tarjeta-marca" autocomplete="off" placeholder="Visa, Mastercard, Amex..." value="'+esc(STATE.importTarjetaMarca||'')+'" style="width:150px"></div>';
-  }
-
-  var tarjetaHint = '';
-  if(e === 'tarjeta'){
-    var resumenImp = tarjetaImp ? resumenParaImportacion(tarjetaImp, STATE.importVencimiento, STATE.importCierre) : null;
-    if(!tarjetasActivas().length) tarjetaHint = '<div style="font-size:11px;color:var(--ink-soft);margin-top:8px">Si cargás tus tarjetas en ABM → Tarjetas, los consumos importados quedan agrupados en su resumen y las cuotas que ya tenías cargadas se reconocen.</div>';
-    else if(resumenImp && resumenImp.existente) tarjetaHint = '<div class="msg ok" style="margin-top:8px">Este resumen ya existe (cierre estimado '+esc(fechaISOaDDMMAAAA(resumenImp.existente.fechaCierre))+', vence '+esc(fechaISOaDDMMAAAA(resumenImp.existente.fechaVencimiento))+', '+movimientosDelResumen(resumenImp.existente.id).length+' movimiento(s) ya cargado(s)). Al importar se corrigen sus fechas con las reales y las cuotas que ya estaban cargadas se marcan como posible duplicado.</div>';
-    else if(resumenImp) tarjetaHint = '<div style="font-size:11px;color:var(--ink-soft);margin-top:8px">Se va a crear el resumen que cierra el '+esc(fechaISOaDDMMAAAA(resumenImp.fechaCierre))+(STATE.importCierre?'':' (estimado)')+' y vence el '+esc(fechaISOaDDMMAAAA(resumenImp.fechaVencimiento))+'.</div>';
   }
 
   var excelHint = e==='excel' ? '<div class="msg ok" style="margin-top:8px">Pegá las filas copiadas de tu Excel, en este orden de columnas (separadas por tab): Periodo, Cuenta, Categoría, Subcategoría, CC, Fecha, Contraparte, Detalle, Ingresos, Egresos. Si falta un Centro de Costo, Categoría o Subcategoría, se crea automáticamente al importar.</div>' : '';
@@ -2910,7 +2592,6 @@ function renderImportar(){
       '</select></div>'+
       subFieldsHtml+
     '</div>'+
-    tarjetaHint+
     excelHint+
     '<div class="field" style="margin-top:10px"><label>Texto del resumen</label>'+
     '<textarea id="imp-raw" rows="8" style="width:100%;font-family:\'Geist Mono\',ui-monospace,Consolas,monospace;font-size:12px" placeholder="Pegá acá el texto copiado del resumen...">'+esc(STATE.importRaw||'')+'</textarea></div>'+
@@ -2922,10 +2603,8 @@ function renderImportar(){
     var centroOpts = centrosOrdenados().map(function(c){ return '<option value="'+c.id+'">'+esc(c.codigo)+'</option>'; }).join('');
     var catOpts = categoriasOrdenadas().map(function(c){ return '<option value="'+c.id+'">'+esc(c.nombre)+'</option>'; }).join('');
 
-    var resumenPreview = (STATE.importEntidad==='tarjeta' && tarjetaPorId(STATE.importTarjetaId)) ? resumenParaImportacion(tarjetaPorId(STATE.importTarjetaId), STATE.importVencimiento, STATE.importCierre) : null;
-    var resumenPreviewId = resumenPreview && resumenPreview.existente ? resumenPreview.existente.id : '';
     var dupIds = calcularDuplicados(STATE.importPreview.map(function(r){
-      return { id:r.id, fecha:r.fecha, centroId:r.centroId, proveedor:r.proveedor, monto:r.monto, resumenId:resumenPreviewId };
+      return { id:r.id, fecha:r.fecha, centroId:r.centroId, proveedor:r.proveedor, monto:r.monto };
     }));
 
     var rows = STATE.importPreview.map(function(r){
@@ -3293,12 +2972,10 @@ function renderVencimientos(){
   var pendientesTarjeta = pendientesMov.filter(function(m){ return !!m.tarjeta; });
   var pendientesOtros = pendientesMov.filter(function(m){ return !m.tarjeta; });
   var gruposTarjetaMap = {}, gruposTarjetaOrden = [];
-  // Con tarjeta cargada en ABM, el grupo es directamente su resumen.
   pendientesTarjeta.forEach(function(m){
-    var resumenM = resumenPorId(m.resumenId);
-    var clave = resumenM ? 'r|'+resumenM.id : m.fecha+'|'+(m.centroId||'');
+    var clave = m.fecha+'|'+(m.centroId||'');
     if(!gruposTarjetaMap[clave]){
-      gruposTarjetaMap[clave] = { fecha:m.fecha, centroId:m.centroId||'', resumen:resumenM, movs:[], total:0 };
+      gruposTarjetaMap[clave] = { fecha:m.fecha, centroId:m.centroId||'', movs:[], total:0 };
       gruposTarjetaOrden.push(clave);
     }
     gruposTarjetaMap[clave].movs.push(m);
@@ -3311,28 +2988,14 @@ function renderVencimientos(){
     var nombreCC = g.centroId ? nombreCentro(g.centroId) : '(sin centro asignado)';
     var filasGrupo = g.movs.map(filaMovPendiente).join('');
     var claveAbierto = 'venc-tarjeta|'+clave;
-    var tarjetaG = g.resumen ? tarjetaPorId(g.resumen.tarjetaId) : null;
-    var tituloG = tarjetaG ? tarjetaG.nombre+(g.centroId ? ' · '+nombreCentro(g.centroId).split(' · ')[0] : '') : nombreCC;
-    // Con resumen: cierre, total real (si ya se cargó) y su diferencia con lo proyectado, y el acceso al modal.
-    var barraResumen = '';
-    if(g.resumen){
-      var difG = g.resumen.totalReal!==null ? g.resumen.totalReal - g.total : null;
-      barraResumen = '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:10px;font-size:12px;color:var(--ink-soft)">'+
-        '<span>Cierre '+esc(fechaISOaDDMMAAAA(g.resumen.fechaCierre))+'</span>'+
-        (g.resumen.totalReal!==null ? '<span>Total real <strong class="mono">'+fmtMonto(g.resumen.totalReal)+'</strong>'+(Math.abs(difG)>0.005 ? ' · diferencia <strong class="mono '+(difG>0?'egreso':'ingreso')+'">'+fmtMonto(difG)+'</strong>' : ' · coincide con lo proyectado')+'</span>' : '')+
-        (g.resumen.estado==='pagado' ? '<span class="ingreso"><i class="bi bi-check-circle"></i> Pagado</span>' : '')+
-        '<button class="link" data-action="abrir-resumen" data-id="'+g.resumen.id+'" style="margin-left:auto">'+(g.resumen.estado==='pagado' ? 'ver resumen' : 'fechas, total real y pago')+'</button>'+
-      '</div>';
-    }
     return '<details class="resumen-tarjeta" data-grupo-key="'+esc(claveAbierto)+'"'+(STATE.gruposAbiertos[claveAbierto]?' open':'')+'>'+
       '<summary>'+
         '<span class="mono">'+esc(fechaISOaDDMMAAAA(g.fecha)||g.fecha)+'</span>'+
         '<span style="color:var(--ink-soft);font-size:12px">'+diasTxt+'</span>'+
-        '<span><i class="bi bi-credit-card"></i> '+esc(tituloG)+'</span>'+
-        '<span style="font-size:12px;color:var(--ink-soft)">'+g.movs.length+' movimiento(s)'+(g.resumen && g.resumen.estado==='pagado' ? ' · pagado' : '')+'</span>'+
+        '<span><i class="bi bi-credit-card"></i> '+esc(nombreCC)+'</span>'+
+        '<span style="font-size:12px;color:var(--ink-soft)">'+g.movs.length+' movimiento(s)</span>'+
         '<span class="mono egreso" style="margin-left:auto;font-weight:600">'+fmtMonto(g.total)+'</span>'+
       '</summary>'+
-      barraResumen+
       '<div style="overflow-x:auto;margin-top:10px"><table class="table tabla-movil"><thead><tr><th>Fecha</th><th>Vence</th><th>Centro</th><th>Categoría</th><th>Contraparte</th><th>Detalle</th><th class="num">Ingreso</th><th class="num">Egreso</th><th></th></tr></thead><tbody>'+filasGrupo+'</tbody></table></div>'+
     '</details>';
   }).join('');
@@ -5084,25 +4747,6 @@ function bindEvents(){
       render();
     });
   }
-  // Elegir la tarjeta o cambiar la fecha de consumo recalcula el resumen (y la Fecha mostrada); si el
-  // centro estaba vacío, se completa con la cuenta desde la que se paga la tarjeta.
-  var movTarjetaIdSel = document.getElementById('f-mov-tarjeta-id');
-  if(movTarjetaIdSel){
-    movTarjetaIdSel.addEventListener('change', function(){
-      var draft = getMovFormValues();
-      var t = tarjetaPorId(draft.tarjetaId);
-      if(t && !draft.centroId) draft.centroId = t.centroId||'';
-      STATE.movDraft = draft;
-      render();
-    });
-  }
-  var movFechaConsumoInput = document.getElementById('f-mov-fecha-consumo');
-  if(movFechaConsumoInput && movTarjetaIdSel && movTarjetaIdSel.value){
-    movFechaConsumoInput.addEventListener('change', function(){
-      STATE.movDraft = getMovFormValues();
-      render();
-    });
-  }
   var movCuotasInput = document.getElementById('f-mov-cuotas');
   if(movCuotasInput){
     movCuotasInput.addEventListener('input', function(){
@@ -5127,10 +4771,6 @@ function bindEvents(){
   if(impBanco){ impBanco.addEventListener('change', function(){ STATE.importBanco = impBanco.value; }); }
   var impVenc = document.getElementById('imp-vencimiento');
   if(impVenc){ impVenc.addEventListener('input', function(){ STATE.importVencimiento = impVenc.value; }); }
-  var impTarjetaId = document.getElementById('imp-tarjeta-id');
-  if(impTarjetaId){ impTarjetaId.addEventListener('change', function(){ STATE.importTarjetaId = impTarjetaId.value; STATE.importPreview = null; STATE.importMsg = null; render(); }); }
-  var impCierre = document.getElementById('imp-cierre');
-  if(impCierre){ impCierre.addEventListener('input', function(){ STATE.importCierre = impCierre.value; }); }
   var impTarjetaMarca = document.getElementById('imp-tarjeta-marca');
   if(impTarjetaMarca){ impTarjetaMarca.addEventListener('input', function(){ STATE.importTarjetaMarca = impTarjetaMarca.value; }); }
   var impRaw = document.getElementById('imp-raw');
@@ -5269,7 +4909,6 @@ function getMovFormValues(){
     tarjeta: (document.getElementById('f-mov-tarjeta')||{}).checked || false,
     fechaConsumo: (document.getElementById('f-mov-fecha-consumo')||{}).value || '',
     tarjetaMarca: (document.getElementById('f-mov-tarjeta-marca')||{}).value || '',
-    tarjetaId: (document.getElementById('f-mov-tarjeta-id')||{}).value || '',
     cuotas: (document.getElementById('f-mov-cuotas')||{}).value || 1,
     cuotasInfo: (document.getElementById('f-mov-cuotas-info')||{}).value || ''
   };
@@ -5303,7 +4942,6 @@ async function handleAction(action, id){
     STATE.bulkEditMovAbierto = false; STATE.bulkEditMovMsg = null;
     STATE.usdtFormMsg = null; STATE.movFieldErrors = null;
     STATE.dolaresDraft = null; STATE.dolaresFormMsg = null;
-    STATE.tarjetaFormMsg = null; STATE.resumenFormMsg = null;
     STATE.vencDraft = null; STATE.gfFormMsg = null;
     render(); return;
   }
@@ -5432,82 +5070,6 @@ async function handleAction(action, id){
       STATE.saldosDirty = true;
       STATE.editing = null;
     }catch(e){ STATE.dbError = 'No se pudo guardar el centro de costo: '+(e.message||e); }
-    render(); return;
-  }
-
-  // ---- TARJETAS ----
-  if(action==='edit-tarjeta'){ STATE.editing = {type:'tarjeta', id:id}; STATE.tarjetaFormMsg = null; render(); return; }
-  if(action==='del-tarjeta'){
-    STATE.confirmState = { message:'¿Borrar esta tarjeta? Se borran también sus resúmenes; sus movimientos quedan cargados, sin tarjeta asignada. Si ya no la usás, mejor dala de baja desde "editar".', action:'del-tarjeta-do', id:id };
-    render(); return;
-  }
-  if(action==='del-tarjeta-do'){
-    try{
-      await dbDelete('tarjetas', id); // en la base: ON DELETE CASCADE borra los resúmenes y SET NULL desvincula los movimientos
-      var idsResumenesBorrados = STATE.resumenesTarjeta.filter(function(r){ return r.tarjetaId===id; }).map(function(r){ return r.id; });
-      STATE.tarjetas = STATE.tarjetas.filter(function(t){ return t.id!==id; });
-      STATE.resumenesTarjeta = STATE.resumenesTarjeta.filter(function(r){ return r.tarjetaId!==id; });
-      STATE.movimientos.forEach(function(m){
-        if(m.tarjetaId===id) m.tarjetaId = '';
-        if(idsResumenesBorrados.indexOf(m.resumenId)!==-1) m.resumenId = '';
-      });
-    }catch(e){ STATE.dbError = 'No se pudo borrar la tarjeta: '+(e.message||e); }
-    render(); return;
-  }
-  if(action==='save-tarjeta'){
-    var tVals = {
-      nombre: (document.getElementById('f-tarjeta-nombre')||{}).value.trim(),
-      banco: (document.getElementById('f-tarjeta-banco')||{}).value || 'nacion',
-      marca: ((document.getElementById('f-tarjeta-marca')||{}).value||'').trim(),
-      centroId: (document.getElementById('f-tarjeta-centro')||{}).value || '',
-      diaCierre: parseInt((document.getElementById('f-tarjeta-dia-cierre')||{}).value, 10),
-      diaVencimiento: parseInt((document.getElementById('f-tarjeta-dia-venc')||{}).value, 10)
-    };
-    var activaSel = document.getElementById('f-tarjeta-activa');
-    if(activaSel) tVals.activa = activaSel.value!=='0';
-    if(!tVals.nombre){ STATE.tarjetaFormMsg = 'Poné un nombre para la tarjeta (ej. "Visa Nación").'; render(); return; }
-    if(!(tVals.diaCierre>=1 && tVals.diaCierre<=31) || !(tVals.diaVencimiento>=1 && tVals.diaVencimiento<=31)){
-      STATE.tarjetaFormMsg = 'El día de cierre y el de vencimiento tienen que estar entre 1 y 31.'; render(); return;
-    }
-    STATE.tarjetaFormMsg = null; STATE.dbError = null;
-    try{
-      if(id){
-        var tEdit = tarjetaPorId(id);
-        var tActualizada = Object.assign({}, tEdit, tVals);
-        await dbUpdate('tarjetas', id, toDbTarjeta(tActualizada));
-        Object.assign(tEdit, tVals);
-      } else {
-        var tNueva = Object.assign({id:uid(), activa:true}, tVals);
-        await dbInsert('tarjetas', toDbTarjeta(tNueva));
-        STATE.tarjetas.push(tNueva);
-      }
-      STATE.editing = null;
-    }catch(e){ STATE.dbError = 'No se pudo guardar la tarjeta: '+(e.message||e); }
-    render(); return;
-  }
-
-  // ---- RESÚMENES DE TARJETA ----
-  if(action==='abrir-resumen'){ STATE.editing = {type:'resumen', id:id}; STATE.resumenFormMsg = null; render(); return; }
-  if(action==='save-resumen' || action==='pagar-resumen' || action==='reabrir-resumen'){
-    var resumenSel = resumenPorId(id);
-    if(!resumenSel){ STATE.editing = null; render(); return; }
-    var rCierre = (document.getElementById('f-resumen-cierre')||{}).value || resumenSel.fechaCierre;
-    var rVenc = (document.getElementById('f-resumen-venc')||{}).value || resumenSel.fechaVencimiento;
-    var rTotalTxt = ((document.getElementById('f-resumen-total')||{}).value || '').trim();
-    if(!/^\d{4}-\d{2}-\d{2}$/.test(rCierre) || !/^\d{4}-\d{2}-\d{2}$/.test(rVenc)){ STATE.resumenFormMsg = 'Revisá las fechas de cierre y vencimiento.'; render(); return; }
-    if(rVenc < rCierre){ STATE.resumenFormMsg = 'El vencimiento no puede ser anterior al cierre.'; render(); return; }
-    var rTotal = rTotalTxt==='' ? null : parseFloat(rTotalTxt);
-    if(rTotal!==null && isNaN(rTotal)){ STATE.resumenFormMsg = 'El total real no es un número válido.'; render(); return; }
-    // al pagar sin tipear el total, se toma lo proyectado
-    if(action==='pagar-resumen' && rTotal===null) rTotal = Math.round(totalProyectadoResumen(id)*100)/100;
-    var rEstado = action==='pagar-resumen' ? 'pagado' : (action==='reabrir-resumen' ? 'abierto' : resumenSel.estado);
-    STATE.resumenFormMsg = null; STATE.dbError = null;
-    try{
-      await actualizarFechasResumen(resumenSel, rCierre, rVenc);
-      await dbUpdate('resumenes_tarjeta', id, {total_real:rTotal, estado:rEstado});
-      resumenSel.totalReal = rTotal; resumenSel.estado = rEstado;
-      STATE.editing = null;
-    }catch(e){ STATE.dbError = 'No se pudo guardar el resumen: '+(e.message||e); }
     render(); return;
   }
 
@@ -5884,20 +5446,9 @@ async function handleAction(action, id){
   if(action==='save-mov'){
     var v = getMovFormValues();
     STATE.movDraft = v; // conservar lo tipeado si la validación falla más abajo
-    // Con una tarjeta cargada en ABM, la Fecha no se tipea: es el vencimiento del resumen en que cae
-    // la fecha de consumo (y cada cuota, el del resumen siguiente). El centro, si quedó vacío, es la
-    // cuenta desde la que se paga la tarjeta.
-    var tarjetaMov = v.tarjeta ? tarjetaPorId(v.tarjetaId) : null;
-    var resumenesMov = null;
-    if(tarjetaMov && /^\d{4}-\d{2}-\d{2}$/.test(v.fechaConsumo)){
-      resumenesMov = resumenesParaConsumo(tarjetaMov, v.fechaConsumo, Math.max(1, parseInt(v.cuotas,10)||1));
-      v.fecha = resumenesMov[0].fechaVencimiento;
-      if(!v.centroId) v.centroId = tarjetaMov.centroId||'';
-    }
     var esFechaFutura = !!v.fecha && v.fecha > fechaHoyISO();
     var errores = {};
-    if(tarjetaMov && !resumenesMov) errores.fechaConsumo = 'Con tarjeta, la fecha de consumo es obligatoria: con ella se calcula el resumen.';
-    else if(!v.fecha) errores.fecha = 'La fecha es obligatoria.';
+    if(!v.fecha) errores.fecha = 'La fecha es obligatoria.';
     // El input date deja tipear años de 5 dígitos ("20226-07-29"): esa fecha se guardaba, quedaba
     // como "futura" y aparecía como un mes suelto en los filtros y promedios.
     else if(!/^\d{4}-\d{2}-\d{2}$/.test(v.fecha)) errores.fecha = 'La fecha no es válida (revisá el año).';
@@ -5930,16 +5481,9 @@ async function handleAction(action, id){
       egreso: v.tipo==='egreso' ? monto : 0,
       tarjeta: !!v.tarjeta,
       fechaConsumo: v.tarjeta ? (v.fechaConsumo||'') : '',
-      tarjetaMarca: tarjetaMov ? (tarjetaMov.marca||'') : (v.tarjeta ? (v.tarjetaMarca||'').trim() : ''),
-      cuotas: v.tarjeta ? (v.cuotasInfo||'').trim() : '',
-      tarjetaId: tarjetaMov ? tarjetaMov.id : '',
-      resumenId: resumenesMov ? resumenesMov[0].id : ''
+      tarjetaMarca: v.tarjeta ? (v.tarjetaMarca||'').trim() : '',
+      cuotas: v.tarjeta ? (v.cuotasInfo||'').trim() : ''
     };
-    // Fecha y resumen de la cuota n (0 = la primera): con tarjeta cargada, los de su resumen; si no, un mes después cada una.
-    function fechaYResumenCuota(n){
-      if(resumenesMov) return { fecha: resumenesMov[n].fechaVencimiento, resumenId: resumenesMov[n].id };
-      return { fecha: n===0 ? v.fecha : sumarMeses(v.fecha, n), resumenId: '' };
-    }
     // Compra en cuotas con tarjeta: la Fecha cargada es el vencimiento de la 1ª cuota;
     // las siguientes caen un mes después cada una, con el mismo monto (no se divide). El Detalle no
     // se toca — cada movimiento generado lleva su número de cuota en el campo Cuotas ("N/Total"),
@@ -5952,15 +5496,9 @@ async function handleAction(action, id){
       return cuotasTotal>1 ? (numeroCuota+'/'+cuotasTotal) : mov.cuotas;
     }
     try{
-      if(resumenesMov) await guardarResumenesNuevos(resumenesMov.slice(0, cuotasTotal));
       if(id){
         var movEditado = Object.assign({}, mov, { cuotas: etiquetaCuota(1) });
-        var filaEditada = toDbMovimiento(Object.assign({id:id}, movEditado));
-        var movAnterior = STATE.movimientos.find(function(m){return m.id===id;}) || {};
-        // toDbMovimiento omite tarjeta/resumen vacíos: si los tenía y ya no, hay que borrarlos a mano.
-        if(movAnterior.tarjetaId && !movEditado.tarjetaId) filaEditada.tarjeta_id = null;
-        if(movAnterior.resumenId && !movEditado.resumenId) filaEditada.resumen_id = null;
-        await dbUpdate('movimientos', id, filaEditada);
+        await dbUpdate('movimientos', id, toDbMovimiento(Object.assign({id:id}, movEditado)));
         var idx = STATE.movimientos.findIndex(function(m){return m.id===id;});
         // cambioId se conserva: si es la pata en pesos de una compra/venta de dólares, sigue vinculada.
         if(idx>-1) STATE.movimientos[idx] = Object.assign({id:id, cambioId: STATE.movimientos[idx].cambioId||''}, movEditado);
@@ -5981,18 +5519,18 @@ async function handleAction(action, id){
         if(cuotasTotal>1){
           var loteRestante = [];
           for(var cj=1; cj<cuotasTotal; cj++){
-            loteRestante.push(Object.assign({id:uid()}, mov, fechaYResumenCuota(cj), { cuotas: etiquetaCuota(cj+1) }));
+            var fechaCuotaJ = sumarMeses(v.fecha, cj);
+            loteRestante.push(Object.assign({id:uid()}, mov, { fecha: fechaCuotaJ, cuotas: etiquetaCuota(cj+1) }));
           }
           await dbInsert('movimientos', loteRestante.map(toDbMovimiento));
           STATE.movimientos.push.apply(STATE.movimientos, loteRestante);
         }
       } else {
         var fechasCuotas = [];
-        for(var ci=0; ci<cuotasTotal; ci++){ fechasCuotas.push(fechaYResumenCuota(ci)); }
+        for(var ci=0; ci<cuotasTotal; ci++){ fechasCuotas.push(ci===0 ? v.fecha : sumarMeses(v.fecha, ci)); }
         var nuevosLote = [];
-        fechasCuotas.forEach(function(cuotaFR, i){
-          var fechaCuota = cuotaFR.fecha;
-          var base = Object.assign({}, mov, cuotaFR, { cuotas: etiquetaCuota(i+1) });
+        fechasCuotas.forEach(function(fechaCuota, i){
+          var base = Object.assign({}, mov, { fecha: fechaCuota, cuotas: etiquetaCuota(i+1) });
           if(esTecMov && centroDestino){
             // crear el movimiento de origen + el espejo automático en el centro destino, con tipo contrario
             var nuevoM = Object.assign({id:uid()}, base);
@@ -6405,28 +5943,7 @@ async function handleAction(action, id){
     var faltaCentro = seleccionadas.some(function(r){return !r.centroId;});
     if(faltaCentro){ STATE.importMsg = {type:'err', text:'Hay movimientos sin Centro de Costo asignado. Asignalo antes de importar.'}; render(); return; }
     var esTarjeta = STATE.importEntidad === 'tarjeta';
-    // Tarjeta cargada: todo el lote va a un resumen (el que ya existía cerca de esas fechas, o uno
-    // nuevo) con las fechas reales, y su vencimiento es la fecha de cada movimiento.
-    var tarjetaConfirm = esTarjeta ? tarjetaPorId(STATE.importTarjetaId) : null;
-    var resumenConfirm = null;
-    if(tarjetaConfirm){
-      var rImp = resumenParaImportacion(tarjetaConfirm, STATE.importVencimiento, STATE.importCierre);
-      if(!rImp){ STATE.importMsg = {type:'err', text:'Ingresá la fecha de vencimiento del resumen.'}; render(); return; }
-      resumenConfirm = rImp.existente || {id:uid(), tarjetaId:tarjetaConfirm.id, fechaCierre:rImp.fechaCierre, fechaVencimiento:rImp.fechaVencimiento, totalReal:null, estado:'abierto', nuevo:true};
-    }
     var nuevosMov = seleccionadas.map(function(r){
-      if(resumenConfirm) return {
-        id: uid(), fecha: rImp.fechaVencimiento, centroId: r.centroId, categoriaId: r.categoriaId, subcategoriaId: r.subcategoriaId,
-        proveedor: r.proveedor, detalle: r.detalle,
-        ingreso: r.monto>0 ? r.monto : 0,
-        egreso: r.monto<0 ? -r.monto : 0,
-        tarjeta: true,
-        fechaConsumo: r.fechaConsumo || '',
-        tarjetaMarca: tarjetaConfirm.marca || '',
-        cuotas: r.cuotas || '',
-        tarjetaId: tarjetaConfirm.id,
-        resumenId: resumenConfirm.id
-      };
       return {
         id: uid(), fecha: r.fecha, centroId: r.centroId, categoriaId: r.categoriaId, subcategoriaId: r.subcategoriaId,
         proveedor: r.proveedor, detalle: r.detalle,
@@ -6439,15 +5956,9 @@ async function handleAction(action, id){
       };
     });
     try{
-      if(resumenConfirm && resumenConfirm.nuevo) await guardarResumenesNuevos([resumenConfirm]);
       await dbInsert('movimientos', nuevosMov.map(toDbMovimiento));
       STATE.movimientos = STATE.movimientos.concat(nuevosMov);
       STATE.saldosDirty = true;
-      // resumen que ya existía: pasan a las fechas reales él y los movimientos que ya tenía (cuotas proyectadas)
-      if(resumenConfirm){
-        var rImpReal = resumenParaImportacion(tarjetaConfirm, STATE.importVencimiento, STATE.importCierre);
-        await actualizarFechasResumen(resumenConfirm, rImpReal.fechaCierre, rImpReal.fechaVencimiento);
-      }
       var nuevasReglas = 0;
       for(var idxSel=0; idxSel<seleccionadas.length; idxSel++){
         var rSel = seleccionadas[idxSel];

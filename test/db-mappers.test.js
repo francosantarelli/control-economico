@@ -47,7 +47,6 @@ describe('movimiento', () => {
       id: 'm1', fecha: '2026-08-09', centroId: 'c1', categoriaId: 'cat1', subcategoriaId: 's1',
       proveedor: 'Netflix', detalle: 'Suscripción mensual', ingreso: 0, egreso: 890,
       tarjeta: true, fechaConsumo: '2026-08-01', tarjetaMarca: 'Visa', cuotas: '3/6', moneda: 'ARS', cambioId: '',
-      tarjetaId: 't1', resumenId: 'r1',
     };
     expect(win.fromDbMovimiento(win.toDbMovimiento(mov))).toEqual(mov);
   });
@@ -56,7 +55,6 @@ describe('movimiento', () => {
     const usd = {
       id: 'm2', fecha: '2026-08-09', centroId: 'c1', categoriaId: '', subcategoriaId: '', proveedor: 'Compra USD', detalle: '',
       ingreso: 100, egreso: 0, tarjeta: false, fechaConsumo: '', tarjetaMarca: '', cuotas: '', moneda: 'USD', cambioId: 'k1',
-      tarjetaId: '', resumenId: '',
     };
     const row = win.toDbMovimiento(usd);
     expect(row).toMatchObject({ moneda: 'USD', cambio_id: 'k1' });
@@ -64,9 +62,6 @@ describe('movimiento', () => {
     const ars = win.toDbMovimiento({ id: 'm3', fecha: '2026-08-09', ingreso: 0, egreso: 10 });
     expect(ars).not.toHaveProperty('moneda');
     expect(ars).not.toHaveProperty('cambio_id');
-    // tarjeta/resumen tampoco viajan si están vacíos (la app sigue andando sin migracion_tarjetas_resumenes.sql)
-    expect(ars).not.toHaveProperty('tarjeta_id');
-    expect(ars).not.toHaveProperty('resumen_id');
   });
 
   it('ingreso/egreso siempre se guardan como número, aunque vengan como string o vacíos', () => {
@@ -81,21 +76,6 @@ describe('movimiento', () => {
     expect(row.categoria_id).toBeNull();
     expect(row.subcategoria_id).toBeNull();
     expect(win.fromDbMovimiento(row).centroId).toBe('');
-  });
-});
-
-describe('tarjeta y resumen de tarjeta', () => {
-  it('toDbTarjeta -> fromDbTarjeta conserva los datos', () => {
-    const t = { id: 't1', nombre: 'Visa Nación', banco: 'nacion', marca: 'Visa', centroId: 'c1', diaCierre: 24, diaVencimiento: 6, activa: true };
-    expect(win.fromDbTarjeta(win.toDbTarjeta(t))).toEqual(t);
-    expect(win.toDbTarjeta({ id: 't2', nombre: 'X' })).toMatchObject({ banco: null, centro_id: null, dia_cierre: 25, dia_vencimiento: 5, activa: true });
-  });
-
-  it('toDbResumenTarjeta -> fromDbResumenTarjeta: total_real vacío queda null (no 0)', () => {
-    const r = { id: 'r1', tarjetaId: 't1', fechaCierre: '2026-10-24', fechaVencimiento: '2026-11-06', totalReal: null, estado: 'abierto' };
-    expect(win.toDbResumenTarjeta(Object.assign({}, r, { totalReal: '' })).total_real).toBeNull();
-    expect(win.fromDbResumenTarjeta(win.toDbResumenTarjeta(r))).toEqual(r);
-    expect(win.fromDbResumenTarjeta(win.toDbResumenTarjeta(Object.assign({}, r, { totalReal: 0, estado: 'pagado' })))).toMatchObject({ totalReal: 0, estado: 'pagado' });
   });
 });
 
