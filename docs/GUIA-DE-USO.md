@@ -114,6 +114,16 @@ El botón **Cargar efectivo** (💵; en el celular está en la barra superior) a
 - **Vencimientos propios:** concepto, contraparte, categoría, centro, fecha y monto. Se pueden editar, borrar o **marcar como pagado**; al pagar elegís entre *marcar pagado y cargarlo como movimiento* o *solo marcar pagado*.
 - **Movimientos con fecha futura** (por ejemplo cuotas de tarjeta), agrupados. No afectan Saldos hasta su fecha.
 
+**Gastos fijos** (servicios, cuota del club, biblioteca, colaboraciones con entidades…) tienen su propio sector dentro de Vencimientos:
+
+- **Alta:** en *Nuevo vencimiento*, tildá **Es un gasto fijo** y elegí el **Tipo** (Servicio, Club, Biblioteca, Colaboración, Otro). El día del *Primer vencimiento* es el día en que vence cada mes, y ese mes es el primero en que aparece. Si un mes no tiene ese día (por ejemplo el 31), vence el último día del mes.
+- **Siempre visibles:** pagar un gasto fijo no lo saca de la lista; solo cambia su **estado en el mes** (pagado, pendiente, vence hoy o mañana, vencido). Primero aparecen los pendientes y después los pagados. Con las flechas ves cualquier mes, pasado o futuro, con el total, lo pagado y lo que falta.
+- **Marcar pagado:** pide la fecha y el monto real (puede diferir del habitual) y deja elegir si también se carga como movimiento. **Desmarcar** deshace solo ese mes; el movimiento, si se cargó, queda en Movimientos.
+- **Editar:** el monto y el día nuevos valen para los meses sin pagar; los pagados conservan lo que se pagó.
+- **Borrar:** si nunca se pagó, se elimina. Si ya tiene meses pagados, deja de aparecer después del último mes pagado y conserva el historial.
+
+Los gastos fijos sin pagar que vencen hoy o mañana también aparecen en el aviso de vencimientos próximos.
+
 En **Resumen** aparece un aviso con los vencimientos próximos.
 
 ## 8. Resumen

@@ -3,7 +3,7 @@ var SUPABASE_URL = 'https://krgwoiufhvhoqucqjpff.supabase.co';
 var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtyZ3dvaXVmaHZob3F1Y3FqcGZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0MDA2MTIsImV4cCI6MjA5OTk3NjYxMn0.HxA7P1_LUEkZq75kMPKmiCLixeJQ2sROXcmW37gnQOE';
 var sb = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
-var STATE = { centros: [], categorias: [], subcategorias: [], movimientos: [], vencimientos: [], gimnasioVisitas: [], usdtMovimientos: [], movimientosUsd: [], deudas: [], facturas: [], configuracion: [], facturaLoadingId:null, activeTab: 'resumen', editing: null, ready:false,
+var STATE = { centros: [], categorias: [], subcategorias: [], movimientos: [], vencimientos: [], gimnasioVisitas: [], usdtMovimientos: [], movimientosUsd: [], deudas: [], gastosFijos: [], gastosFijosPagos: [], facturas: [], configuracion: [], facturaLoadingId:null, activeTab: 'resumen', editing: null, ready:false,
   importEntidad:'mp', importBanco:'nacion', importVencimiento:'', importTarjetaMarca:'', importRaw:'', importPreview:null, importPreviewExcel:null, importMsg:null,
   bulkColorCatMsg:null, confirmState:null, subDeleteState:null, vencPagarState:null, movFormMsg:null, movFieldErrors:null,
   filtros:{centro:[], categoria:[], subcategoria:[], mes:[], texto:'', soloIncompletos:false, soloTarjeta:false},
@@ -19,7 +19,7 @@ var STATE = { centros: [], categorias: [], subcategorias: [], movimientos: [], v
   menuUsuarioAbierto:false, usdtFormMsg:null, usdtDraft:null, usdtIngresoOpcionalesAbierto:false,
   usdtCotizacionBid:null, usdtCotizacionActualizada:null, usdtCotizacionError:null, usdtCotizacionCargando:false,
   dolaresDraft:null, dolaresFormMsg:null, dolarBlueCompra:null, dolarBlueVenta:null, dolarBlueActualizada:null, dolarBlueError:null, dolarBlueCargando:false,
-  deudaFormMsg:null, flujoVentana:'6m', flujoHorizonte:12, filtrosMovAbiertos:false };
+  deudaFormMsg:null, vencDraft:null, gfFormMsg:null, gfPeriodo:fechaHoyISO().slice(0,7), gfPagarState:null, gfPagarMsg:null, flujoVentana:'6m', flujoHorizonte:12, filtrosMovAbiertos:false };
 var MOV_PAGE_SIZE = 50;
 var REGLAS_PAGE_SIZE = 15;
 // Cantidad de registros por página elegible desde el paginador; se recuerda en el navegador.
@@ -293,6 +293,55 @@ function toDbMovimiento(m){
 function fromDbMovimiento(r){ return {id:r.id, fecha:r.fecha, centroId:r.centro_id||'', categoriaId:r.categoria_id||'', subcategoriaId:r.subcategoria_id||'', proveedor:r.proveedor||'', detalle:r.detalle||'', ingreso:Number(r.ingreso)||0, egreso:Number(r.egreso)||0, tarjeta:!!r.tarjeta, fechaConsumo:r.fecha_consumo||'', tarjetaMarca:r.tarjeta_marca||'', cuotas:r.cuotas||'', moneda:r.moneda==='USD'?'USD':'ARS', cambioId:r.cambio_id||''}; }
 function toDbVencimiento(v){ return {id:v.id, concepto:v.concepto, fecha:v.fecha, monto:Number(v.monto)||0, centro_id:v.centroId||null, estado:v.estado||'pendiente'}; }
 function fromDbVencimiento(r){ return {id:r.id, concepto:r.concepto, fecha:r.fecha, monto:Number(r.monto)||0, centroId:r.centro_id||'', estado:r.estado||'pendiente'}; }
+// Gastos fijos (servicios, club, biblioteca, colaboraciones...): se cargan una vez y se ven siempre
+// en Vencimientos; cada mes pagado queda en gastos_fijos_pagos (uno por gasto y por mes).
+// desde/hasta ('YYYY-MM') acotan los meses en que aparece; hasta queda vacío mientras siga vigente.
+function toDbGastoFijo(g){ return {id:g.id, concepto:g.concepto, tipo:g.tipo||'otro', monto:Number(g.monto)||0, dia_vencimiento:Number(g.diaVencimiento)||1, centro_id:g.centroId||null, desde:g.desde, hasta:g.hasta||null}; }
+function fromDbGastoFijo(r){ return {id:r.id, concepto:r.concepto, tipo:r.tipo||'otro', monto:Number(r.monto)||0, diaVencimiento:Number(r.dia_vencimiento)||1, centroId:r.centro_id||'', desde:r.desde, hasta:r.hasta||''}; }
+function toDbGastoFijoPago(p){ return {id:p.id, gasto_fijo_id:p.gastoFijoId, periodo:p.periodo, fecha:p.fecha, monto:Number(p.monto)||0, movimiento_id:p.movimientoId||null}; }
+function fromDbGastoFijoPago(r){ return {id:r.id, gastoFijoId:r.gasto_fijo_id, periodo:r.periodo, fecha:r.fecha, monto:Number(r.monto)||0, movimientoId:r.movimiento_id||''}; }
+var TIPOS_GASTO_FIJO = [
+  {id:'servicio', label:'Servicio'}, {id:'club', label:'Club'}, {id:'biblioteca', label:'Biblioteca'},
+  {id:'colaboracion', label:'Colaboración'}, {id:'otro', label:'Otro'}
+];
+function etiquetaTipoGastoFijo(tipo){
+  var t = TIPOS_GASTO_FIJO.find(function(x){ return x.id===tipo; });
+  return t ? t.label : 'Otro';
+}
+function periodoMas(periodo, n){
+  var partes = (periodo||'').split('-');
+  return mesOffset(new Date(parseInt(partes[0],10), parseInt(partes[1],10)-1, 1), n);
+}
+var NOMBRES_MES_LARGO = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+function periodoLabelLargo(periodo){
+  var m = (periodo||'').match(/^(\d{4})-(\d{2})$/);
+  return m ? NOMBRES_MES_LARGO[parseInt(m[2],10)-1]+' '+m[1] : (periodo||'');
+}
+// Fecha de vencimiento del gasto en ese mes; si el mes no tiene el día (ej. 31 en noviembre), vence el último.
+function fechaVencGastoFijo(g, periodo){
+  var partes = periodo.split('-');
+  var ultimoDia = new Date(parseInt(partes[0],10), parseInt(partes[1],10), 0).getDate();
+  return periodo+'-'+pad2(Math.min(Number(g.diaVencimiento)||1, ultimoDia));
+}
+function pagoGastoFijo(gastoFijoId, periodo){
+  return STATE.gastosFijosPagos.find(function(p){ return p.gastoFijoId===gastoFijoId && p.periodo===periodo; }) || null;
+}
+function gastoFijoAplicaEn(g, periodo){
+  return (!g.desde || g.desde<=periodo) && (!g.hasta || periodo<=g.hasta);
+}
+// Gastos fijos sin pagar que vencen hoy o mañana (para el aviso de Vencimientos próximos).
+function gastosFijosProximos(){
+  var periodoHoy = fechaHoyISO().slice(0,7);
+  var out = [];
+  [periodoHoy, periodoMas(periodoHoy, 1)].forEach(function(periodo){
+    STATE.gastosFijos.forEach(function(g){
+      if(!gastoFijoAplicaEn(g, periodo) || pagoGastoFijo(g.id, periodo)) return;
+      var dias = diasHasta(fechaVencGastoFijo(g, periodo));
+      if(dias===0 || dias===1) out.push({dias:dias, concepto:g.concepto, monto:g.monto, centroId:g.centroId});
+    });
+  });
+  return out;
+}
 async function crearMovimientoDesdeVencimiento(v){
   var nuevoMov = {
     id: uid(), fecha: v.fecha, centroId: v.centroId||'', categoriaId:'', subcategoriaId:'',
@@ -379,7 +428,7 @@ async function dbUpsert(table, rows){
 // scripts/backup-a-drive/backup.js, que tiene que listar exactamente las mismas). El orden importa
 // al restaurar: primero las que otras referencian (centros antes que movimientos, movimientos antes
 // que usdt_movimientos/facturas). arca_ta queda afuera a propósito: es un token temporal de ARCA.
-var TABLAS_BACKUP = ['centros', 'categorias', 'subcategorias', 'movimientos', 'vencimientos', 'deudas',
+var TABLAS_BACKUP = ['centros', 'categorias', 'subcategorias', 'movimientos', 'vencimientos', 'deudas', 'gastos_fijos', 'gastos_fijos_pagos',
   'usdt_movimientos', 'facturas', 'gimnasio_visitas', 'reglas_categorizacion', 'configuracion'];
 var BACKUP_LOTE = 500; // filas por upsert al restaurar, para no mandar un request gigante
 
@@ -455,6 +504,13 @@ async function cargarTodo(){
     var deudas = await dbFetchAll('deudas');
     STATE.deudas = deudas.map(fromDbDeuda);
   }catch(e){ STATE.deudas = []; }
+  try{
+    // Idem: si todavía no corriste migracion_gastos_fijos.sql, arranca vacío en vez de romper la carga.
+    var gastosFijos = await dbFetchAll('gastos_fijos');
+    var gastosFijosPagos = await dbFetchAll('gastos_fijos_pagos');
+    STATE.gastosFijos = gastosFijos.map(fromDbGastoFijo);
+    STATE.gastosFijosPagos = gastosFijosPagos.map(fromDbGastoFijoPago);
+  }catch(e){ STATE.gastosFijos = []; STATE.gastosFijosPagos = []; }
   try{
     // Idem: si todavía no corriste migracion_reglas_categorizacion.sql, arranca vacío en vez de romper la carga.
     var reglas = await dbFetchAll('reglas_categorizacion');
@@ -2180,7 +2236,7 @@ function alertaVencimientosProximosHtml(){
     return dias===0 || dias===1;
   }).map(function(v){
     return {dias:diasHasta(v.fecha), concepto:v.concepto, monto:v.monto, centroId:v.centroId};
-  }).concat(movsProximos).sort(function(a,b){ return a.dias-b.dias; });
+  }).concat(movsProximos, gastosFijosProximos()).sort(function(a,b){ return a.dias-b.dias; });
 
   return vencimientosProximos.length ? ''+
   '<div class="card" style="border-color:var(--danger);background:var(--danger-soft)">'+
@@ -2679,13 +2735,33 @@ function diasHasta(iso){
   return Math.round((f-hoy)/86400000);
 }
 
+function getVencFormValues(){
+  return {
+    concepto: (document.getElementById('f-venc-concepto')||{}).value || '',
+    fecha: (document.getElementById('f-venc-fecha')||{}).value || '',
+    monto: (document.getElementById('f-venc-monto')||{}).value || '',
+    centroId: (document.getElementById('f-venc-centro')||{}).value || '',
+    esFijo: !!(document.getElementById('f-venc-es-fijo')||{}).checked,
+    tipo: (document.getElementById('f-venc-tipo')||{}).value || 'servicio'
+  };
+}
+// mostrarEstado: edición de un vencimiento común. Si no, es el alta, que con "Es un gasto fijo"
+// tildado crea un gasto fijo en vez de un vencimiento.
 function campoVenc(e, mostrarEstado){
-  var html = '<div class="field"><label>Concepto</label><input type="text" id="f-venc-concepto" value="'+esc(e.concepto)+'" style="width:220px" placeholder="Ej: Tarjeta Visa Santander"></div>'+
-    '<div class="field"><label>Fecha de vencimiento</label><input type="date" id="f-venc-fecha" value="'+esc(e.fecha)+'"></div>'+
+  var html = '<div class="field"><label>Concepto</label><input type="text" id="f-venc-concepto" value="'+esc(e.concepto)+'" style="width:220px" placeholder="'+(e.esFijo?'Ej: Cuota del club':'Ej: Tarjeta Visa Santander')+'"></div>'+
+    '<div class="field"><label>'+(e.esFijo?'Primer vencimiento':'Fecha de vencimiento')+'</label><input type="date" id="f-venc-fecha" value="'+esc(e.fecha)+'"></div>'+
     '<div class="field"><label>Monto</label><input type="number" step="0.01" id="f-venc-monto" value="'+esc(e.monto)+'" style="width:130px"></div>'+
     '<div class="field"><label>Centro de Costo</label><select id="f-venc-centro"><option value="">(sin asignar)</option>'+
       centrosOrdenados().map(function(c){ return '<option value="'+c.id+'" '+(e.centroId===c.id?'selected':'')+'>'+esc(c.codigo)+' · '+esc(c.nombre)+'</option>'; }).join('') +
     '</select></div>';
+  if(!mostrarEstado){
+    html += '<div class="field" style="align-self:flex-end;margin-bottom:8px"><label style="display:flex;align-items:center;gap:6px;font-weight:400"><input type="checkbox" id="f-venc-es-fijo" style="width:auto"'+(e.esFijo?' checked':'')+'> Es un gasto fijo (se repite todos los meses)</label></div>';
+    if(e.esFijo){
+      html += '<div class="field"><label>Tipo</label><select id="f-venc-tipo">'+
+        TIPOS_GASTO_FIJO.map(function(t){ return '<option value="'+t.id+'" '+(e.tipo===t.id?'selected':'')+'>'+esc(t.label)+'</option>'; }).join('')+
+      '</select></div>';
+    }
+  }
   if(mostrarEstado){
     html += '<div class="field"><label>Estado</label><select id="f-venc-estado">'+
         '<option value="pendiente"'+(e.estado!=='pagado'?' selected':'')+'>Pendiente</option>'+
@@ -2694,6 +2770,113 @@ function campoVenc(e, mostrarEstado){
       '<div class="field" style="align-self:flex-end;margin-bottom:8px"><label style="display:flex;align-items:center;gap:6px;font-weight:400"><input type="checkbox" id="f-venc-crear-mov" style="width:auto"> Cargar también como movimiento</label></div>';
   }
   return html;
+}
+function campoGastoFijo(g){
+  return '<div class="field"><label>Concepto</label><input type="text" id="f-gf-concepto" value="'+esc(g.concepto)+'" style="width:220px"></div>'+
+    '<div class="field"><label>Tipo</label><select id="f-gf-tipo">'+
+      TIPOS_GASTO_FIJO.map(function(t){ return '<option value="'+t.id+'" '+(g.tipo===t.id?'selected':'')+'>'+esc(t.label)+'</option>'; }).join('')+
+    '</select></div>'+
+    '<div class="field"><label>Monto por mes</label><input type="number" step="0.01" id="f-gf-monto" value="'+esc(g.monto)+'" style="width:130px"></div>'+
+    '<div class="field"><label>Día de vencimiento</label><input type="number" min="1" max="31" id="f-gf-dia" value="'+esc(g.diaVencimiento)+'" style="width:80px"></div>'+
+    '<div class="field"><label>Centro de Costo</label><select id="f-gf-centro"><option value="">(sin asignar)</option>'+
+      centrosOrdenados().map(function(c){ return '<option value="'+c.id+'" '+(g.centroId===c.id?'selected':'')+'>'+esc(c.codigo)+' · '+esc(c.nombre)+'</option>'; }).join('')+
+    '</select></div>';
+}
+// Sector "Gastos fijos" de Vencimientos: los gastos quedan siempre en la lista y lo que cambia es el
+// estado del mes elegido con las flechas (primero los pendientes, después los pagados).
+function renderGastosFijosVenc(){
+  var editando = STATE.editing && STATE.editing.type==='gf' ? STATE.gastosFijos.find(function(x){return x.id===STATE.editing.id;}) : null;
+  if(editando){
+    MODAL_HTML = '<div class="modal-overlay" data-modal-backdrop="edit"><div class="modal-card">'+
+      '<h2>Editar gasto fijo</h2>'+
+      (STATE.gfFormMsg ? '<div class="msg err">'+esc(STATE.gfFormMsg)+'</div>' : '')+
+      '<div class="fields-row">'+ campoGastoFijo(editando) +'</div>'+
+      '<div style="font-size:12px;color:var(--ink-soft);margin-top:10px">El monto y el día valen para todos los meses sin pagar; los meses ya pagados conservan lo que se pagó.</div>'+
+      '<div class="fields-row" style="margin-top:14px">'+
+        '<button data-action="save-gf" data-id="'+editando.id+'">Guardar cambios</button>'+
+        '<button class="secondary" data-action="cancel-edit">Cancelar</button>'+
+      '</div>'+
+    '</div></div>';
+  }
+  if(STATE.gfPagarState){
+    var gp = STATE.gastosFijos.find(function(x){ return x.id===STATE.gfPagarState.id; });
+    if(gp){
+      MODAL_HTML = '<div class="modal-overlay" data-modal-backdrop="pagar-gf"><div class="modal-card">'+
+        '<div style="margin-bottom:12px">¿Marcar "'+esc(gp.concepto)+'" de '+esc(periodoLabelLargo(STATE.gfPeriodo).toLowerCase())+' como pagado?</div>'+
+        (STATE.gfPagarMsg ? '<div class="msg err">'+esc(STATE.gfPagarMsg)+'</div>' : '')+
+        '<div class="fields-row">'+
+          '<div class="field"><label>Fecha de pago</label><input type="date" id="f-gf-pago-fecha" value="'+esc(STATE.gfPagarState.fecha)+'"></div>'+
+          '<div class="field"><label>Monto pagado</label><input type="number" step="0.01" id="f-gf-pago-monto" value="'+esc(STATE.gfPagarState.monto)+'" style="width:130px"></div>'+
+        '</div>'+
+        '<div class="fields-row" style="flex-direction:column;align-items:stretch;gap:8px;margin-top:14px">'+
+          '<button data-action="pagar-gf-con-mov" data-id="'+gp.id+'">Sí, y cargarlo como movimiento</button>'+
+          '<button class="secondary" data-action="pagar-gf-sin-mov" data-id="'+gp.id+'">Sí, sólo marcar pagado</button>'+
+          '<button class="secondary" data-action="cancel-pagar-gf">Cancelar</button>'+
+        '</div>'+
+      '</div></div>';
+    }
+  }
+
+  var periodo = STATE.gfPeriodo;
+  var periodoHoy = fechaHoyISO().slice(0,7);
+  var mesTxt = periodoLabelLargo(periodo).split(' ')[0].toLowerCase();
+  var items = STATE.gastosFijos.filter(function(g){ return gastoFijoAplicaEn(g, periodo); }).map(function(g){
+    return {g:g, pago:pagoGastoFijo(g.id, periodo), fechaVenc:fechaVencGastoFijo(g, periodo)};
+  }).sort(function(a,b){
+    return ((a.pago?1:0)-(b.pago?1:0)) || a.fechaVenc.localeCompare(b.fechaVenc) || (a.g.concepto||'').localeCompare(b.g.concepto||'', 'es', {sensitivity:'base'});
+  });
+
+  var total = 0, pagado = 0, cantPagados = 0;
+  var rows = items.map(function(it){
+    var g = it.g, pago = it.pago;
+    var monto = pago ? pago.monto : g.monto;
+    total += Number(monto)||0;
+    var estadoHtml;
+    if(pago){
+      pagado += Number(pago.monto)||0; cantPagados++;
+      estadoHtml = '<span class="ingreso"><i class="bi bi-check-circle-fill"></i> Pagado el '+esc(fechaISOaDDMMAAAA(pago.fecha).slice(0,5))+'</span>';
+    } else {
+      var dias = diasHasta(it.fechaVenc);
+      if(dias<0) estadoHtml = '<span class="egreso" style="font-weight:600"><i class="bi bi-exclamation-circle"></i> Vencido hace '+Math.abs(dias)+' día(s)</span>';
+      else if(dias<=1) estadoHtml = '<span style="color:var(--warning);font-weight:600"><i class="bi bi-clock"></i> Vence '+(dias===0?'hoy':'mañana')+'</span>';
+      else estadoHtml = 'Pendiente · en '+dias+' día(s)';
+    }
+    return '<tr'+(pago?' class="fila-gf-pagada"':'')+'>'+
+      '<td data-label="Concepto">'+esc(g.concepto)+' <span class="chip" style="background:var(--accent-soft);color:var(--accent);font-size:11px">'+esc(etiquetaTipoGastoFijo(g.tipo))+'</span></td>'+
+      '<td class="mono" data-label="Vence">día '+esc(String(g.diaVencimiento))+'</td>'+
+      '<td class="mono" data-label="Estado">'+estadoHtml+'</td>'+
+      '<td class="mono" data-label="Centro">'+esc(g.centroId?nombreCentro(g.centroId).split(' · ')[0]:'—')+'</td>'+
+      '<td class="num mono" data-label="Monto">'+fmtMonto(monto)+'</td>'+
+      '<td class="actions-cell">'+
+        (pago ? '<button class="link" data-action="desmarcar-gf" data-id="'+g.id+'">desmarcar</button>'
+              : '<button class="link" data-action="pagar-gf" data-id="'+g.id+'">marcar pagado</button>')+
+        '<button class="link" data-action="edit-gf" data-id="'+g.id+'">editar</button>'+
+        (g.hasta ? '' : '<button class="link" data-action="del-gf" data-id="'+g.id+'">borrar</button>')+
+      '</td>'+
+    '</tr>';
+  }).join('');
+  var pct = total>0 ? Math.round(pagado/total*100) : 0;
+
+  return '<div class="card">'+
+    '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px">'+
+      '<h2 style="margin:0"><i class="bi bi-arrow-repeat"></i> Gastos fijos ('+items.length+')</h2>'+
+      '<div style="display:flex;align-items:center;gap:6px">'+
+        '<button class="secondary" data-action="gf-mes-anterior" title="Mes anterior" aria-label="Mes anterior" style="padding:4px 10px"><i class="bi bi-chevron-left"></i></button>'+
+        '<span style="font-weight:600;min-width:120px;text-align:center">'+esc(periodoLabelLargo(periodo))+'</span>'+
+        '<button class="secondary" data-action="gf-mes-siguiente" title="Mes siguiente" aria-label="Mes siguiente" style="padding:4px 10px"><i class="bi bi-chevron-right"></i></button>'+
+        (periodo!==periodoHoy ? '<button class="link" data-action="gf-mes-actual">hoy</button>' : '')+
+      '</div>'+
+    '</div>'+
+    (items.length ? ''+
+      '<div style="display:flex;gap:22px;flex-wrap:wrap;font-size:12px;color:var(--ink-soft);margin-bottom:8px">'+
+        '<div>Total del mes<span class="mono" style="display:block;font-size:15px;color:var(--ink);margin-top:2px">'+fmtMonto(total)+'</span></div>'+
+        '<div>Pagado ('+cantPagados+')<span class="mono ingreso" style="display:block;font-size:15px;margin-top:2px">'+fmtMonto(pagado)+'</span></div>'+
+        '<div>Falta pagar ('+(items.length-cantPagados)+')<span class="mono egreso" style="display:block;font-size:15px;margin-top:2px">'+fmtMonto(total-pagado)+'</span></div>'+
+      '</div>'+
+      '<div style="height:6px;border-radius:3px;background:var(--rule);overflow:hidden;margin-bottom:16px"><div style="height:100%;width:'+pct+'%;background:var(--accent)"></div></div>'+
+      '<table class="table tabla-movil"><thead><tr><th>Concepto</th><th>Vence</th><th>Estado en '+esc(mesTxt)+'</th><th>Centro</th><th class="num">Monto</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>'
+      : '<div class="empty">No hay gastos fijos para este mes. Para cargar uno, tildá "Es un gasto fijo" en Nuevo vencimiento.</div>')+
+  '</div>';
 }
 function renderVencimientos(){
   var editing = STATE.editing && STATE.editing.type==='venc' ? STATE.vencimientos.find(function(x){return x.id===STATE.editing.id;}) : null;
@@ -2714,12 +2897,12 @@ function renderVencimientos(){
   '<div class="card">'+
     '<h2>Nuevo vencimiento</h2>'+
     (STATE.vencFormMsg ? '<div class="msg err">'+esc(STATE.vencFormMsg)+'</div>' : '')+
-    '<div class="fields-row">'+ campoVenc({concepto:'', fecha:'', monto:'', centroId:''}) +
+    '<div class="fields-row">'+ campoVenc(STATE.vencDraft || {concepto:'', fecha:'', monto:'', centroId:'', esFijo:false, tipo:'servicio'}) +
       '<button data-action="save-venc" data-id="">Agregar</button>'+
     '</div>'+
   '</div>';
 
-  var formHtml = formNuevoVenc;
+  var formHtml = formNuevoVenc + renderGastosFijosVenc();
 
   var lista = STATE.vencimientos.filter(function(v){ return v.estado!=='pagado'; }).sort(function(a,b){ return (a.fecha||'').localeCompare(b.fecha||''); });
   var rows = lista.map(function(v){
@@ -4318,7 +4501,7 @@ function bindEvents(){
     overlay.addEventListener('click', function(ev){
       if(ev.target !== overlay) return; // sólo si el click fue directo en el fondo, no en el contenido del modal
       var tipo = overlay.getAttribute('data-modal-backdrop');
-      var accion = tipo==='confirm' ? 'confirm-no' : (tipo==='subdelete' ? 'sub-delete-cancel' : (tipo==='efectivo' ? 'cerrar-efectivo' : (tipo==='usdt-venta-mov' ? 'cerrar-usdt-venta-mov' : (tipo==='pagar-venc' ? 'cancel-pagar-venc' : 'cancel-edit'))));
+      var accion = tipo==='confirm' ? 'confirm-no' : (tipo==='subdelete' ? 'sub-delete-cancel' : (tipo==='efectivo' ? 'cerrar-efectivo' : (tipo==='usdt-venta-mov' ? 'cerrar-usdt-venta-mov' : (tipo==='pagar-venc' ? 'cancel-pagar-venc' : (tipo==='pagar-gf' ? 'cancel-pagar-gf' : 'cancel-edit')))));
       handleAction(accion);
     });
   });
@@ -4334,7 +4517,7 @@ function bindEvents(){
   document.querySelectorAll('.tab').forEach(function(t){
     t.addEventListener('click', function(){
       var tabId = t.getAttribute('data-tab');
-      STATE.activeTab = tabId; STATE.editing = null; STATE.movDraft = null; STATE.usdtDraft = null; STATE.usdtFormMsg = null; STATE.usdtIngresoOpcionalesAbierto = false; STATE.dolaresDraft = null; STATE.dolaresFormMsg = null; STATE.nuevoMovAbierto = false; STATE.menuMovilAbierto = false; STATE.multiSelectAbierto = null; STATE.bulkEditMovAbierto = false; STATE.movSeleccionados = [];
+      STATE.activeTab = tabId; STATE.editing = null; STATE.movDraft = null; STATE.usdtDraft = null; STATE.usdtFormMsg = null; STATE.usdtIngresoOpcionalesAbierto = false; STATE.dolaresDraft = null; STATE.dolaresFormMsg = null; STATE.vencDraft = null; STATE.gfFormMsg = null; STATE.nuevoMovAbierto = false; STATE.menuMovilAbierto = false; STATE.multiSelectAbierto = null; STATE.bulkEditMovAbierto = false; STATE.movSeleccionados = [];
       render();
       // Primera vez que se entra a USDT (o a Resumen/Saldos/Flujo, que valúan a la cotización de hoy el USDT de
       // sueldo todavía sin vender) en esta sesión: traer la cotización sola, sin que haya que tocar "Actualizar".
@@ -4531,6 +4714,14 @@ function bindEvents(){
       var draft = getUsdtFormValues();
       draft.tipo = usdtTipoSel.value;
       STATE.usdtDraft = draft;
+      render();
+    });
+  }
+  // Alta de vencimiento: al tildar "Es un gasto fijo" aparece el Tipo (sin perder lo ya tipeado).
+  var vencEsFijoChk = document.getElementById('f-venc-es-fijo');
+  if(vencEsFijoChk){
+    vencEsFijoChk.addEventListener('change', function(){
+      STATE.vencDraft = getVencFormValues();
       render();
     });
   }
@@ -4751,6 +4942,7 @@ async function handleAction(action, id){
     STATE.bulkEditMovAbierto = false; STATE.bulkEditMovMsg = null;
     STATE.usdtFormMsg = null; STATE.movFieldErrors = null;
     STATE.dolaresDraft = null; STATE.dolaresFormMsg = null;
+    STATE.vencDraft = null; STATE.gfFormMsg = null;
     render(); return;
   }
   if(action==='abrir-nuevo-mov'){
@@ -5384,8 +5576,24 @@ async function handleAction(action, id){
     var fecha = document.getElementById('f-venc-fecha').value;
     var monto = parseFloat(document.getElementById('f-venc-monto').value) || 0;
     var centroId = document.getElementById('f-venc-centro').value;
+    var vencVals = getVencFormValues();
     if(!concepto || !fecha){
       STATE.vencFormMsg = 'Completá al menos concepto y fecha de vencimiento.';
+      if(!id) STATE.vencDraft = vencVals;
+      render(); return;
+    }
+    if(!id && vencVals.esFijo){
+      // Alta de un gasto fijo: el día de la fecha es el día de vencimiento de cada mes, y el mes de
+      // esa fecha es el primero en que aparece.
+      STATE.vencFormMsg = null; STATE.dbError = null;
+      try{
+        var nuevoGf = {id:uid(), concepto:concepto, tipo:vencVals.tipo, monto:monto, diaVencimiento:parseInt(fecha.slice(8,10),10),
+          centroId:centroId, desde:fecha.slice(0,7), hasta:''};
+        await dbInsert('gastos_fijos', toDbGastoFijo(nuevoGf));
+        STATE.gastosFijos.push(nuevoGf);
+        STATE.vencDraft = null;
+        if(nuevoGf.desde > STATE.gfPeriodo) STATE.gfPeriodo = nuevoGf.desde;
+      }catch(e){ STATE.vencDraft = vencVals; STATE.dbError = 'No se pudo guardar el gasto fijo: '+(e.message||e); }
       render(); return;
     }
     var estadoSel = document.getElementById('f-venc-estado');
@@ -5405,6 +5613,7 @@ async function handleAction(action, id){
         var nuevoV = {id:uid(), concepto:concepto, fecha:fecha, monto:monto, centroId:centroId, estado:'pendiente'};
         await dbInsert('vencimientos', toDbVencimiento(nuevoV));
         STATE.vencimientos.push(nuevoV);
+        STATE.vencDraft = null;
       }
       STATE.editing = null;
     }catch(e){ STATE.dbError = 'No se pudo guardar el vencimiento: '+(e.message||e); }
@@ -5442,6 +5651,110 @@ async function handleAction(action, id){
       STATE.vencPagarState = null;
       if(action==='venc-a-movimiento'){ STATE.activeTab = 'movimientos'; STATE.editing = null; }
     }catch(e){ STATE.dbError = 'No se pudo convertir el vencimiento en movimiento: '+(e.message||e); }
+    render(); return;
+  }
+  // ---- GASTOS FIJOS (sector de Vencimientos) ----
+  if(action==='gf-mes-anterior'){ STATE.gfPeriodo = periodoMas(STATE.gfPeriodo, -1); render(); return; }
+  if(action==='gf-mes-siguiente'){ STATE.gfPeriodo = periodoMas(STATE.gfPeriodo, 1); render(); return; }
+  if(action==='gf-mes-actual'){ STATE.gfPeriodo = fechaHoyISO().slice(0,7); render(); return; }
+  if(action==='edit-gf'){ STATE.editing = {type:'gf', id:id}; STATE.gfFormMsg = null; render(); return; }
+  if(action==='save-gf'){
+    var gEdit = STATE.gastosFijos.find(function(x){return x.id===id;});
+    if(!gEdit) return;
+    var conceptoGf = document.getElementById('f-gf-concepto').value.trim();
+    var diaGf = parseInt(document.getElementById('f-gf-dia').value, 10);
+    if(!conceptoGf || !(diaGf>=1 && diaGf<=31)){
+      STATE.gfFormMsg = 'Completá el concepto y un día de vencimiento entre 1 y 31.';
+      render(); return;
+    }
+    STATE.gfFormMsg = null; STATE.dbError = null;
+    try{
+      gEdit.concepto = conceptoGf; gEdit.tipo = document.getElementById('f-gf-tipo').value; gEdit.diaVencimiento = diaGf;
+      gEdit.monto = parseFloat(document.getElementById('f-gf-monto').value) || 0; gEdit.centroId = document.getElementById('f-gf-centro').value;
+      await dbUpdate('gastos_fijos', id, toDbGastoFijo(gEdit));
+      STATE.editing = null;
+    }catch(e){ STATE.dbError = 'No se pudo guardar el gasto fijo: '+(e.message||e); }
+    render(); return;
+  }
+  if(action==='del-gf'){
+    var tienePagos = STATE.gastosFijosPagos.some(function(p){ return p.gastoFijoId===id; });
+    STATE.confirmState = {
+      message: tienePagos
+        ? '¿Borrar este gasto fijo? Deja de aparecer en los meses siguientes; los meses ya pagados quedan en el historial.'
+        : '¿Borrar este gasto fijo?',
+      action:'del-gf-do', id:id
+    };
+    render(); return;
+  }
+  if(action==='del-gf-do'){
+    var pagosGf = STATE.gastosFijosPagos.filter(function(p){ return p.gastoFijoId===id; });
+    try{
+      if(pagosGf.length){
+        // Con pagos: se corta en el último mes pagado, para no perder el historial.
+        var ultimoPeriodo = pagosGf.map(function(p){ return p.periodo; }).sort().pop();
+        await dbUpdate('gastos_fijos', id, {hasta:ultimoPeriodo});
+        STATE.gastosFijos.find(function(g){return g.id===id;}).hasta = ultimoPeriodo;
+      } else {
+        await dbDelete('gastos_fijos', id);
+        STATE.gastosFijos = STATE.gastosFijos.filter(function(g){return g.id!==id;});
+      }
+    }catch(e){ STATE.dbError = 'No se pudo borrar el gasto fijo: '+(e.message||e); }
+    render(); return;
+  }
+  if(action==='pagar-gf'){
+    var gpa = STATE.gastosFijos.find(function(x){return x.id===id;});
+    if(!gpa) return;
+    // Por defecto: hoy si se está mirando el mes actual; si no, el vencimiento de ese mes.
+    var fechaDefault = STATE.gfPeriodo===fechaHoyISO().slice(0,7) ? fechaHoyISO() : fechaVencGastoFijo(gpa, STATE.gfPeriodo);
+    STATE.gfPagarState = {id:id, fecha:fechaDefault, monto:gpa.monto};
+    STATE.gfPagarMsg = null;
+    render(); return;
+  }
+  if(action==='cancel-pagar-gf'){ STATE.gfPagarState = null; STATE.gfPagarMsg = null; render(); return; }
+  if(action==='pagar-gf-con-mov' || action==='pagar-gf-sin-mov'){
+    var gpc = STATE.gastosFijos.find(function(x){return x.id===id;});
+    if(!gpc) return;
+    var fechaPago = document.getElementById('f-gf-pago-fecha').value;
+    var montoPagoTxt = document.getElementById('f-gf-pago-monto').value;
+    var montoPago = parseFloat(montoPagoTxt) || 0;
+    if(!fechaPago || montoPago<=0){
+      STATE.gfPagarState = {id:id, fecha:fechaPago, monto:montoPagoTxt};
+      STATE.gfPagarMsg = 'Completá la fecha y el monto pagado (mayor a cero).';
+      render(); return;
+    }
+    STATE.dbError = null;
+    try{
+      var nuevoPago = {id:uid(), gastoFijoId:id, periodo:STATE.gfPeriodo, fecha:fechaPago, monto:montoPago, movimientoId:''};
+      if(action==='pagar-gf-con-mov'){
+        var movGf = {
+          id: uid(), fecha: fechaPago, centroId: gpc.centroId||'', categoriaId:'', subcategoriaId:'',
+          proveedor: gpc.concepto, detalle:'', ingreso:0, egreso: montoPago
+        };
+        await dbInsert('movimientos', toDbMovimiento(movGf));
+        STATE.movimientos.push(movGf);
+        STATE.saldosDirty = true;
+        nuevoPago.movimientoId = movGf.id;
+      }
+      await dbInsert('gastos_fijos_pagos', toDbGastoFijoPago(nuevoPago));
+      STATE.gastosFijosPagos.push(nuevoPago);
+      STATE.gfPagarState = null; STATE.gfPagarMsg = null;
+    }catch(e){ STATE.dbError = 'No se pudo marcar pagado el gasto fijo: '+(e.message||e); }
+    render(); return;
+  }
+  if(action==='desmarcar-gf'){
+    var pagoD = pagoGastoFijo(id, STATE.gfPeriodo);
+    if(!pagoD) return;
+    STATE.confirmState = {
+      message:'¿Desmarcar el pago de '+periodoLabelLargo(STATE.gfPeriodo).toLowerCase()+'?'+(pagoD.movimientoId ? ' El movimiento que se cargó al pagarlo no se borra: si hace falta, borralo desde Movimientos.' : ''),
+      action:'desmarcar-gf-do', id:pagoD.id, textoConfirmar:'Sí, desmarcar'
+    };
+    render(); return;
+  }
+  if(action==='desmarcar-gf-do'){
+    try{
+      await dbDelete('gastos_fijos_pagos', id);
+      STATE.gastosFijosPagos = STATE.gastosFijosPagos.filter(function(p){return p.id!==id;});
+    }catch(e){ STATE.dbError = 'No se pudo desmarcar el pago: '+(e.message||e); }
     render(); return;
   }
   if(action==='edit-deuda'){ STATE.editing = {type:'deuda', id:id}; STATE.deudaFormMsg = null; render(); return; }

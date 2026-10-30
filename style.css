@@ -486,3 +486,7 @@ footer.small{ margin-top:28px; font-size:11px; color:var(--ink-soft); text-align
   table.tabla-movil tfoot, table.tabla-movil tfoot tr{ display:block; }
   table.tabla-movil tfoot td{ display:flex; justify-content:space-between; border-bottom:none; border-top:2px solid var(--accent); padding:8px 0 0; }
 }
+
+/* Gastos fijos (Vencimientos): los ya pagados en el mes quedan en la lista, pero en gris (el concepto no). */
+.table tr.fila-gf-pagada td{ color:var(--ink-soft); }
+.table tr.fila-gf-pagada td:first-child{ color:var(--ink); }
