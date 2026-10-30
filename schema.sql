@@ -41,6 +41,30 @@ create table subcategorias (
   created_at timestamptz default now()
 );
 
+-- Tarjetas de crédito: con el día de cierre y de vencimiento la app calcula en qué resumen cae cada consumo
+create table tarjetas (
+  id uuid primary key default gen_random_uuid(),
+  nombre text not null,                -- ej. "Visa Nación"
+  banco text,                          -- formato del resumen al importar: 'nacion' | 'santander' | 'provincia' | 'mercadopago'
+  marca text,                          -- Visa, Mastercard, Amex...
+  centro_id uuid references centros(id) on delete set null, -- cuenta desde la que se paga el resumen
+  dia_cierre int not null default 25 check (dia_cierre between 1 and 31),
+  dia_vencimiento int not null default 5 check (dia_vencimiento between 1 and 31),
+  activa boolean not null default true,
+  created_at timestamptz default now()
+);
+
+-- Resúmenes de tarjeta: se crean solos al cargar/importar consumos; al importar el real se corrigen las fechas
+create table resumenes_tarjeta (
+  id uuid primary key default gen_random_uuid(),
+  tarjeta_id uuid not null references tarjetas(id) on delete cascade,
+  fecha_cierre date not null,
+  fecha_vencimiento date not null,
+  total_real numeric(14,2),            -- lo que vino en el resumen (se carga al pagarlo)
+  estado text not null default 'abierto' check (estado in ('abierto','pagado')),
+  created_at timestamptz default now()
+);
+
 -- Movimientos
 create table movimientos (
   id uuid primary key default gen_random_uuid(),
@@ -58,6 +82,8 @@ create table movimientos (
   cuotas text, -- texto libre, ej. "5/6"
   moneda text not null default 'ARS' check (moneda in ('ARS','USD')),
   cambio_id uuid, -- une las dos patas (USD y pesos) de una compra/venta de dólares
+  tarjeta_id uuid references tarjetas(id) on delete set null, -- tarjeta con la que se pagó (si está cargada en ABM → Tarjetas)
+  resumen_id uuid references resumenes_tarjeta(id) on delete set null, -- resumen en el que se paga (su vencimiento es "fecha")
   created_at timestamptz default now()
 );
 create index movimientos_cambio_id_idx on movimientos(cambio_id);
@@ -207,6 +233,8 @@ alter table facturas enable row level security;
 alter table configuracion enable row level security;
 alter table arca_ta enable row level security;
 alter table reglas_categorizacion enable row level security;
+alter table tarjetas enable row level security;
+alter table resumenes_tarjeta enable row level security;
 
 create policy "logueados_todo_centros" on centros
   for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
@@ -248,6 +276,12 @@ create policy "logueados_todo_arca_ta" on arca_ta
   for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
 
 create policy "logueados_todo_reglas_categorizacion" on reglas_categorizacion
+  for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+
+create policy "logueados_todo_tarjetas" on tarjetas
+  for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+
+create policy "logueados_todo_resumenes_tarjeta" on resumenes_tarjeta
   for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
 
 -- ============================================================

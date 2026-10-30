@@ -62,7 +62,7 @@ Al crear una categoría elegís su **Tratamiento en reportes**. Es la decisión 
 - **Dólares** — compras/ventas de dólares y saldos en USD.
 - **Importar** — carga masiva desde resúmenes de bancos.
 - **Gimnasio** — marcador de visitas.
-- **ABM** — categorías, subcategorías, centros de costo, reglas y backup.
+- **ABM** — categorías, subcategorías, centros de costo, tarjetas, reglas y backup.
 
 ## 4. Configuración inicial (ABM)
 
@@ -71,8 +71,9 @@ Antes de cargar datos, armá la base en **ABM** (cada sección es una subpestañ
 1. **Centros de Costo.** Por cada cuenta: *Código* (ej. `MPF`), *Nombre*, *Color*, *Entidad* (Santander, Nación, Provincia, ICBC, Mercado Pago: muestra el logo en Saldos) y *Moneda* (Pesos, Dólares o Pesos y dólares).
 2. **Categorías.** Nombre, color y tratamiento en reportes (ver [sección 2](#tratamiento-de-las-categorías-en-reportes)). Para que cada cuenta arranque con su saldo actual, creá una categoría **“Saldo Inicial”** y cargá un movimiento por cuenta con ese monto.
 3. **Subcategorías.** Se crean dentro de una categoría. También se pueden crear al vuelo escribiendo un nombre nuevo en el campo Subcategoría de un movimiento. Al borrar una subcategoría con movimientos, la app permite **reasignarlos** a otra o dejarlos sin subcategoría.
-4. **Reglas de categorización** (opcional, ahorra tiempo al importar): asociá un texto de contraparte (coincidencia parcial, sin importar mayúsculas) a una categoría/subcategoría. Ej.: “Barrientos” → Hogar › Limpieza.
-5. **Backup** — ver [sección 14](#14-backups).
+4. **Tarjetas** (opcional, recomendado si pagás con tarjeta de crédito): por cada tarjeta, *Nombre* (ej. “Visa Nación”), *Banco* (el formato con que se lee su resumen al importarlo), *Marca*, *Se paga desde* (el CC de donde sale el pago) y los días de *cierre* y *vencimiento* de un mes típico. Con eso la app ubica cada consumo en su resumen (ver [sección 7](#7-vencimientos-y-tarjeta)). Si dejás de usar una, dala de baja desde *editar* en vez de borrarla: borrarla elimina sus resúmenes y deja sus movimientos sin tarjeta.
+5. **Reglas de categorización** (opcional, ahorra tiempo al importar): asociá un texto de contraparte (coincidencia parcial, sin importar mayúsculas) a una categoría/subcategoría. Ej.: “Barrientos” → Hogar › Limpieza.
+6. **Backup** — ver [sección 14](#14-backups).
 
 ## 5. Cargar movimientos
 
@@ -81,8 +82,8 @@ Tocá **+ Movimiento**. Campos principales: Fecha, Centro de Costo, Tipo (ingres
 
 - Los desplegables de Centro/Categoría/Subcategoría tienen **buscador**: escribí para filtrar y confirmá con **Enter** o **Tab**.
 - **Transferencia:** completá *Centro de Costo Destino* (opcional) para registrar el movimiento de pasaje entre cuentas.
-- **Cuotas:** indicá *Cuotas a generar* y la app crea una por mes (con fecha futura, visibles en Vencimientos). *Cuota manual* es solo para escribir la etiqueta a mano en un movimiento suelto; dejala vacía si ya pusiste una cantidad.
-- **Tarjeta:** *Marca de tarjeta* y *Fecha de consumo* son opcionales.
+- **Tarjeta:** tildá *Pagado con tarjeta de crédito* y elegí la **Tarjeta** (las cargadas en ABM › Tarjetas). Cargás la *Fecha de consumo* y la app calcula sola el resumen en que cae: la *Fecha* del movimiento pasa a ser el vencimiento de ese resumen y el centro, si lo dejaste vacío, el de la cuenta desde la que se paga la tarjeta. Con *(otra — fecha y marca a mano)* funciona como antes: la Fecha es el vencimiento que tipeás vos, y la marca y la fecha de consumo son opcionales.
+- **Cuotas:** indicá *Cuotas a generar*. Con tarjeta elegida, cada cuota va al resumen del mes siguiente (la pantalla muestra en qué fechas vencen); sin tarjeta, la app crea una por mes desde la Fecha. Quedan con fecha futura, visibles en Vencimientos. *Cuota manual* es solo para escribir la etiqueta a mano en un movimiento suelto; dejala vacía si ya pusiste una cantidad.
 
 ### Cargar efectivo (rápido)
 El botón **Cargar efectivo** (💵; en el celular está en la barra superior) abre un formulario corto: fecha, CC, ingreso/egreso, monto, contraparte y detalle. Categoría y subcategoría pueden completarse después. Preselecciona tu CC de efectivo según tu usuario.
@@ -91,7 +92,7 @@ El botón **Cargar efectivo** (💵; en el celular está en la barra superior) a
 - **Filtros:** búsqueda por texto y filtros múltiples (tildás varias opciones) de Centro, Categoría, Subcategoría y Mes. *Solo incompletos* muestra los que no tienen categoría; *Solo tarjeta* los de tarjeta. **Limpiar filtros** los reinicia.
 - **Paginación** de 50 en 50.
 - **Edición múltiple:** seleccioná varios movimientos y editalos en lote (por ejemplo, asignarles la misma categoría).
-- **Agrupar tarjeta:** los consumos de un mismo resumen se pueden agrupar y desplegar.
+- **Agrupar tarjeta:** los consumos de un mismo resumen se agrupan en una línea desplegable (por resumen si la tarjeta está cargada en ABM; si no, por fecha, centro y marca). El botón 🧾 de la línea abre el resumen.
 - **Exportar a Excel** lo filtrado.
 - Las ventas de USDT muestran un botón para **facturar con ARCA** (ver [sección 11](#11-usdt)).
 
@@ -100,9 +101,9 @@ El botón **Cargar efectivo** (💵; en el celular está en la barra superior) a
 **Importar** convierte el texto copiado de un resumen en movimientos.
 
 1. Elegí la **Entidad**: Mercado Pago, Santander, Nación, Provincia, Tarjeta de Crédito o *Excel histórico* (ya categorizado).
-2. Para *Tarjeta de Crédito* indicá además Banco, Vencimiento del resumen y, opcionalmente, la marca.
+2. Para *Tarjeta de Crédito* elegí la **Tarjeta** y cargá el **Vencimiento** real del resumen y, si lo tenés, el **Cierre**. Si ese resumen ya existía (por consumos o cuotas que cargaste antes), la app lo avisa: al confirmar se corrigen sus fechas con las reales y sus movimientos pasan a la fecha de vencimiento real. Si la tarjeta no está cargada, elegí *(otra — elegir banco)* e indicá Banco, Vencimiento y, opcionalmente, la marca, como antes.
 3. Pegá el texto del resumen en el cuadro y tocá **Previsualizar**.
-4. Revisá la tabla: podés corregir centro, categoría y subcategoría de cada fila. Las **reglas de categorización** completan las que coincidan, y los **posibles duplicados** (mismo centro, contraparte, monto y fecha que algo ya cargado) quedan marcados.
+4. Revisá la tabla: podés corregir centro, categoría y subcategoría de cada fila. Las **reglas de categorización** completan las que coincidan, y los **posibles duplicados** (mismo centro, monto y fecha que algo ya cargado, o mismo monto que un movimiento de ese mismo resumen de tarjeta, como una cuota ya proyectada) quedan marcados.
 5. Confirmá para guardar.
 
 *Excel histórico:* pegá las filas copiadas del Excel con columnas separadas por tab, en el orden que indica la propia pantalla (Periodo, Cuenta, Categoría, Subcategoría, CC, Fecha, Contraparte, Detalle, Ingreso, Egreso).
@@ -113,6 +114,12 @@ El botón **Cargar efectivo** (💵; en el celular está en la barra superior) a
 
 - **Vencimientos propios:** concepto, contraparte, categoría, centro, fecha y monto. Se pueden editar, borrar o **marcar como pagado**; al pagar elegís entre *marcar pagado y cargarlo como movimiento* o *solo marcar pagado*.
 - **Movimientos con fecha futura** (por ejemplo cuotas de tarjeta), agrupados. No afectan Saldos hasta su fecha.
+
+**Resúmenes de tarjeta.** Los consumos de una tarjeta cargada en ABM se agrupan por resumen, con su total proyectado (la suma de los consumos cargados). Los resúmenes se crean solos al cargar o importar consumos, con fechas estimadas a partir de los días de cierre y vencimiento de la tarjeta. Desde **fechas, total real y pago** podés:
+
+- corregir el **cierre** y el **vencimiento** (todos sus consumos pasan a la nueva fecha de vencimiento);
+- cargar el **total real** que vino en el resumen: la línea muestra la **diferencia** con lo proyectado (suele ser intereses, impuestos o un consumo que te faltó cargar);
+- **marcarlo pagado**. Si no tipeás el total, se toma lo proyectado.
 
 **Gastos fijos** (servicios, cuota del club, biblioteca, colaboraciones con entidades…) tienen su propio sector dentro de Vencimientos:
 
