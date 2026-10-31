@@ -15,9 +15,8 @@ App web para llevar ingresos y egresos, vencimientos, saldos por cuenta, proyecc
 10. [Flujo de Caja y deudas](#10-flujo-de-caja-y-deudas)
 11. [USDT](#11-usdt)
 12. [Dólares](#12-dólares)
-13. [Gimnasio](#13-gimnasio)
-14. [Backups](#14-backups)
-15. [Preguntas frecuentes](#15-preguntas-frecuentes)
+13. [Backups](#13-backups)
+14. [Preguntas frecuentes](#14-preguntas-frecuentes)
 
 ---
 
@@ -61,7 +60,6 @@ Al crear una categoría elegís su **Tratamiento en reportes**. Es la decisión 
 - **USDT** — tenencia y ventas de USDT.
 - **Dólares** — compras/ventas de dólares y saldos en USD.
 - **Importar** — carga masiva desde resúmenes de bancos.
-- **Gimnasio** — marcador de visitas.
 - **ABM** — categorías, subcategorías, centros de costo, reglas y backup.
 
 ## 4. Configuración inicial (ABM)
@@ -72,7 +70,7 @@ Antes de cargar datos, armá la base en **ABM** (cada sección es una subpestañ
 2. **Categorías.** Nombre, color y tratamiento en reportes (ver [sección 2](#tratamiento-de-las-categorías-en-reportes)). Para que cada cuenta arranque con su saldo actual, creá una categoría **“Saldo Inicial”** y cargá un movimiento por cuenta con ese monto.
 3. **Subcategorías.** Se crean dentro de una categoría. También se pueden crear al vuelo escribiendo un nombre nuevo en el campo Subcategoría de un movimiento. Al borrar una subcategoría con movimientos, la app permite **reasignarlos** a otra o dejarlos sin subcategoría.
 4. **Reglas de categorización** (opcional, ahorra tiempo al importar): asociá un texto de contraparte (coincidencia parcial, sin importar mayúsculas) a una categoría/subcategoría. Ej.: “Barrientos” → Hogar › Limpieza.
-5. **Backup** — ver [sección 14](#14-backups).
+5. **Backup** — ver [sección 13](#13-backups).
 
 ## 5. Cargar movimientos
 
@@ -158,11 +156,7 @@ Para compras y ventas de dólares y algún ingreso/gasto en USD.
 - El botón **“Usar blue de hoy”** sugiere el monto en pesos con la cotización del dólar blue.
 - Los montos en dólares no se suman a ningún informe en pesos, salvo al Flujo de Caja y al total de Saldos de la proyección (a cotización blue).
 
-## 13. Gimnasio
-
-Un marcador entre usuarios: cada visita suma un punto, la meta es **2 por semana** y desde **3** es “WOW”. Gana la semana quien más suma. Hay semana actual, marcador general (semanas ganadas), historial semanal y últimas visitas (por si te equivocaste, se puede borrar una). Tenés que estar logueado para cargar tu visita.
-
-## 14. Backups
+## 13. Backups
 
 En **ABM › Backup**:
 
@@ -171,7 +165,7 @@ En **ABM › Backup**:
 
 Además existe un **backup automático diario a Google Drive** (ver [INSTALACION-Y-OPERACION.md](INSTALACION-Y-OPERACION.md#backup-diario-a-google-drive)).
 
-## 15. Preguntas frecuentes
+## 14. Preguntas frecuentes
 
 **El saldo de una cuenta no coincide con el banco.** Revisá que cargaste la categoría *Saldo Inicial*, que no falten movimientos y que las transferencias (TEC) tengan sus dos puntas. Tocá *Recalcular* en Saldos.
 

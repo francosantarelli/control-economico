@@ -21,7 +21,7 @@ Para una base **ya en uso**, aplicar solo las migraciones faltantes de [`migrati
 
 - En Supabase: **Authentication → Users → Add user** (email y contraseña) para cada persona.
 - **Deshabilitar el signup público** (Authentication → Settings). Las políticas RLS dan acceso total a *cualquier* cuenta autenticada: sin esto, cualquiera que se registre vería todos los datos.
-- El CC de efectivo por defecto y la persona del Gimnasio se resuelven por email (`codigoCentroPorUsuario` y `personaPorUsuario` en `app.js`); para usuarios nuevos hay que agregarlos ahí.
+- El CC de efectivo por defecto se resuelve por email (`codigoCentroPorUsuario` en `app.js`); para usuarios nuevos hay que agregarlos ahí.
 
 ## 3. Publicación (GitHub Pages)
 

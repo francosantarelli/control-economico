@@ -18,7 +18,7 @@ const GDRIVE_OAUTH_REFRESH_TOKEN = requireEnv('GDRIVE_OAUTH_REFRESH_TOKEN');
 // Mismas tablas (y en el mismo orden) que TABLAS_BACKUP en app.js: así el archivo se puede restaurar
 // desde la app con "Restaurar desde un backup". Un test chequea que las dos listas coincidan.
 const TABLAS = ['centros', 'categorias', 'subcategorias', 'movimientos', 'vencimientos', 'deudas',
-  'usdt_movimientos', 'facturas', 'gimnasio_visitas', 'reglas_categorizacion', 'configuracion'];
+  'usdt_movimientos', 'facturas', 'reglas_categorizacion', 'configuracion'];
 // Columna para ordenar al paginar (sin un orden fijo, las páginas pueden repetir o saltear filas).
 const CLAVE_ORDEN = { configuracion: 'clave' };
 // Supabase devuelve como máximo 1000 filas por request: hay que pedirlas de a páginas.
