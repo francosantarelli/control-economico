@@ -100,7 +100,7 @@ El botón **Cargar efectivo** (💵; en el celular está en la barra superior) a
 1. Elegí la **Entidad**: Mercado Pago, Santander, Nación, Provincia, Tarjeta de Crédito o *Excel histórico* (ya categorizado).
 2. Para *Tarjeta de Crédito* indicá además Banco, Vencimiento del resumen y, opcionalmente, la marca.
 3. Pegá el texto del resumen en el cuadro y tocá **Previsualizar**.
-4. Revisá la tabla: podés corregir centro, categoría y subcategoría de cada fila. Las **reglas de categorización** completan las que coincidan, y los **posibles duplicados** (mismo centro, contraparte, monto y fecha que algo ya cargado) quedan marcados.
+4. Revisá la tabla: podés corregir centro, categoría y subcategoría de cada fila. Las **reglas de categorización** completan las que coincidan, y los **posibles duplicados** (mismo centro, contraparte, monto y fecha que algo ya cargado) quedan marcados. En resúmenes de tarjeta, si una fila ya estaba cargada como cuota con otra fecha (misma cuenta y monto, hasta 10 días de diferencia), aparece *Ya cargado el …*: al confirmar, esa cuota se mueve a la fecha del resumen conservando su categoría y detalle, en vez de duplicarse. Desmarcalo si es una compra distinta.
 5. Confirmá para guardar.
 
 *Excel histórico:* pegá las filas copiadas del Excel con columnas separadas por tab, en el orden que indica la propia pantalla (Periodo, Cuenta, Categoría, Subcategoría, CC, Fecha, Contraparte, Detalle, Ingreso, Egreso).
@@ -110,7 +110,7 @@ El botón **Cargar efectivo** (💵; en el celular está en la barra superior) a
 **Vencimientos** tiene dos partes:
 
 - **Vencimientos propios:** concepto, contraparte, categoría, centro, fecha y monto. Se pueden editar, borrar o **marcar como pagado**; al pagar elegís entre *marcar pagado y cargarlo como movimiento* o *solo marcar pagado*.
-- **Movimientos con fecha futura** (por ejemplo cuotas de tarjeta), agrupados. No afectan Saldos hasta su fecha.
+- **Movimientos con fecha futura** (por ejemplo cuotas de tarjeta), agrupados. No afectan Saldos hasta su fecha. Si un resumen tiene movimientos repetidos en otro resumen de la misma cuenta a 10 días o menos (típico: cuotas cargadas a mano con un vencimiento estimado y después el resumen real importado), se marca con *repetido(s)* y ofrece **Unificar con el resumen del …**: mueve los cargados a mano a la fecha real y borra sus copias importadas.
 
 En **Resumen** aparece un aviso con los vencimientos próximos.
 

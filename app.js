@@ -1348,6 +1348,98 @@ function calcularDuplicados(filasNormalizadas){
   return dupIds;
 }
 
+// ===================== GEMELOS DE TARJETA (cuota proyectada vs. resumen real) =====================
+// Las cuotas que se generan a mano repiten el día del 1er vencimiento todos los meses (ej. "el 7"),
+// pero el vencimiento real de la tarjeta cambia mes a mes (ej. 11/11). Al importar el resumen
+// real, la misma cuota entraba de nuevo con otra fecha y el detector de duplicados (que pide fecha
+// exacta) no la veía. Un "gemelo" es un movimiento con tarjeta de la misma cuenta, mismo monto y
+// otra fecha a no más de VENTANA_GEMELOS_TARJETA días: es la misma cuota cargada dos veces.
+var VENTANA_GEMELOS_TARJETA = 10;
+function diasEntreISO(a, b){
+  var pa = (a||'').split('-').map(Number), pb = (b||'').split('-').map(Number);
+  if(pa.length!==3 || pb.length!==3) return null;
+  return Math.round((new Date(pb[0], pb[1]-1, pb[2]) - new Date(pa[0], pa[1]-1, pa[2]))/86400000);
+}
+function sonGemelosTarjeta(fechaA, centroA, montoA, fechaB, centroB, montoB){
+  if(!fechaA || !fechaB || fechaA===fechaB || !centroA || centroA!==centroB) return false;
+  if(!montosIguales(montoA, montoB)) return false;
+  var d = diasEntreISO(fechaA, fechaB);
+  return d!==null && Math.abs(d) <= VENTANA_GEMELOS_TARJETA;
+}
+// Para cada fila a importar [{id, fecha, centroId, monto}] busca un movimiento con tarjeta ya
+// guardado que sea su gemelo (el de fecha más cercana). Cada movimiento se usa una sola vez, así
+// dos cuotas del mismo monto en el resumen no se emparejan con el mismo movimiento.
+// Devuelve id de fila -> movimiento existente.
+function buscarGemelosTarjetaImportacion(filas){
+  var usados = {}, res = {};
+  filas.forEach(function(f){
+    var mejor = null, mejorDist = Infinity;
+    STATE.movimientos.forEach(function(m){
+      if(!m.tarjeta || usados[m.id]) return;
+      if(!sonGemelosTarjeta(f.fecha, f.centroId, f.monto, m.fecha, m.centroId, montoSignedMovimiento(m))) return;
+      var dist = Math.abs(diasEntreISO(f.fecha, m.fecha));
+      if(dist < mejorDist){ mejor = m; mejorDist = dist; }
+    });
+    if(mejor){ usados[mejor.id] = true; res[f.id] = mejor; }
+  });
+  return res;
+}
+// Une la cuota proyectada (se conserva: tiene la categoría/contraparte que cargó el usuario) con el
+// dato real del resumen: toma su fecha y completa lo que le falte. Devuelve los campos a actualizar.
+function camposUnificarGemelo(proyectado, real){
+  var c = { fecha: real.fecha };
+  if(!proyectado.cuotas && real.cuotas) c.cuotas = real.cuotas;
+  if(!proyectado.fechaConsumo && real.fechaConsumo) c.fechaConsumo = real.fechaConsumo;
+  if(!proyectado.tarjetaMarca && real.tarjetaMarca) c.tarjetaMarca = real.tarjetaMarca;
+  if(!proyectado.categoriaId && real.categoriaId){ c.categoriaId = real.categoriaId; c.subcategoriaId = real.subcategoriaId||''; }
+  if(!proyectado.proveedor && real.proveedor) c.proveedor = real.proveedor;
+  return c;
+}
+function camposUnificarGemeloDb(c){
+  var r = {};
+  if('fecha' in c) r.fecha = c.fecha;
+  if('cuotas' in c) r.cuotas = c.cuotas||null;
+  if('fechaConsumo' in c) r.fecha_consumo = c.fechaConsumo||null;
+  if('tarjetaMarca' in c) r.tarjeta_marca = c.tarjetaMarca||null;
+  if('categoriaId' in c){ r.categoria_id = c.categoriaId||null; r.subcategoria_id = c.subcategoriaId||null; }
+  if('proveedor' in c) r.proveedor = c.proveedor||null;
+  return r;
+}
+// Resúmenes de tarjeta ya cargados (Fecha + Centro) que tienen movimientos repetidos en otro
+// resumen cercano de la misma cuenta. El resumen "real" (destino) es el que tiene más movimientos
+// (el importado completo); a igualdad, el de fecha más tardía. Devuelve
+// clave del resumen origen -> {fechaOrigen, fechaDestino, centroId, pares:[{proyectado, real}]}.
+function buscarResumenesTarjetaDuplicados(){
+  var grupos = {};
+  STATE.movimientos.forEach(function(m){
+    if(!m.tarjeta || !m.fecha || !m.centroId) return;
+    var k = m.fecha+'|'+m.centroId;
+    (grupos[k] = grupos[k] || {fecha:m.fecha, centroId:m.centroId, movs:[]}).movs.push(m);
+  });
+  var res = {};
+  Object.keys(grupos).forEach(function(kO){
+    var gO = grupos[kO];
+    var destino = null;
+    Object.keys(grupos).forEach(function(kD){
+      var gD = grupos[kD];
+      if(kD===kO || gD.centroId!==gO.centroId) return;
+      var d = diasEntreISO(gO.fecha, gD.fecha);
+      if(d===null || Math.abs(d) > VENTANA_GEMELOS_TARJETA) return;
+      var esMayor = gD.movs.length > gO.movs.length || (gD.movs.length===gO.movs.length && gD.fecha > gO.fecha);
+      if(!esMayor) return;
+      if(!destino || gD.movs.length > destino.movs.length) destino = gD;
+    });
+    if(!destino) return;
+    var usados = {}, pares = [];
+    gO.movs.forEach(function(p){
+      var real = destino.movs.find(function(r){ return !usados[r.id] && montosIguales(montoSignedMovimiento(r), montoSignedMovimiento(p)); });
+      if(real){ usados[real.id] = true; pares.push({proyectado:p, real:real}); }
+    });
+    if(pares.length) res[kO] = {fechaOrigen:gO.fecha, fechaDestino:destino.fecha, centroId:gO.centroId, pares:pares, totalOrigen:gO.movs.length};
+  });
+  return res;
+}
+
 // Suma n meses a una fecha ISO (YYYY-MM-DD), ajustando al último día del mes
 // destino si este tiene menos días (ej: 31-01 + 1 mes -> 28/29-02, no 03-03).
 function sumarMeses(fechaISO, n){
@@ -2535,8 +2627,16 @@ function renderImportar(){
       return { id:r.id, fecha:r.fecha, centroId:r.centroId, proveedor:r.proveedor, monto:r.monto };
     }));
 
+    var gemelosImp = STATE.importEntidad === 'tarjeta' ? buscarGemelosTarjetaImportacion(STATE.importPreview.filter(function(r){ return !existeMovimientoIgual(r.fecha, r.centroId, r.proveedor, r.monto); }).map(function(r){
+      return { id:r.id, fecha:r.fecha, centroId:r.centroId, monto:r.monto };
+    })) : {};
+
     var rows = STATE.importPreview.map(function(r){
       var esDup = !!dupIds[r.id];
+      var gemelo = gemelosImp[r.id];
+      var gemeloTag = gemelo ? '<div class="aviso-gemelo" style="font-size:11px;color:var(--ink-soft);margin-top:4px;white-space:normal;min-width:180px">'+
+        '<label style="display:flex;gap:4px;align-items:flex-start;font-weight:400"><input type="checkbox" data-rowid="'+r.id+'" data-field="unificar" '+(r.unificar!==false?'checked':'')+' style="width:auto;margin-top:2px">'+
+        '<span><i class="bi bi-arrow-repeat"></i> Ya cargado el '+esc(fechaISOaDDMMAAAA(gemelo.fecha))+' ('+esc([nombreCategoria(gemelo.categoriaId), gemelo.proveedor].filter(function(x){return x && x!=='—';}).join(' · '))+') — se mueve al '+esc(fechaISOaDDMMAAAA(r.fecha))+' en vez de duplicarlo</span></label></div>' : '';
       var centroSel = '<select data-rowid="'+r.id+'" data-field="centroId"><option value="">—</option>'+
         centrosOrdenados().map(function(c){ return '<option value="'+c.id+'" '+(r.centroId===c.id?'selected':'')+'>'+esc(c.codigo)+'</option>'; }).join('')+'</select>';
       var catSel = '<select data-rowid="'+r.id+'" data-field="categoriaId"><option value="">Sin categoría</option>'+
@@ -2551,7 +2651,7 @@ function renderImportar(){
       var fechaConsumoInput = '<input type="date" id="imp-fc-'+r.id+'" data-rowid="'+r.id+'" data-field="fechaConsumo" value="'+esc(r.fechaConsumo||'')+'" style="width:100%;min-width:120px;box-sizing:border-box">';
       return '<tr'+(esDup?' class="fila-duplicada"':'')+'>'+
         '<td><input type="checkbox" data-rowid="'+r.id+'" data-field="incluir" '+(r.incluir?'checked':'')+'></td>'+
-        '<td class="mono">'+esc(fechaISOaDDMMAAAA(r.fecha)||r.fecha)+dupTag+'</td>'+
+        '<td class="mono">'+esc(fechaISOaDDMMAAAA(r.fecha)||r.fecha)+dupTag+gemeloTag+'</td>'+
         '<td>'+fechaConsumoInput+'</td>'+
         '<td>'+centroSel+'</td>'+
         '<td>'+catSel+'</td>'+
@@ -2567,6 +2667,7 @@ function renderImportar(){
 
     var incluidos = STATE.importPreview.filter(function(r){return r.incluir;}).length;
     var duplicados = STATE.importPreview.filter(function(r){return dupIds[r.id];}).length;
+    var cantGemelos = Object.keys(gemelosImp).length;
 
     previewHtml = ''+
     '<div class="card">'+
@@ -2580,6 +2681,7 @@ function renderImportar(){
     '<div class="card">'+
       '<h3>Previsualización ('+STATE.importPreview.length+' movimiento(s), '+incluidos+' seleccionado(s))</h3>'+
       (duplicados>0 ? '<div class="msg err"><i class="bi bi-exclamation-triangle"></i> '+duplicados+' fila(s) marcada(s) como posible duplicado (mismo Centro, fecha y monto que otro movimiento). Revisalas antes de confirmar.</div>' : '')+
+      (cantGemelos>0 ? '<div class="msg ok"><i class="bi bi-arrow-repeat"></i> '+cantGemelos+' fila(s) ya estaban cargadas como cuota de tarjeta con otra fecha (misma cuenta y monto, hasta '+VENTANA_GEMELOS_TARJETA+' días de diferencia). En vez de duplicarlas, se mueve la que ya tenías a la fecha de este resumen, conservando su categoría y detalle. Desmarcá "Ya cargado" si alguna es una compra distinta.</div>' : '')+
       '<table id="import-preview-table" class="table"><thead><tr><th></th><th>Fecha</th><th>Fecha de consumo</th><th>Centro</th><th>Categoría</th><th>Subcategoría</th><th>Contraparte</th><th>Detalle</th><th>Cuotas</th><th class="num">Ingreso</th><th class="num">Egreso</th><th title="Guardar la relación contraparte → categoría como regla para futuras importaciones">Regla</th></tr></thead>'+
       '<tbody>'+rows+'</tbody></table>'+
       '<div class="fields-row" style="margin-top:14px">'+
@@ -2782,8 +2884,14 @@ function renderVencimientos(){
     gruposTarjetaMap[clave].movs.push(m);
     gruposTarjetaMap[clave].total += (Number(m.egreso)||0) - (Number(m.ingreso)||0);
   });
+  var resumenesDuplicados = buscarResumenesTarjetaDuplicados();
   var gruposTarjetaHtml = gruposTarjetaOrden.map(function(clave){
     var g = gruposTarjetaMap[clave];
+    var dupRes = resumenesDuplicados[clave];
+    var avisoDupHtml = dupRes ? '<div class="msg err" style="margin-top:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">'+
+      '<span><i class="bi bi-exclamation-triangle"></i> '+dupRes.pares.length+' de estos '+dupRes.totalOrigen+' movimiento(s) también están en el resumen del '+esc(fechaISOaDDMMAAAA(dupRes.fechaDestino))+' de la misma cuenta (mismo monto).</span>'+
+      '<button class="secondary" data-action="unificar-resumen-tarjeta" data-id="'+esc(clave)+'" style="font-size:12px;padding:6px 12px">Unificar con el resumen del '+esc(fechaISOaDDMMAAAA(dupRes.fechaDestino))+'</button>'+
+    '</div>' : '';
     var dias = diasHasta(g.fecha);
     var diasTxt = dias===null ? '' : (dias===0 ? 'Vence hoy' : 'en '+dias+' día(s)');
     var nombreCC = g.centroId ? nombreCentro(g.centroId) : '(sin centro asignado)';
@@ -2795,8 +2903,10 @@ function renderVencimientos(){
         '<span style="color:var(--ink-soft);font-size:12px">'+diasTxt+'</span>'+
         '<span><i class="bi bi-credit-card"></i> '+esc(nombreCC)+'</span>'+
         '<span style="font-size:12px;color:var(--ink-soft)">'+g.movs.length+' movimiento(s)</span>'+
+        (dupRes ? '<span style="font-size:12px;color:var(--danger)"><i class="bi bi-exclamation-triangle"></i> '+dupRes.pares.length+' repetido(s)</span>' : '')+
         '<span class="mono egreso" style="margin-left:auto;font-weight:600">'+fmtMonto(g.total)+'</span>'+
       '</summary>'+
+      avisoDupHtml+
       '<div style="overflow-x:auto;margin-top:10px"><table class="table tabla-movil"><thead><tr><th>Fecha</th><th>Vence</th><th>Centro</th><th>Categoría</th><th>Contraparte</th><th>Detalle</th><th class="num">Ingreso</th><th class="num">Egreso</th><th></th></tr></thead><tbody>'+filasGrupo+'</tbody></table></div>'+
     '</details>';
   }).join('');
@@ -4417,7 +4527,7 @@ function bindEvents(){
       if(!rowId || !field) return;
       var row = STATE.importPreview.find(function(r){return r.id===rowId;});
       if(!row) return;
-      if(field==='incluir' || field==='guardarRegla') row[field] = t.checked;
+      if(field==='incluir' || field==='guardarRegla' || field==='unificar') row[field] = t.checked;
       else if(field==='categoriaId'){ row.categoriaId = t.value; row.subcategoriaId=''; }
       else row[field] = t.value;
       render();
@@ -5061,6 +5171,33 @@ async function handleAction(action, id){
     STATE.bulkEditMovAbierto = false;
     render(); return;
   }
+  if(action==='unificar-resumen-tarjeta'){
+    var dupU = buscarResumenesTarjetaDuplicados()[id];
+    if(!dupU) return;
+    STATE.confirmState = {
+      message: '¿Unificar '+dupU.pares.length+' movimiento(s) del '+fechaISOaDDMMAAAA(dupU.fechaOrigen)+' con el resumen del '+fechaISOaDDMMAAAA(dupU.fechaDestino)+'? '+
+        'Se mueven al '+fechaISOaDDMMAAAA(dupU.fechaDestino)+' conservando su categoría y detalle, y se borran sus repetidos: '+
+        dupU.pares.map(function(p){ return (p.real.proveedor||'(sin contraparte)')+' $'+fmtMonto(Math.abs(montoSignedMovimiento(p.real))); }).join(', ')+'.',
+      action: 'unificar-resumen-tarjeta-do', id: id, destructivo: false, textoConfirmar: 'Sí, unificar'
+    };
+    render(); return;
+  }
+  if(action==='unificar-resumen-tarjeta-do'){
+    var dupD = buscarResumenesTarjetaDuplicados()[id];
+    if(!dupD) return;
+    try{
+      for(var iP=0; iP<dupD.pares.length; iP++){
+        var par = dupD.pares[iP];
+        var camposPar = camposUnificarGemelo(par.proyectado, par.real);
+        await dbUpdate('movimientos', par.proyectado.id, camposUnificarGemeloDb(camposPar));
+        Object.assign(par.proyectado, camposPar);
+        await dbDelete('movimientos', par.real.id);
+        STATE.movimientos = STATE.movimientos.filter(function(x){ return x.id!==par.real.id; });
+      }
+      STATE.saldosDirty = true;
+    }catch(e){ STATE.dbError = 'No se pudo unificar el resumen: '+(e.message||e); }
+    render(); return;
+  }
   if(action==='del-mov'){
     STATE.confirmState = { message:'¿Borrar este movimiento?', action:'del-mov-do', id:id };
     render(); return;
@@ -5453,6 +5590,18 @@ async function handleAction(action, id){
     var faltaCentro = seleccionadas.some(function(r){return !r.centroId;});
     if(faltaCentro){ STATE.importMsg = {type:'err', text:'Hay movimientos sin Centro de Costo asignado. Asignalo antes de importar.'}; render(); return; }
     var esTarjeta = STATE.importEntidad === 'tarjeta';
+    // Cuotas ya cargadas con otra fecha (gemelos): se mueven a la fecha del resumen en vez de duplicarse.
+    // Se recalcula igual que en la previsualización (excluyendo las filas que ya existen con la misma fecha).
+    var gemelosConf = esTarjeta ? buscarGemelosTarjetaImportacion(STATE.importPreview.filter(function(r){ return !existeMovimientoIgual(r.fecha, r.centroId, r.proveedor, r.monto); }).map(function(r){
+      return { id:r.id, fecha:r.fecha, centroId:r.centroId, monto:r.monto };
+    })) : {};
+    var unificaciones = [];
+    seleccionadas = seleccionadas.filter(function(r){
+      var g = gemelosConf[r.id];
+      if(!g || r.unificar===false) return true;
+      unificaciones.push({ mov:g, campos: camposUnificarGemelo(g, {fecha:r.fecha, cuotas:r.cuotas, fechaConsumo:r.fechaConsumo, tarjetaMarca:r.tarjetaMarca, categoriaId:r.categoriaId, subcategoriaId:r.subcategoriaId, proveedor:r.proveedor}), regla:r });
+      return false;
+    });
     var nuevosMov = seleccionadas.map(function(r){
       return {
         id: uid(), fecha: r.fecha, centroId: r.centroId, categoriaId: r.categoriaId, subcategoriaId: r.subcategoriaId,
@@ -5466,19 +5615,25 @@ async function handleAction(action, id){
       };
     });
     try{
-      await dbInsert('movimientos', nuevosMov.map(toDbMovimiento));
+      if(nuevosMov.length) await dbInsert('movimientos', nuevosMov.map(toDbMovimiento));
       STATE.movimientos = STATE.movimientos.concat(nuevosMov);
+      for(var idxU=0; idxU<unificaciones.length; idxU++){
+        var u = unificaciones[idxU];
+        await dbUpdate('movimientos', u.mov.id, camposUnificarGemeloDb(u.campos));
+        Object.assign(u.mov, u.campos);
+      }
       STATE.saldosDirty = true;
       var nuevasReglas = 0;
-      for(var idxSel=0; idxSel<seleccionadas.length; idxSel++){
-        var rSel = seleccionadas[idxSel];
+      var conRegla = seleccionadas.concat(unificaciones.map(function(u){ return u.regla; }));
+      for(var idxSel=0; idxSel<conRegla.length; idxSel++){
+        var rSel = conRegla[idxSel];
         if(rSel.guardarRegla && rSel.categoriaId){
           await agregarOActualizarRegla(rSel.proveedor, nombreCategoria(rSel.categoriaId), rSel.subcategoriaId ? nombreSubcategoria(rSel.subcategoriaId) : '');
           nuevasReglas++;
         }
       }
       STATE.importPreview = null; STATE.importRaw = '';
-      STATE.importMsg = {type:'ok', text: seleccionadas.length+' movimiento(s) importado(s) correctamente.'+(nuevasReglas ? ' Se guardaron '+nuevasReglas+' regla(s) de categorización nueva(s).' : '')};
+      STATE.importMsg = {type:'ok', text: nuevosMov.length+' movimiento(s) importado(s) correctamente.'+(unificaciones.length ? ' '+unificaciones.length+' cuota(s) que ya estaban cargadas se movieron a la fecha del resumen.' : '')+(nuevasReglas ? ' Se guardaron '+nuevasReglas+' regla(s) de categorización nueva(s).' : '')};
       STATE.activeTab = 'movimientos'; STATE.editing = null;
     }catch(e){ STATE.dbError = 'No se pudo completar la importación: '+(e.message||e); }
     render(); return;
