@@ -106,6 +106,50 @@ describe('Vencimientos', () => {
     expect(win.STATE.movimientos[0]).toMatchObject({ proveedor: 'Luz', egreso: 5000 });
   });
 
+  it('alta de un vencimiento marcado como Gasto fijo: se lista en la sección propia', async () => {
+    win.document.getElementById('f-venc-concepto').value = 'Club';
+    win.document.getElementById('f-venc-fecha').value = '2026-08-10';
+    win.document.getElementById('f-venc-monto').value = '20000';
+    win.document.getElementById('f-venc-gasto-fijo').checked = true;
+    await win.handleAction('save-venc', '');
+    expect(win.STATE.vencimientos[0]).toMatchObject({ concepto: 'Club', gastoFijo: true });
+    expect(sbMock.calls[0].rows).toMatchObject({ gasto_fijo: true });
+    const seccion = win.document.getElementById('venc-gastos-fijos');
+    expect(seccion).not.toBeNull();
+    expect(seccion.textContent).toContain('Club');
+  });
+
+  it('los vencimientos comunes no aparecen en la sección de Gastos fijos', () => {
+    win.STATE.vencimientos = [
+      { id: 'v1', concepto: 'Club', fecha: '2026-08-10', monto: 20000, centroId: 'c-ef', estado: 'pendiente', gastoFijo: true },
+      { id: 'v2', concepto: 'Patente', fecha: '2026-08-15', monto: 9000, centroId: 'c-ef', estado: 'pendiente' }
+    ];
+    win.render();
+    const seccion = win.document.getElementById('venc-gastos-fijos');
+    expect(seccion.textContent).toContain('Club');
+    expect(seccion.textContent).not.toContain('Patente');
+  });
+
+  it('pagar un gasto fijo crea el vencimiento del mes siguiente (una sola vez)', async () => {
+    win.STATE.vencimientos = [{ id: 'v1', concepto: 'Club', fecha: '2026-08-10', monto: 20000, centroId: 'c-ef', estado: 'pendiente', gastoFijo: true }];
+    win.render();
+    await win.handleAction('pagar-venc', 'v1');
+    await win.handleAction('pagar-venc-sin-mov', 'v1');
+    expect(win.STATE.vencimientos).toHaveLength(2);
+    expect(win.STATE.vencimientos[1]).toMatchObject({ concepto: 'Club', fecha: '2026-09-10', monto: 20000, centroId: 'c-ef', estado: 'pendiente', gastoFijo: true });
+    // desmarcar y volver a marcar pagado no duplica el del mes siguiente
+    await win.handleAction('toggle-venc-estado', 'v1');
+    await win.handleAction('toggle-venc-estado', 'v1');
+    expect(win.STATE.vencimientos).toHaveLength(2);
+  });
+
+  it('pagar un vencimiento común no crea otro', async () => {
+    win.STATE.vencimientos = [{ id: 'v1', concepto: 'Patente', fecha: '2026-08-15', monto: 9000, centroId: 'c-ef', estado: 'pendiente' }];
+    win.render();
+    await win.handleAction('pagar-venc-con-mov', 'v1');
+    expect(win.STATE.vencimientos).toHaveLength(1);
+  });
+
   it('borra un vencimiento', async () => {
     win.STATE.vencimientos = [{ id: 'v1', concepto: 'Luz', fecha: '2026-08-20', monto: 5000, centroId: 'c-ef', estado: 'pendiente' }];
     win.render();

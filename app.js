@@ -291,8 +291,24 @@ function toDbMovimiento(m){
   return r;
 }
 function fromDbMovimiento(r){ return {id:r.id, fecha:r.fecha, centroId:r.centro_id||'', categoriaId:r.categoria_id||'', subcategoriaId:r.subcategoria_id||'', proveedor:r.proveedor||'', detalle:r.detalle||'', ingreso:Number(r.ingreso)||0, egreso:Number(r.egreso)||0, tarjeta:!!r.tarjeta, fechaConsumo:r.fecha_consumo||'', tarjetaMarca:r.tarjeta_marca||'', cuotas:r.cuotas||'', moneda:r.moneda==='USD'?'USD':'ARS', cambioId:r.cambio_id||''}; }
-function toDbVencimiento(v){ return {id:v.id, concepto:v.concepto, fecha:v.fecha, monto:Number(v.monto)||0, centro_id:v.centroId||null, estado:v.estado||'pendiente'}; }
-function fromDbVencimiento(r){ return {id:r.id, concepto:r.concepto, fecha:r.fecha, monto:Number(r.monto)||0, centroId:r.centro_id||'', estado:r.estado||'pendiente'}; }
+function toDbVencimiento(v){ return {id:v.id, concepto:v.concepto, fecha:v.fecha, monto:Number(v.monto)||0, centro_id:v.centroId||null, estado:v.estado||'pendiente', gasto_fijo:!!v.gastoFijo}; }
+function fromDbVencimiento(r){ return {id:r.id, concepto:r.concepto, fecha:r.fecha, monto:Number(r.monto)||0, centroId:r.centro_id||'', estado:r.estado||'pendiente', gastoFijo:!!r.gasto_fijo}; }
+// Un gasto fijo (luz, club, colaboraciones...) se renueva al pagarlo: se crea el vencimiento del mes
+// siguiente con el mismo concepto, monto y centro. Si ese vencimiento ya existe (p. ej. se marcó
+// pagado, se desmarcó y se volvió a marcar), no se crea otro.
+async function renovarGastoFijo(v){
+  if(!v || !v.gastoFijo || !v.fecha) return null;
+  var fechaSig = sumarMeses(v.fecha, 1);
+  var concepto = (v.concepto||'').trim().toLowerCase();
+  var yaExiste = STATE.vencimientos.some(function(x){
+    return x.id!==v.id && x.gastoFijo && x.fecha===fechaSig && (x.concepto||'').trim().toLowerCase()===concepto && (x.centroId||'')===(v.centroId||'');
+  });
+  if(yaExiste) return null;
+  var sig = {id:uid(), concepto:v.concepto, fecha:fechaSig, monto:Number(v.monto)||0, centroId:v.centroId||'', estado:'pendiente', gastoFijo:true};
+  await dbInsert('vencimientos', toDbVencimiento(sig));
+  STATE.vencimientos.push(sig);
+  return sig;
+}
 async function crearMovimientoDesdeVencimiento(v){
   var nuevoMov = {
     id: uid(), fecha: v.fecha, centroId: v.centroId||'', categoriaId:'', subcategoriaId:'',
@@ -2771,7 +2787,8 @@ function campoVenc(e, mostrarEstado){
     '<div class="field"><label>Monto</label><input type="number" step="0.01" id="f-venc-monto" value="'+esc(e.monto)+'" style="width:130px"></div>'+
     '<div class="field"><label>Centro de Costo</label><select id="f-venc-centro"><option value="">(sin asignar)</option>'+
       centrosOrdenados().map(function(c){ return '<option value="'+c.id+'" '+(e.centroId===c.id?'selected':'')+'>'+esc(c.codigo)+' · '+esc(c.nombre)+'</option>'; }).join('') +
-    '</select></div>';
+    '</select></div>'+
+    '<div class="field" style="align-self:flex-end;margin-bottom:8px"><label style="display:flex;align-items:center;gap:6px;font-weight:400" title="Se renueva solo: al marcarlo pagado se crea el vencimiento del mes siguiente"><input type="checkbox" id="f-venc-gasto-fijo" '+(e.gastoFijo?'checked':'')+' style="width:auto"> <i class="bi bi-arrow-repeat"></i> Gasto fijo</label></div>';
   if(mostrarEstado){
     html += '<div class="field"><label>Estado</label><select id="f-venc-estado">'+
         '<option value="pendiente"'+(e.estado!=='pagado'?' selected':'')+'>Pendiente</option>'+
@@ -2807,8 +2824,10 @@ function renderVencimientos(){
 
   var formHtml = formNuevoVenc;
 
-  var lista = STATE.vencimientos.filter(function(v){ return v.estado!=='pagado'; }).sort(function(a,b){ return (a.fecha||'').localeCompare(b.fecha||''); });
-  var rows = lista.map(function(v){
+  var pendientesTodos = STATE.vencimientos.filter(function(v){ return v.estado!=='pagado'; }).sort(function(a,b){ return (a.fecha||'').localeCompare(b.fecha||''); });
+  var listaFijos = pendientesTodos.filter(function(v){ return v.gastoFijo; });
+  var lista = pendientesTodos.filter(function(v){ return !v.gastoFijo; });
+  function filaVencPendiente(v){
     var dias = diasHasta(v.fecha);
     var diasTxt = dias===null ? '' : (dias<0 ? Math.abs(dias)+' día(s) vencido' : (dias===0 ? 'Vence hoy' : 'en '+dias+' día(s)'));
     var colorDias = dias!==null && dias<=3 ? 'egreso' : (dias!==null && dias<=7 ? '' : 'ingreso');
@@ -2824,10 +2843,19 @@ function renderVencimientos(){
         '<button class="link" data-action="del-venc" data-id="'+v.id+'">borrar</button>'+
       '</td>'+
     '</tr>';
-  }).join('');
+  }
+  var rows = lista.map(filaVencPendiente).join('');
+  var theadVenc = '<thead><tr><th>Concepto</th><th>Fecha</th><th>Estado</th><th>Centro</th><th class="num">Monto</th><th></th></tr></thead>';
 
-  var tableHtml = '<div class="card"><h3>Vencimientos ('+lista.length+')</h3>'+
-    (lista.length ? '<table class="table tabla-movil"><thead><tr><th>Concepto</th><th>Fecha</th><th>Estado</th><th>Centro</th><th class="num">Monto</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>' : '<div class="empty">Todavía no cargaste ningún vencimiento.</div>')+
+  var totalFijos = listaFijos.reduce(function(acc, v){ return acc + (Number(v.monto)||0); }, 0);
+  var fijosHtml = listaFijos.length ? '<div class="card" id="venc-gastos-fijos"><h3><i class="bi bi-arrow-repeat"></i> Gastos fijos ('+listaFijos.length+')'+
+      '<span class="mono egreso" style="float:right;font-weight:600">'+fmtMonto(totalFijos)+'</span></h3>'+
+    '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Se renuevan solos: al marcar uno pagado se crea el del mes siguiente con el mismo monto (si cambia, editalo).</div>'+
+    '<table class="table tabla-movil">'+theadVenc+'<tbody>'+listaFijos.map(filaVencPendiente).join('')+'</tbody></table>'+
+  '</div>' : '';
+
+  var tableHtml = fijosHtml + '<div class="card"><h3>Vencimientos ('+lista.length+')</h3>'+
+    (lista.length ? '<table class="table tabla-movil">'+theadVenc+'<tbody>'+rows+'</tbody></table>' : '<div class="empty">'+(listaFijos.length ? 'No hay otros vencimientos pendientes.' : 'Todavía no cargaste ningún vencimiento.')+'</div>')+
   '</div>';
 
   var pagados = STATE.vencimientos.filter(function(v){ return v.estado==='pagado'; }).sort(function(a,b){ return (b.fecha||'').localeCompare(a.fecha||''); });
@@ -5350,19 +5378,22 @@ async function handleAction(action, id){
     }
     var estadoSel = document.getElementById('f-venc-estado');
     var crearMovChk = document.getElementById('f-venc-crear-mov');
+    var gastoFijoChk = document.getElementById('f-venc-gasto-fijo');
+    var gastoFijo = !!(gastoFijoChk && gastoFijoChk.checked);
     STATE.vencFormMsg = null; STATE.dbError = null;
     try{
       if(id){
         var v = STATE.vencimientos.find(function(x){return x.id===id;});
         var estadoAnterior = v.estado;
-        v.concepto = concepto; v.fecha = fecha; v.monto = monto; v.centroId = centroId;
+        v.concepto = concepto; v.fecha = fecha; v.monto = monto; v.centroId = centroId; v.gastoFijo = gastoFijo;
         if(estadoSel) v.estado = estadoSel.value;
         await dbUpdate('vencimientos', id, toDbVencimiento(v));
-        if(estadoSel && estadoSel.value==='pagado' && estadoAnterior!=='pagado' && crearMovChk && crearMovChk.checked){
-          await crearMovimientoDesdeVencimiento(v);
+        if(estadoSel && estadoSel.value==='pagado' && estadoAnterior!=='pagado'){
+          if(crearMovChk && crearMovChk.checked) await crearMovimientoDesdeVencimiento(v);
+          await renovarGastoFijo(v);
         }
       } else {
-        var nuevoV = {id:uid(), concepto:concepto, fecha:fecha, monto:monto, centroId:centroId, estado:'pendiente'};
+        var nuevoV = {id:uid(), concepto:concepto, fecha:fecha, monto:monto, centroId:centroId, estado:'pendiente', gastoFijo:gastoFijo};
         await dbInsert('vencimientos', toDbVencimiento(nuevoV));
         STATE.vencimientos.push(nuevoV);
       }
@@ -5377,6 +5408,7 @@ async function handleAction(action, id){
     try{
       await dbUpdate('vencimientos', id, {estado:nuevoEstado});
       vt.estado = nuevoEstado;
+      if(nuevoEstado==='pagado') await renovarGastoFijo(vt);
     }catch(e){ STATE.dbError = 'No se pudo actualizar el estado: '+(e.message||e); }
     render(); return;
   }
@@ -5388,6 +5420,7 @@ async function handleAction(action, id){
     try{
       await dbUpdate('vencimientos', id, {estado:'pagado'});
       vps1.estado = 'pagado';
+      await renovarGastoFijo(vps1);
       STATE.vencPagarState = null;
     }catch(e){ STATE.dbError = 'No se pudo actualizar el estado: '+(e.message||e); }
     render(); return;
@@ -5399,6 +5432,7 @@ async function handleAction(action, id){
       await crearMovimientoDesdeVencimiento(vm);
       await dbUpdate('vencimientos', id, {estado:'pagado'});
       vm.estado = 'pagado';
+      await renovarGastoFijo(vm);
       STATE.vencPagarState = null;
       if(action==='venc-a-movimiento'){ STATE.activeTab = 'movimientos'; STATE.editing = null; }
     }catch(e){ STATE.dbError = 'No se pudo convertir el vencimiento en movimiento: '+(e.message||e); }

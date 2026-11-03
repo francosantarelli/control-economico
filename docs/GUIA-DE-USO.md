@@ -110,6 +110,7 @@ El botón **Cargar efectivo** (💵; en el celular está en la barra superior) a
 **Vencimientos** tiene dos partes:
 
 - **Vencimientos propios:** concepto, contraparte, categoría, centro, fecha y monto. Se pueden editar, borrar o **marcar como pagado**; al pagar elegís entre *marcar pagado y cargarlo como movimiento* o *solo marcar pagado*.
+- **Gastos fijos:** al cargar o editar un vencimiento, tildá **Gasto fijo** para los que se repiten todos los meses (servicios, club, colaboraciones…). Se listan en su propia sección arriba, con el total. Al marcar uno pagado, la app crea solo el del mes siguiente, con el mismo concepto, monto, centro y día. Si el monto cambia, editá el nuevo.
 - **Movimientos con fecha futura** (por ejemplo cuotas de tarjeta), agrupados. No afectan Saldos hasta su fecha. Si un resumen tiene movimientos repetidos en otro resumen de la misma cuenta a 10 días o menos (típico: cuotas cargadas a mano con un vencimiento estimado y después el resumen real importado), se marca con *repetido(s)* y ofrece **Unificar con el resumen del …**: mueve los cargados a mano a la fecha real y borra sus copias importadas.
 
 En **Resumen** aparece un aviso con los vencimientos próximos.

@@ -70,6 +70,7 @@ create table vencimientos (
   monto numeric(14,2) default 0,
   centro_id uuid references centros(id) on delete set null,
   estado text default 'pendiente', -- 'pendiente' | 'pagado'
+  gasto_fijo boolean not null default false, -- se renueva al mes siguiente al pagarlo
   created_at timestamptz default now()
 );
 

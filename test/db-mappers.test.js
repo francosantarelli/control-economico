@@ -81,9 +81,12 @@ describe('movimiento', () => {
 
 describe('vencimiento', () => {
   it('toDbVencimiento -> fromDbVencimiento conserva los datos, con estado por defecto "pendiente"', () => {
-    const venc = { id: 'v1', concepto: 'Tarjeta Visa', fecha: '2026-08-15', monto: 5000, centroId: 'c1', estado: 'pendiente' };
+    const venc = { id: 'v1', concepto: 'Tarjeta Visa', fecha: '2026-08-15', monto: 5000, centroId: 'c1', estado: 'pendiente', gastoFijo: true };
     expect(win.fromDbVencimiento(win.toDbVencimiento(venc))).toEqual(venc);
     expect(win.toDbVencimiento({ id: 'v1', concepto: 'X', fecha: '2026-08-15', monto: 100 }).estado).toBe('pendiente');
+    expect(win.toDbVencimiento({ id: 'v1', concepto: 'X', fecha: '2026-08-15', monto: 100 }).gasto_fijo).toBe(false);
+    // filas viejas sin la columna (backups anteriores) quedan como vencimiento común
+    expect(win.fromDbVencimiento({ id: 'v1', concepto: 'X', fecha: '2026-08-15', monto: 100 }).gastoFijo).toBe(false);
   });
 });
 
