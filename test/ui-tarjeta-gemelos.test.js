@@ -92,6 +92,15 @@ describe('Tarjeta: cuotas proyectadas vs. resumen real', () => {
       win.render();
     });
 
+    it('cada resumen muestra cuántos movimientos faltan categorizar', () => {
+      const porCategorizar = [...win.document.querySelectorAll('details.resumen-tarjeta summary')].map(s => {
+        const tag = s.querySelector('.por-categorizar');
+        return tag ? tag.textContent.trim() : '';
+      });
+      // 07/11: p1 y p2 tienen categoría; 11/11: r1, r2 y r3 no
+      expect(porCategorizar).toEqual(['', '3 por categorizar']);
+    });
+
     it('marca el resumen proyectado con repetidos y ofrece unificar con el real', () => {
       const btn = win.document.querySelector('[data-action="unificar-resumen-tarjeta"]');
       expect(btn).not.toBeNull();

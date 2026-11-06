@@ -2214,7 +2214,9 @@ function movimientosFiltrados(f){
   var ordenCarga = new Map();
   STATE.movimientos.forEach(function(m, i){ ordenCarga.set(m, i); });
   return STATE.movimientos.filter(function(m){
-    if(esMovimientoPendiente(m)) return false; // los movimientos con fecha futura se muestran en Vencimientos, no acá
+    // Los movimientos con fecha futura se muestran en Vencimientos, no acá; salvo en "Solo incompletos",
+    // para poder categorizarlos antes de su fecha (Resumen ya los suma en su mes).
+    if(esMovimientoPendiente(m) && !f.soloIncompletos) return false;
     if(f.centro.length && f.centro.indexOf(m.centroId)===-1) return false;
     if(f.categoria.length && f.categoria.indexOf(m.categoriaId)===-1) return false;
     if(f.mes.length && f.mes.indexOf((m.fecha||'').slice(0,7))===-1) return false;
@@ -2298,7 +2300,7 @@ function renderMovimientos(){
     return {value:s.id, label:etiqueta};
   }));
 
-  var cantidadIncompletos = STATE.movimientos.filter(function(m){ return !esMovimientoPendiente(m) && camposFaltantes(m).length>0; }).length;
+  var cantidadIncompletos = STATE.movimientos.filter(function(m){ return camposFaltantes(m).length>0; }).length;
 
   // Control de integridad de TEC: debería dar 0 (cada transferencia es un ingreso en un centro y un egreso en otro, por el mismo monto)
   var movsTec = STATE.movimientos.filter(function(m){ return esTipoCategoria(m.categoriaId,'tec'); });
@@ -2365,7 +2367,8 @@ function renderMovimientos(){
     idsCheckboxVisibles.push(m.id);
     return '<tr'+(claseFila?' class="'+claseFila+'"':'')+tituloFila+'>'+
       '<td data-label=""><input type="checkbox" class="chk-select-mov" data-mov-id="'+m.id+'" '+(seleccionados.indexOf(m.id)!==-1?'checked':'')+'></td>'+
-      '<td class="mono'+(fechaFiltrable?' celda-filtrable':'')+'" data-label="Fecha"'+(fechaFiltrable?' data-filter-field="mes" data-filter-value="'+esc(fechaFiltrable)+'" title="Filtrar por este Mes"':'')+'>'+(incompleto?'<i class="bi bi-exclamation-triangle"></i> ':'')+esc(fechaISOaDDMMAAAA(m.fecha)||m.fecha||'')+'</td>'+
+      '<td class="mono'+(fechaFiltrable?' celda-filtrable':'')+'" data-label="Fecha"'+(fechaFiltrable?' data-filter-field="mes" data-filter-value="'+esc(fechaFiltrable)+'" title="Filtrar por este Mes"':'')+'>'+(incompleto?'<i class="bi bi-exclamation-triangle"></i> ':'')+esc(fechaISOaDDMMAAAA(m.fecha)||m.fecha||'')+
+        (esMovimientoPendiente(m)?' <span class="tag-mes-siguiente" title="Fecha futura: todavía no se ve en Movimientos ni cuenta en Saldos">pendiente</span>':'')+'</td>'+
       celdaCentro + celdaCategoria + celdaSubcategoria + celdaProveedor + celdaDetalle +
       '<td class="num ingreso" data-label="Ingreso">'+(Number(m.ingreso)?fmtMonto(m.ingreso):'')+'</td>'+
       '<td class="num egreso" data-label="Egreso">'+(Number(m.egreso)?fmtMonto(m.egreso):'')+'</td>'+
@@ -2935,6 +2938,7 @@ function renderVencimientos(){
   var gruposTarjetaHtml = gruposTarjetaOrden.map(function(clave){
     var g = gruposTarjetaMap[clave];
     var dupRes = resumenesDuplicados[clave];
+    var faltantesVenc = g.movs.filter(function(m){ return camposFaltantes(m).length>0; }).length;
     var avisoDupHtml = dupRes ? '<div class="msg err" style="margin-top:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">'+
       '<span><i class="bi bi-exclamation-triangle"></i> '+dupRes.pares.length+' de estos '+dupRes.totalOrigen+' movimiento(s) también están en el resumen del '+esc(fechaISOaDDMMAAAA(dupRes.fechaDestino))+' de la misma cuenta (mismo monto).</span>'+
       '<button class="secondary" data-action="unificar-resumen-tarjeta" data-id="'+esc(clave)+'" style="font-size:12px;padding:6px 12px">Unificar con el resumen del '+esc(fechaISOaDDMMAAAA(dupRes.fechaDestino))+'</button>'+
@@ -2950,6 +2954,7 @@ function renderVencimientos(){
         '<span style="color:var(--ink-soft);font-size:12px">'+diasTxt+'</span>'+
         '<span><i class="bi bi-credit-card"></i> '+esc(nombreCC)+'</span>'+
         '<span style="font-size:12px;color:var(--ink-soft)">'+g.movs.length+' movimiento(s)</span>'+
+        (faltantesVenc ? '<span class="por-categorizar" style="font-size:12px;color:var(--danger)" title="Movimientos sin categoría u otro dato obligatorio"><i class="bi bi-exclamation-triangle"></i> '+faltantesVenc+' por categorizar</span>' : '')+
         (dupRes ? '<span style="font-size:12px;color:var(--danger)"><i class="bi bi-exclamation-triangle"></i> '+dupRes.pares.length+' repetido(s)</span>' : '')+
         '<span class="mono egreso" style="margin-left:auto;font-weight:600">'+fmtMonto(g.total)+'</span>'+
       '</summary>'+
@@ -4344,7 +4349,7 @@ function bindEvents(){
       STATE.filtros.soloIncompletos = ffSoloIncompletos.checked;
       STATE.movPaginaActual = 1;
       if(ffSoloIncompletos.checked){
-        STATE.incompletosSnapshotIds = STATE.movimientos.filter(function(m){ return !esMovimientoPendiente(m) && camposFaltantes(m).length>0; }).map(function(m){ return m.id; });
+        STATE.incompletosSnapshotIds = STATE.movimientos.filter(function(m){ return camposFaltantes(m).length>0; }).map(function(m){ return m.id; });
       } else {
         STATE.incompletosSnapshotIds = null;
       }
@@ -5045,7 +5050,7 @@ async function handleAction(action, id){
   }
 
   if(action==='refrescar-incompletos'){
-    STATE.incompletosSnapshotIds = STATE.movimientos.filter(function(m){ return !esMovimientoPendiente(m) && camposFaltantes(m).length>0; }).map(function(m){ return m.id; });
+    STATE.incompletosSnapshotIds = STATE.movimientos.filter(function(m){ return camposFaltantes(m).length>0; }).map(function(m){ return m.id; });
     render(); return;
   }
   if(action==='limpiar-filtros-mov'){

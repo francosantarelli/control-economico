@@ -86,7 +86,7 @@ Tocá **+ Movimiento**. Campos principales: Fecha, Centro de Costo, Tipo (ingres
 El botón **Cargar efectivo** (💵; en el celular está en la barra superior) abre un formulario corto: fecha, CC, ingreso/egreso, monto, contraparte y detalle. Categoría y subcategoría pueden completarse después. Preselecciona tu CC de efectivo según tu usuario.
 
 ### Listado de Movimientos
-- **Filtros:** búsqueda por texto y filtros múltiples (tildás varias opciones) de Centro, Categoría, Subcategoría y Mes. *Solo incompletos* muestra los que no tienen categoría; *Solo tarjeta* los de tarjeta. **Limpiar filtros** los reinicia.
+- **Filtros:** búsqueda por texto y filtros múltiples (tildás varias opciones) de Centro, Categoría, Subcategoría y Mes. *Solo incompletos* muestra los que no tienen categoría, incluidos los de fecha futura (por ejemplo, el próximo resumen de tarjeta, marcados *pendiente*), así los categorizás antes de que venzan; *Solo tarjeta* los de tarjeta. **Limpiar filtros** los reinicia.
 - **Paginación** de 50 en 50.
 - **Edición múltiple:** seleccioná varios movimientos y editalos en lote (por ejemplo, asignarles la misma categoría).
 - **Agrupar tarjeta:** los consumos de un mismo resumen se pueden agrupar y desplegar.

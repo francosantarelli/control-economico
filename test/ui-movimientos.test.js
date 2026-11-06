@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { loadApp } from './helpers/loadApp.js';
+import { loadApp, mockNow } from './helpers/loadApp.js';
 import { seedBase } from './helpers/fixtures.js';
 import { mockSb } from './helpers/mockSb.js';
 
@@ -264,5 +264,34 @@ describe('Movimientos: edición en línea', () => {
 
     expect(win.STATE.saldosDirty).toBe(true);
     expect(win.obtenerSaldos().filas.find(f => f.id === 'c-ef').saldo).toBe(-100);
+  });
+});
+
+describe('Movimientos: "Solo incompletos" incluye los de fecha futura', () => {
+  it('lista y deja categorizar un movimiento pendiente sin categoría, marcado como pendiente', () => {
+    const win = loadApp();
+    const restore = mockNow(win, '2026-11-06T12:00:00');
+    seedBase(win);
+    win.sb = mockSb().client;
+    win.STATE.movimientos = [
+      { id: 'm-pasado', fecha: '2026-11-02', centroId: 'c-ef', categoriaId: '', subcategoriaId: '', proveedor: 'Kiosco', detalle: '', ingreso: 0, egreso: 2000 },
+      { id: 'm-futuro', fecha: '2026-11-11', centroId: 'c-ef', categoriaId: '', subcategoriaId: '', proveedor: 'JUGUETERIA', detalle: '', ingreso: 0, egreso: 28526.66, tarjeta: true },
+      { id: 'm-futuro-ok', fecha: '2026-11-11', centroId: 'c-ef', categoriaId: 'cat-super', subcategoriaId: '', proveedor: 'Super', detalle: '', ingreso: 0, egreso: 500, tarjeta: true }
+    ];
+    win.STATE.activeTab = 'movimientos';
+    win.render();
+    // sin el filtro, los de fecha futura siguen sin verse en Movimientos
+    expect(win.document.getElementById('app').innerHTML).not.toContain('JUGUETERIA');
+    // el contador cuenta los dos incompletos
+    expect(win.document.getElementById('ff-solo-incompletos').parentElement.textContent).toContain('(2)');
+
+    const chk = win.document.getElementById('ff-solo-incompletos');
+    chk.checked = true;
+    chk.dispatchEvent(new win.Event('change', { bubbles: true }));
+    expect(win.document.querySelector('select[data-mov-id="m-futuro"][data-field="categoriaId"]')).not.toBeNull();
+    expect(win.document.querySelector('select[data-mov-id="m-pasado"][data-field="categoriaId"]')).not.toBeNull();
+    expect(win.document.querySelector('[data-mov-id="m-futuro-ok"]')).toBeNull();
+    expect(win.document.getElementById('app').innerHTML).toContain('pendiente');
+    restore();
   });
 });
