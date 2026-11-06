@@ -143,6 +143,25 @@ describe('Vencimientos', () => {
     expect(win.STATE.vencimientos).toHaveLength(2);
   });
 
+  it('un gasto fijo de un mes posterior al actual se ve con otro color y no suma al total del mes', () => {
+    const restore = mockNow(win, '2026-11-06T12:00:00');
+    win.STATE.vencimientos = [
+      { id: 'v1', concepto: 'Luz', fecha: '2026-11-20', monto: 5000, centroId: 'c-ef', estado: 'pendiente', gastoFijo: true },
+      { id: 'v2', concepto: 'Club', fecha: '2026-12-05', monto: 20000, centroId: 'c-ef', estado: 'pendiente', gastoFijo: true }
+    ];
+    win.render();
+    const filas = [...win.document.querySelectorAll('#venc-gastos-fijos tbody tr')];
+    const luz = filas.find(tr => tr.textContent.includes('Luz'));
+    const club = filas.find(tr => tr.textContent.includes('Club'));
+    expect(luz.classList.contains('venc-mes-siguiente')).toBe(false);
+    expect(club.classList.contains('venc-mes-siguiente')).toBe(true);
+    expect(club.textContent).toContain('Dic 26');
+    const h3 = win.document.querySelector('#venc-gastos-fijos h3').textContent;
+    expect(h3).toContain('5.000,00');
+    expect(h3).toMatch(/próximos meses: 20\.000,00/);
+    restore();
+  });
+
   it('pagar un vencimiento común no crea otro', async () => {
     win.STATE.vencimientos = [{ id: 'v1', concepto: 'Patente', fecha: '2026-08-15', monto: 9000, centroId: 'c-ef', estado: 'pendiente' }];
     win.render();

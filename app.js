@@ -2781,6 +2781,14 @@ function diasHasta(iso){
   return Math.round((f-hoy)/86400000);
 }
 
+function esGastoFijoDeMesFuturo(v){
+  return !!(v && v.gastoFijo && v.fecha) && v.fecha.slice(0,7) > fechaHoyISO().slice(0,7);
+}
+function nombreMesCorto(iso){
+  var m = (iso||'').match(/^(\d{4})-(\d{2})/);
+  return m ? NOMBRES_MES_CORTO[parseInt(m[2],10)-1]+' '+m[1].slice(2) : '';
+}
+
 function campoVenc(e, mostrarEstado){
   var html = '<div class="field"><label>Concepto</label><input type="text" id="f-venc-concepto" value="'+esc(e.concepto)+'" style="width:220px" placeholder="Ej: Tarjeta Visa Santander"></div>'+
     '<div class="field"><label>Fecha de vencimiento</label><input type="date" id="f-venc-fecha" value="'+esc(e.fecha)+'"></div>'+
@@ -2831,10 +2839,13 @@ function renderVencimientos(){
     var dias = diasHasta(v.fecha);
     var diasTxt = dias===null ? '' : (dias<0 ? Math.abs(dias)+' día(s) vencido' : (dias===0 ? 'Vence hoy' : 'en '+dias+' día(s)'));
     var colorDias = dias!==null && dias<=3 ? 'egreso' : (dias!==null && dias<=7 ? '' : 'ingreso');
-    return '<tr>'+
-      '<td data-label="Concepto">'+esc(v.concepto)+'</td>'+
+    // Gasto fijo de un mes posterior al actual (típicamente el que se renovó al pagar el de este mes):
+    // se ve en otro color para distinguirlo de lo que falta pagar en el mes en curso.
+    var esMesSiguiente = esGastoFijoDeMesFuturo(v);
+    return '<tr'+(esMesSiguiente?' class="venc-mes-siguiente" title="Gasto fijo de un mes próximo (no del mes en curso)"':'')+'>'+
+      '<td data-label="Concepto">'+esc(v.concepto)+(esMesSiguiente?' <span class="tag-mes-siguiente">'+esc(nombreMesCorto(v.fecha))+'</span>':'')+'</td>'+
       '<td class="mono" data-label="Fecha">'+esc(fechaISOaDDMMAAAA(v.fecha))+'</td>'+
-      '<td class="mono '+colorDias+'" data-label="Estado">'+diasTxt+'</td>'+
+      '<td class="mono '+(esMesSiguiente?'':colorDias)+'" data-label="Estado">'+diasTxt+'</td>'+
       '<td class="mono" data-label="Centro">'+esc(v.centroId?nombreCentro(v.centroId).split(' · ')[0]:'—')+'</td>'+
       '<td class="num mono" data-label="Monto">'+fmtMonto(v.monto)+'</td>'+
       '<td class="actions-cell">'+
@@ -2847,9 +2858,17 @@ function renderVencimientos(){
   var rows = lista.map(filaVencPendiente).join('');
   var theadVenc = '<thead><tr><th>Concepto</th><th>Fecha</th><th>Estado</th><th>Centro</th><th class="num">Monto</th><th></th></tr></thead>';
 
-  var totalFijos = listaFijos.reduce(function(acc, v){ return acc + (Number(v.monto)||0); }, 0);
+  // El total del encabezado es lo que falta pagar del mes en curso (y lo vencido); lo de meses próximos va aparte.
+  var totalFijos = 0, totalFijosProximos = 0;
+  listaFijos.forEach(function(v){
+    if(esGastoFijoDeMesFuturo(v)) totalFijosProximos += Number(v.monto)||0;
+    else totalFijos += Number(v.monto)||0;
+  });
   var fijosHtml = listaFijos.length ? '<div class="card" id="venc-gastos-fijos"><h3><i class="bi bi-arrow-repeat"></i> Gastos fijos ('+listaFijos.length+')'+
-      '<span class="mono egreso" style="float:right;font-weight:600">'+fmtMonto(totalFijos)+'</span></h3>'+
+      '<span style="float:right;text-align:right">'+
+        '<span class="mono egreso" style="font-weight:600" title="Pendiente del mes en curso">'+fmtMonto(totalFijos)+'</span>'+
+        (totalFijosProximos ? '<div class="mono" style="font-size:11px;font-weight:400;color:var(--ink-soft)">próximos meses: '+fmtMonto(totalFijosProximos)+'</div>' : '')+
+      '</span></h3>'+
     '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Se renuevan solos: al marcar uno pagado se crea el del mes siguiente con el mismo monto (si cambia, editalo).</div>'+
     '<table class="table tabla-movil">'+theadVenc+'<tbody>'+listaFijos.map(filaVencPendiente).join('')+'</tbody></table>'+
   '</div>' : '';

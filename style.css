@@ -486,3 +486,9 @@ footer.small{ margin-top:28px; font-size:11px; color:var(--ink-soft); text-align
   table.tabla-movil tfoot, table.tabla-movil tfoot tr{ display:block; }
   table.tabla-movil tfoot td{ display:flex; justify-content:space-between; border-bottom:none; border-top:2px solid var(--accent); padding:8px 0 0; }
 }
+
+/* Gastos fijos de un mes posterior al actual (renovados al pagar el de este mes): apagados, con
+   etiqueta del mes, para no confundirlos con lo que falta pagar del mes en curso. */
+tr.venc-mes-siguiente td{ color:var(--ink-soft); background:var(--accent-soft); }
+tr.venc-mes-siguiente td.num{ color:var(--ink-soft); }
+.tag-mes-siguiente{ display:inline-block; font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; padding:1px 6px; border-radius:999px; border:1px solid var(--ink-soft); color:var(--ink-soft); margin-left:4px; vertical-align:middle; }
