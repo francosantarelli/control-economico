@@ -2010,7 +2010,9 @@ function campoCategoria(nombre, tipo, color){
     '</select></div>';
 }
 function renderCategorias(){
-  var rows = STATE.categorias.map(function(c){
+  var rows = STATE.categorias.slice().sort(function(a,b){
+    return (a.nombre||'').localeCompare(b.nombre||'', 'es', {sensitivity:'base'});
+  }).map(function(c){
     var subCount = STATE.subcategorias.filter(function(s){return s.categoriaId===c.id;}).length;
     return '<tr><td data-label="Nombre">'+renderChip(c.nombre, colorCategoria(c.id), colorTextoCategoria(c.id))+'</td><td class="mono" data-label="Tipo">'+tipoLabel(c.tipo)+'</td><td class="mono" data-label="Subcategorías">'+subCount+' subcategoría(s)</td>'+
       '<td class="actions-cell"><button class="link" data-action="edit-categoria" data-id="'+c.id+'">editar</button>'+
