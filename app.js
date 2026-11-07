@@ -11,7 +11,8 @@ var STATE = { centros: [], categorias: [], subcategorias: [], movimientos: [], v
   vencFormMsg:null, dbError:null, saldosCache:null, saldosDirty:true,
   usuarioEmail:null, efectivoAbierto:false, efectivoMsg:null, efectivoCategoriaId:'', efectivoDraft:null, backupMsg:null, backupPendiente:null, menuMovilAbierto:false, incompletosSnapshotIds:null,
   usdtVentaMovId:null, usdtVentaMovMsg:null, usdtVentaMovCantidad:'',
-  reglas: [], reglaFormMsg:null, reglasPaginaActual:1, reglasPorPagina:leerTamPagina('controlReglasPorPagina', [15,30,50,100], 15), movPorPagina:leerTamPagina('controlMovPorPagina', [25,50,100,200], 50),
+  reglas: [], reglaFormMsg:null, reglasPaginaActual:1, reglasPorPagina:leerTamPagina('controlReglasPorPagina', [15,30,50,100], 15),
+  subsBusqueda:'', subsPaginaActual:1, subsPorPagina:leerTamPagina('controlSubsPorPagina', [15,30,50,100], 15), movPorPagina:leerTamPagina('controlMovPorPagina', [25,50,100,200], 50),
   nuevoMovAbierto:false, movDraftCentroDestinoId:'', comboAbierto:null, comboBusqueda:'', comboHighlight:0,
   movSeleccionados:[], bulkEditMovAbierto:false, bulkEditMovMsg:null, movPaginaActual:1, gruposAbiertos:{},
   tema: (function(){ try{ return localStorage.getItem('controlTema')==='oscuro' ? 'oscuro' : 'claro'; }catch(e){ return 'claro'; } })(),
@@ -25,6 +26,8 @@ var REGLAS_PAGE_SIZE = 15;
 // Cantidad de registros por página elegible desde el paginador; se recuerda en el navegador.
 var OPCIONES_POR_PAGINA_MOV = [25, 50, 100, 200];
 var OPCIONES_POR_PAGINA_REGLAS = [15, 30, 50, 100];
+var OPCIONES_POR_PAGINA_SUBS = [15, 30, 50, 100];
+var SUBS_PAGE_SIZE = 15;
 function leerTamPagina(clave, opciones, porDefecto){
   try{
     var n = parseInt(localStorage.getItem(clave), 10);
@@ -2069,7 +2072,25 @@ function renderSubcategorias(){
     if(cmpCat !== 0) return cmpCat;
     return (a.nombre||'').localeCompare(b.nombre||'', 'es', {sensitivity:'base'});
   });
-  var rows = subsOrdenadasPorCategoria.map(function(s){
+  // Búsqueda: coincide con el nombre de la subcategoría o de su categoría, sin importar mayúsculas ni acentos.
+  var sinAcentos = function(t){ return (t||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase(); };
+  var qSubs = sinAcentos(STATE.subsBusqueda).trim();
+  var subsFiltradas = qSubs ? subsOrdenadasPorCategoria.filter(function(s){
+    return sinAcentos(s.nombre).indexOf(qSubs) !== -1 || sinAcentos(nombreCategoria(s.categoriaId)).indexOf(qSubs) !== -1;
+  }) : subsOrdenadasPorCategoria;
+  var totalPaginasSubs = Math.max(1, Math.ceil(subsFiltradas.length / STATE.subsPorPagina));
+  if(STATE.subsPaginaActual > totalPaginasSubs) STATE.subsPaginaActual = totalPaginasSubs;
+  if(STATE.subsPaginaActual < 1) STATE.subsPaginaActual = 1;
+  var inicioPaginaSubs = (STATE.subsPaginaActual-1) * STATE.subsPorPagina;
+  var subsPagina = subsFiltradas.slice(inicioPaginaSubs, inicioPaginaSubs + STATE.subsPorPagina);
+  var paginadorSubs = subsFiltradas.length ? ''+
+    '<div class="fields-row" style="margin-top:10px;align-items:center">'+
+      selectorPorPagina('subs-por-pagina', OPCIONES_POR_PAGINA_SUBS, STATE.subsPorPagina)+
+      '<button class="secondary" data-action="subs-pagina-anterior" style="font-size:12px;padding:6px 12px"'+(STATE.subsPaginaActual<=1?' disabled':'')+'>« Anterior</button>'+
+      '<span style="font-size:12px;color:var(--ink-soft)">Página '+STATE.subsPaginaActual+' de '+totalPaginasSubs+'</span>'+
+      '<button class="secondary" data-action="subs-pagina-siguiente" style="font-size:12px;padding:6px 12px"'+(STATE.subsPaginaActual>=totalPaginasSubs?' disabled':'')+'>Siguiente »</button>'+
+    '</div>' : '';
+  var rows = subsPagina.map(function(s){
     return '<tr><td data-label="Categoría">'+esc(nombreCategoria(s.categoriaId))+'</td><td data-label="Subcategoría">'+esc(s.nombre)+'</td>'+
       '<td class="actions-cell"><button class="link" data-action="edit-subcategoria" data-id="'+s.id+'">editar</button>'+
       '<button class="link" data-action="del-subcategoria" data-id="'+s.id+'">borrar</button></td></tr>';
@@ -2101,8 +2122,13 @@ function renderSubcategorias(){
 
   return formNuevaSub +
   '<div class="card">'+
-    '<h3>Subcategorías cargadas</h3>'+
-    (STATE.subcategorias.length ? '<table class="table tabla-movil"><thead><tr><th>Categoría</th><th>Subcategoría</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>' : '<div class="empty">Todavía no cargaste ninguna subcategoría.</div>')+
+    '<h3>Subcategorías cargadas ('+(qSubs ? subsFiltradas.length+' de ' : '')+STATE.subcategorias.length+')</h3>'+
+    (STATE.subcategorias.length ? ''+
+      '<div class="fields-row" style="margin-bottom:10px"><input type="text" id="subs-busqueda" placeholder="Buscar por subcategoría o categoría..." value="'+esc(STATE.subsBusqueda)+'" style="width:320px;max-width:100%"></div>'+
+      (subsFiltradas.length
+        ? '<table class="table tabla-movil"><thead><tr><th>Categoría</th><th>Subcategoría</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>'+paginadorSubs
+        : '<div class="empty">Ninguna subcategoría coincide con la búsqueda.</div>')
+      : '<div class="empty">Todavía no cargaste ninguna subcategoría.</div>')+
   '</div>';
 
   // Nota: si hay editing, seteamos el select después en bindEvents (post-render) porque innerHTML no respeta "selected" con reflow directo en todos los navegadores.
@@ -4364,6 +4390,14 @@ function bindEvents(){
     guardarTamPagina('controlMovPorPagina', STATE.movPorPagina);
     STATE.movPaginaActual = 1; render();
   }); }
+  var subsBusquedaInp = document.getElementById('subs-busqueda');
+  if(subsBusquedaInp){ subsBusquedaInp.addEventListener('input', function(){ STATE.subsBusqueda = subsBusquedaInp.value; STATE.subsPaginaActual = 1; render(); }); }
+  var subsPorPaginaSel = document.getElementById('subs-por-pagina');
+  if(subsPorPaginaSel){ subsPorPaginaSel.addEventListener('change', function(){
+    STATE.subsPorPagina = parseInt(subsPorPaginaSel.value, 10) || SUBS_PAGE_SIZE;
+    guardarTamPagina('controlSubsPorPagina', STATE.subsPorPagina);
+    STATE.subsPaginaActual = 1; render();
+  }); }
   var reglasPorPaginaSel = document.getElementById('reglas-por-pagina');
   if(reglasPorPaginaSel){ reglasPorPaginaSel.addEventListener('change', function(){
     STATE.reglasPorPagina = parseInt(reglasPorPaginaSel.value, 10) || REGLAS_PAGE_SIZE;
@@ -4730,6 +4764,8 @@ async function handleAction(action, id){
     render();
     return;
   }
+  if(action==='subs-pagina-anterior'){ STATE.subsPaginaActual = Math.max(1, STATE.subsPaginaActual-1); render(); return; }
+  if(action==='subs-pagina-siguiente'){ STATE.subsPaginaActual = STATE.subsPaginaActual+1; render(); return; }
   if(action==='reglas-pagina-anterior'){ STATE.reglasPaginaActual = Math.max(1, STATE.reglasPaginaActual-1); render(); return; }
   if(action==='reglas-pagina-siguiente'){ STATE.reglasPaginaActual = STATE.reglasPaginaActual+1; render(); return; }
   if(action==='cancel-edit'){
