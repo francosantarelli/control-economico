@@ -7,18 +7,7 @@ import { mockSb } from './helpers/mockSb.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-function tablasDelScriptDiario() {
-  const fuente = readFileSync(path.join(ROOT, 'scripts', 'backup-a-drive', 'backup.js'), 'utf8');
-  const lista = fuente.match(/const TABLAS = \[([^\]]*)\]/)[1];
-  return lista.match(/'[^']+'/g).map(s => s.slice(1, -1));
-}
-
 describe('Backup: tablas incluidas', () => {
-  it('el backup diario a Drive y el de la app guardan las mismas tablas, en el mismo orden', () => {
-    const win = loadApp();
-    expect(tablasDelScriptDiario()).toEqual(Array.from(win.TABLAS_BACKUP));
-  });
-
   it('incluye todas las tablas del schema salvo arca_ta (token temporal)', () => {
     const win = loadApp();
     const schema = readFileSync(path.join(ROOT, 'schema.sql'), 'utf8');

@@ -393,16 +393,14 @@ async function dbUpsert(table, rows){
 }
 
 // ---- BACKUP ----
-// Tablas que entran en el backup (botón "Descargar backup" y el backup diario de
-// scripts/backup-a-drive/backup.js, que tiene que listar exactamente las mismas). El orden importa
+// Tablas que entran en el backup (botón "Descargar backup"). El orden importa
 // al restaurar: primero las que otras referencian (centros antes que movimientos, movimientos antes
 // que usdt_movimientos/facturas). arca_ta queda afuera a propósito: es un token temporal de ARCA.
 var TABLAS_BACKUP = ['centros', 'categorias', 'subcategorias', 'movimientos', 'vencimientos', 'deudas',
   'usdt_movimientos', 'facturas', 'reglas_categorizacion', 'configuracion'];
 var BACKUP_LOTE = 500; // filas por upsert al restaurar, para no mandar un request gigante
 
-// Backup versión 2: las filas tal cual están en la base (snake_case), igual que el backup diario a
-// Drive, así cualquiera de los dos se restaura desde la app. Lee de la base y no de STATE para no
+// Backup versión 2: las filas tal cual están en la base (snake_case). Lee de la base y no de STATE para no
 // perder columnas que la app no mapea (created_at, etc.).
 async function armarBackup(){
   var backupObj = { version: 2, exportadoEn: new Date().toISOString() };
@@ -1991,13 +1989,13 @@ function renderBackup(){
   return ''+
   '<div class="card">'+
     '<h2>Descargar backup</h2>'+
-    '<div style="font-size:12px;color:var(--ink-soft);margin-bottom:12px">Genera un archivo con todo lo que hay cargado hoy (Centros, Categorías, Subcategorías, Movimientos, Vencimientos, Deudas, USDT, Facturas, Reglas y Configuración). Te sirve para restaurar todo si algún día se pierde algo en la base de datos. Además, todos los días se sube uno automático a Google Drive con el mismo formato.</div>'+
+    '<div style="font-size:12px;color:var(--ink-soft);margin-bottom:12px">Genera un archivo con todo lo que hay cargado hoy (Centros, Categorías, Subcategorías, Movimientos, Vencimientos, Deudas, USDT, Facturas, Reglas y Configuración). Te sirve para restaurar todo si algún día se pierde algo en la base de datos.</div>'+
     '<button data-action="descargar-backup"><i class="bi bi-download"></i> Descargar backup completo (.json)</button>'+
   '</div>'+
   '<div class="card">'+
     '<h2>Restaurar desde un backup</h2>'+
     msgHtml+
-    '<div style="font-size:12px;color:var(--ink-soft);margin-bottom:12px">Elegí un archivo .json descargado antes con "Descargar backup" o uno de los backups diarios de Google Drive. Esto <strong>no borra</strong> lo que ya tenés cargado: agrega lo que falte y actualiza lo que coincida por ID. Te va a pedir confirmación antes de aplicar nada.</div>'+
+    '<div style="font-size:12px;color:var(--ink-soft);margin-bottom:12px">Elegí un archivo .json descargado antes con "Descargar backup". Esto <strong>no borra</strong> lo que ya tenés cargado: agrega lo que falte y actualiza lo que coincida por ID. Te va a pedir confirmación antes de aplicar nada.</div>'+
     '<div class="fields-row">'+
       '<input type="file" id="backup-file" accept="application/json,.json">'+
       '<button data-action="restaurar-backup-preview">Restaurar</button>'+

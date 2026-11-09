@@ -162,9 +162,7 @@ Para compras y ventas de dólares y algún ingreso/gasto en USD.
 En **ABM › Backup**:
 
 - **Descargar backup completo (.json):** exporta todas las tablas.
-- **Restaurar desde un backup:** elegí un `.json` (descargado acá o uno de los backups diarios de Drive). **No borra** lo existente; agrega lo que falta. La app muestra una vista previa antes de confirmar.
-
-Además existe un **backup automático diario a Google Drive** (ver [INSTALACION-Y-OPERACION.md](INSTALACION-Y-OPERACION.md#backup-diario-a-google-drive)).
+- **Restaurar desde un backup:** elegí un `.json` (descargado acá). **No borra** lo existente; agrega lo que falta. La app muestra una vista previa antes de confirmar.
 
 ## 14. Preguntas frecuentes
 

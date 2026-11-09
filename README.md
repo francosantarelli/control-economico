@@ -4,7 +4,7 @@ App de control de ingresos/egresos, movimientos, vencimientos y resumen, conecta
 
 ## Documentación
 - [Guía de uso](docs/GUIA-DE-USO.md) - cómo usar cada pestaña de la app (para quien la usa a diario).
-- [Instalación y operación](docs/INSTALACION-Y-OPERACION.md) - levantar la base, usuarios, deploy, backup diario a Drive, facturación ARCA y tests (para quien la administra).
+- [Instalación y operación](docs/INSTALACION-Y-OPERACION.md) - levantar la base, usuarios, deploy, facturación ARCA y tests (para quien la administra).
 
 ## Archivos
 - `index.html` - estructura de la página (login + contenedor de la app). Se publica directo con GitHub Pages.
@@ -14,7 +14,6 @@ App de control de ingresos/egresos, movimientos, vencimientos y resumen, conecta
 - `schema.sql` - esquema completo de base de datos para Supabase (tablas, seguridad, datos iniciales), al día con todas las migraciones. Para levantar una base nueva de cero, correr solo este archivo una vez en el SQL Editor de Supabase.
 - `migrations/*.sql` - historial de cada cambio de esquema que se le fue aplicando a la base ya existente, en orden. `schema.sql` ya los incluye a todos — estos archivos quedan como registro de cuándo y por qué se agregó cada cosa, y para aplicar el cambio puntual a una base que ya está en uso (no hace falta correrlos si armás la base de cero con `schema.sql`).
 - `test/` - tests (vitest + jsdom, corren contra el `index.html`/`app.js` reales).
-- `scripts/backup-a-drive/` - script del backup diario a Google Drive (ver `.github/workflows/backup-diario.yml`).
 - `supabase/functions/` - Edge Functions (Deno) para la facturación electrónica vía ARCA.
 
 ## Deploy
