@@ -23,7 +23,7 @@ App web para llevar ingresos y egresos, vencimientos, saldos por cuenta, proyecc
 ## 1. Primeros pasos
 
 - **Ingreso:** abrí la app, escribí email y contraseña y tocá **Iniciar sesión**. No hay registro público: los usuarios los da de alta el administrador en Supabase.
-- **Menú de cuenta** (círculo con tus iniciales, arriba a la derecha): elegí el **color del tema** (verde, azul, naranja), **modo claro/oscuro** y **Cerrar sesión**. Las preferencias quedan guardadas en el navegador.
+- **Menú de cuenta** (círculo con tus iniciales, arriba a la derecha): elegí **modo claro/oscuro** y **Cerrar sesión**. Las preferencias quedan guardadas en el navegador.
 - **Celular:** el menú lateral se abre con el botón de hamburguesa (☰). Al lado hay un acceso rápido a **Cargar efectivo**.
 - **Botón “+ Movimiento”** (arriba del menú lateral): abre el alta de un movimiento desde cualquier pestaña.
 
