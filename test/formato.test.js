@@ -82,6 +82,15 @@ describe('conversión de fechas cortas a ISO', () => {
     expect(win.fechaISOaDDMMAAAA('2026-08-09')).toBe('09/08/2026');
     expect(win.fechaISOaDDMMAAAA('')).toBe('');
   });
+  it('fechaISOaDDMM devuelve la fecha sin año, para las grillas', () => {
+    expect(win.fechaISOaDDMM('2026-08-09')).toBe('09/08');
+    expect(win.fechaISOaDDMM('')).toBe('');
+  });
+  it('celdaMonto arma una sola celda: ingreso en positivo, egreso con el menos adelante', () => {
+    expect(win.celdaMonto(1234.5, 0)).toBe('<td class="num ingreso" data-label="Monto">1.234,50</td>');
+    expect(win.celdaMonto(0, 204.88)).toBe('<td class="num egreso" data-label="Monto">-204,88</td>');
+    expect(win.celdaMonto(0, 0)).toBe('<td class="num ingreso" data-label="Monto"></td>');
+  });
 });
 
 describe('sumarMeses', () => {

@@ -2381,11 +2381,10 @@ function renderMovimientos(){
     idsCheckboxVisibles.push(m.id);
     return '<tr'+(claseFila?' class="'+claseFila+'"':'')+tituloFila+'>'+
       '<td data-label=""><input type="checkbox" class="chk-select-mov" data-mov-id="'+m.id+'" '+(seleccionados.indexOf(m.id)!==-1?'checked':'')+'></td>'+
-      '<td class="mono'+(fechaFiltrable?' celda-filtrable':'')+'" data-label="Fecha"'+(fechaFiltrable?' data-filter-field="mes" data-filter-value="'+esc(fechaFiltrable)+'" title="Filtrar por este Mes"':'')+'>'+(incompleto?'<i class="bi bi-exclamation-triangle"></i> ':'')+esc(fechaISOaDDMMAAAA(m.fecha)||m.fecha||'')+
+      '<td class="mono'+(fechaFiltrable?' celda-filtrable':'')+'" data-label="Fecha"'+(fechaFiltrable?' data-filter-field="mes" data-filter-value="'+esc(fechaFiltrable)+'" title="'+esc(fechaISOaDDMMAAAA(m.fecha))+' · Filtrar por este Mes"':'')+'>'+(incompleto?'<i class="bi bi-exclamation-triangle"></i> ':'')+esc(fechaISOaDDMM(m.fecha)||m.fecha||'')+
         (esMovimientoPendiente(m)?' <span class="tag-mes-siguiente" title="Fecha futura: todavía no se ve en Movimientos ni cuenta en Saldos">pendiente</span>':'')+'</td>'+
       celdaCentro + celdaCategoria + celdaSubcategoria + celdaProveedor + celdaDetalle +
-      '<td class="num ingreso" data-label="Ingreso">'+(Number(m.ingreso)?fmtMonto(m.ingreso):'')+'</td>'+
-      '<td class="num egreso" data-label="Egreso">'+(Number(m.egreso)?fmtMonto(m.egreso):'')+'</td>'+
+      celdaMonto(m.ingreso, m.egreso)+
       '<td class="actions-cell">'+
       (esVentaUsdtPendiente(m)?'<button class="icon-btn" data-action="abrir-usdt-venta-mov" data-id="'+m.id+'" title="Generar movimiento USDT" aria-label="Generar movimiento USDT"><i class="bi bi-coin"></i></button>':'')+
       (esVentaUsdtFacturable(m)?'<button class="icon-btn" data-action="facturar-mov" data-id="'+m.id+'" title="Facturar con ARCA" aria-label="Facturar con ARCA" '+(STATE.facturaLoadingId===m.id?'disabled':'')+'><i class="bi bi-receipt"></i></button>':'')+
@@ -2403,11 +2402,10 @@ function renderMovimientos(){
     idsCheckboxVisibles.push(m.id);
     return '<tr class="fila-detalle-tarjeta'+(incompleto?' fila-incompleta':'')+'"'+tituloFila+'>'+
       '<td data-label=""><input type="checkbox" class="chk-select-mov" data-mov-id="'+m.id+'" '+(seleccionados.indexOf(m.id)!==-1?'checked':'')+'></td>'+
-      '<td class="mono" data-label="Fecha de consumo">'+(incompleto?'<i class="bi bi-exclamation-triangle"></i> ':'')+esc(m.fechaConsumo?fechaISOaDDMMAAAA(m.fechaConsumo):'—')+'</td>'+
+      '<td class="mono" data-label="Fecha de consumo">'+(incompleto?'<i class="bi bi-exclamation-triangle"></i> ':'')+esc(m.fechaConsumo?fechaISOaDDMM(m.fechaConsumo):'—')+'</td>'+
       '<td class="mono" data-label="Cuotas" style="color:var(--ink-soft)">'+(m.cuotas?esc(m.cuotas):'<i class="bi bi-link-45deg" title="Vinculado al resumen de tarjeta, sin cuota individual"></i>')+'</td>'+
       celdas.categoria + celdas.subcategoria + celdas.proveedor + celdas.detalle +
-      '<td class="num ingreso" data-label="Ingreso">'+(Number(m.ingreso)?fmtMonto(m.ingreso):'')+'</td>'+
-      '<td class="num egreso" data-label="Egreso">'+(Number(m.egreso)?fmtMonto(m.egreso):'')+'</td>'+
+      celdaMonto(m.ingreso, m.egreso)+
       '<td class="actions-cell"><button class="icon-btn" data-action="edit-mov" data-id="'+m.id+'" title="Editar" aria-label="Editar"><i class="bi bi-pencil"></i></button>'+
       '<button class="icon-btn icon-btn-danger" data-action="del-mov" data-id="'+m.id+'" title="Borrar" aria-label="Borrar"><i class="bi bi-trash"></i></button></td>'+
     '</tr>';
@@ -2422,11 +2420,10 @@ function renderMovimientos(){
     var leyenda = 'Resumen '+(g.marca ? esc(g.marca) : 'tarjeta')+' · '+g.movs.length+' movimiento(s)'+(faltantesGrupo?' · <i class="bi bi-exclamation-triangle"></i> '+faltantesGrupo+' por categorizar':'');
     var filaResumen = '<tr class="fila-grupo-tarjeta">'+
       '<td data-label=""></td>'+
-      '<td class="mono" data-label="Fecha">'+esc(fechaISOaDDMMAAAA(g.fecha)||g.fecha)+'</td>'+
+      '<td class="mono" data-label="Fecha">'+esc(fechaISOaDDMM(g.fecha)||g.fecha)+'</td>'+
       '<td data-label="Centro">'+(g.centroId?renderChip(nombreCentro(g.centroId).split(' · ')[0], colorCentro(g.centroId), colorTextoCentro(g.centroId)):'—')+'</td>'+
       '<td colspan="4" data-label="Detalle"><button class="link" data-action="toggle-grupo-tarjeta-mov" data-id="'+esc(g.clave)+'">'+caret+' <i class="bi bi-credit-card"></i> '+leyenda+'</button></td>'+
-      '<td class="num ingreso" data-label="Ingreso">'+(totalIngresoG?fmtMonto(totalIngresoG):'')+'</td>'+
-      '<td class="num egreso" data-label="Egreso">'+(totalEgresoG?fmtMonto(totalEgresoG):'')+'</td>'+
+      celdaMonto(totalIngresoG, totalEgresoG)+
       '<td class="actions-cell"></td>'+
     '</tr>';
     if(!abierto) return filaResumen;
@@ -2600,9 +2597,9 @@ function renderMovimientos(){
     '</div>'+
     barraSeleccionHtml+
     (lista.length ? ''+
-    '<table id="tabla-movimientos" class="table tabla-movil"><thead><tr><th><input type="checkbox" id="chk-select-all-mov" '+(todosVisiblesSeleccionados?'checked':'')+'></th><th>Fecha</th><th>CC</th><th>Categoría</th><th>Subcategoría</th><th>Contraparte</th><th>Detalle</th><th class="num">Ingreso</th><th class="num">Egreso</th><th></th></tr></thead>'+
+    '<table id="tabla-movimientos" class="table tabla-movil"><thead><tr><th><input type="checkbox" id="chk-select-all-mov" '+(todosVisiblesSeleccionados?'checked':'')+'></th><th>Fecha</th><th>CC</th><th>Categoría</th><th>Subcategoría</th><th>Contraparte</th><th>Detalle</th><th class="num">Monto</th><th></th></tr></thead>'+
     '<tbody>'+rows+'</tbody>'+
-    '<tfoot><tr><td colspan="7" data-label="">'+esc(etiquetaTotales)+'</td><td class="num ingreso" data-label="Total Ingreso">'+fmtMonto(totalIngreso)+'</td><td class="num egreso" data-label="Total Egreso">'+fmtMonto(totalEgreso)+'</td><td class="num '+(totalIngreso-totalEgreso>=0?'ingreso':'egreso')+'" data-label="Ingresos - Egresos">'+fmtMonto(totalIngreso-totalEgreso)+'</td></tr></tfoot>'+
+    '<tfoot><tr><td colspan="7" data-label=""><span>'+esc(etiquetaTotales)+' · Ingresos <span class="ingreso">'+fmtMonto(totalIngreso)+'</span> · Egresos <span class="egreso">'+fmtMonto(totalEgreso ? -totalEgreso : 0)+'</span></span></td><td class="num '+(totalIngreso-totalEgreso>=0?'ingreso':'egreso')+'" data-label="Ingresos - Egresos">'+fmtMonto(totalIngreso-totalEgreso)+'</td><td></td></tr></tfoot>'+
     '</table>' : '<div class="empty">No hay movimientos que coincidan con los filtros.</div>')+
     paginacionHtml+
   '</div>';
@@ -2790,6 +2787,16 @@ function fechaISOaDDMMAAAA(iso){
   var m = (iso||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);
   return m ? m[3]+'/'+m[2]+'/'+m[1] : '';
 }
+// Para grillas: sin año (ocupa menos). El año completo queda para la exportación y los mensajes.
+function fechaISOaDDMM(iso){
+  var m = (iso||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? m[3]+'/'+m[2] : '';
+}
+// Celda única de monto para grillas: ingreso en positivo, egreso con el menos adelante.
+function celdaMonto(ingreso, egreso){
+  var ing = Number(ingreso)||0, egr = Number(egreso)||0, neto = ing - egr;
+  return '<td class="num '+(neto<0?'egreso':'ingreso')+'" data-label="Monto">'+((ing||egr)?fmtMonto(neto):'')+'</td>';
+}
 function diasHasta(iso){
   if(!iso) return null;
   var hoy = new Date(); hoy.setHours(0,0,0,0);
@@ -2861,7 +2868,7 @@ function renderVencimientos(){
     var esMesSiguiente = esGastoFijoDeMesFuturo(v);
     return '<tr'+(esMesSiguiente?' class="venc-mes-siguiente" title="Gasto fijo de un mes próximo (no del mes en curso)"':'')+'>'+
       '<td data-label="Concepto">'+esc(v.concepto)+(esMesSiguiente?' <span class="tag-mes-siguiente">'+esc(nombreMesCorto(v.fecha))+'</span>':'')+'</td>'+
-      '<td class="mono" data-label="Fecha">'+esc(fechaISOaDDMMAAAA(v.fecha))+'</td>'+
+      '<td class="mono" data-label="Fecha">'+esc(fechaISOaDDMM(v.fecha))+'</td>'+
       '<td class="mono '+(esMesSiguiente?'':colorDias)+'" data-label="Estado">'+diasTxt+'</td>'+
       '<td class="mono" data-label="Centro">'+esc(v.centroId?nombreCentro(v.centroId).split(' · ')[0]:'—')+'</td>'+
       '<td class="num mono" data-label="Monto">'+fmtMonto(v.monto)+'</td>'+
@@ -2898,7 +2905,7 @@ function renderVencimientos(){
   var rowsPagados = pagados.map(function(v){
     return '<tr>'+
       '<td data-label="Concepto">'+esc(v.concepto)+'</td>'+
-      '<td class="mono" data-label="Fecha">'+esc(fechaISOaDDMMAAAA(v.fecha))+'</td>'+
+      '<td class="mono" data-label="Fecha">'+esc(fechaISOaDDMM(v.fecha))+'</td>'+
       '<td class="mono" data-label="Centro">'+esc(v.centroId?nombreCentro(v.centroId).split(' · ')[0]:'—')+'</td>'+
       '<td class="num mono" data-label="Monto">'+fmtMonto(v.monto)+'</td>'+
       '<td class="actions-cell">'+
@@ -2921,14 +2928,13 @@ function renderVencimientos(){
     var dias = diasHasta(m.fecha);
     var diasTxt = dias===null ? '' : (dias===0 ? 'Vence hoy' : 'en '+dias+' día(s)');
     return '<tr>'+
-      '<td class="mono" data-label="Fecha">'+esc(fechaISOaDDMMAAAA(m.fecha)||m.fecha||'')+'</td>'+
+      '<td class="mono" data-label="Fecha">'+esc(fechaISOaDDMM(m.fecha)||m.fecha||'')+'</td>'+
       '<td class="mono" data-label="Vence">'+diasTxt+'</td>'+
       '<td class="mono" data-label="Centro">'+esc(nombreCentro(m.centroId)).split(' · ')[0]+'</td>'+
       '<td data-label="Categoría">'+esc(nombreCategoria(m.categoriaId))+'</td>'+
       '<td data-label="Contraparte">'+(m.tarjeta?'<span title="Pagado con tarjeta de crédito"><i class="bi bi-credit-card"></i></span> ':'')+esc(m.proveedor||'')+'</td>'+
       '<td data-label="Detalle">'+esc(m.detalle||'')+'</td>'+
-      '<td class="num ingreso" data-label="Ingreso">'+(Number(m.ingreso)?fmtMonto(m.ingreso):'')+'</td>'+
-      '<td class="num egreso" data-label="Egreso">'+(Number(m.egreso)?fmtMonto(m.egreso):'')+'</td>'+
+      celdaMonto(m.ingreso, m.egreso)+
       '<td class="actions-cell"><button class="link" data-action="edit-mov" data-id="'+m.id+'">editar</button>'+
       '<button class="link" data-action="del-mov" data-id="'+m.id+'">borrar</button></td>'+
     '</tr>';
@@ -2964,7 +2970,7 @@ function renderVencimientos(){
     var claveAbierto = 'venc-tarjeta|'+clave;
     return '<details class="resumen-tarjeta" data-grupo-key="'+esc(claveAbierto)+'"'+(STATE.gruposAbiertos[claveAbierto]?' open':'')+'>'+
       '<summary>'+
-        '<span class="mono">'+esc(fechaISOaDDMMAAAA(g.fecha)||g.fecha)+'</span>'+
+        '<span class="mono">'+esc(fechaISOaDDMM(g.fecha)||g.fecha)+'</span>'+
         '<span style="color:var(--ink-soft);font-size:12px">'+diasTxt+'</span>'+
         '<span><i class="bi bi-credit-card"></i> '+esc(nombreCC)+'</span>'+
         '<span style="font-size:12px;color:var(--ink-soft)">'+g.movs.length+' movimiento(s)</span>'+
@@ -2973,7 +2979,7 @@ function renderVencimientos(){
         '<span class="mono egreso" style="margin-left:auto;font-weight:600">'+fmtMonto(g.total)+'</span>'+
       '</summary>'+
       avisoDupHtml+
-      '<div style="overflow-x:auto;margin-top:10px"><table class="table tabla-movil"><thead><tr><th>Fecha</th><th>Vence</th><th>Centro</th><th>Categoría</th><th>Contraparte</th><th>Detalle</th><th class="num">Ingreso</th><th class="num">Egreso</th><th></th></tr></thead><tbody>'+filasGrupo+'</tbody></table></div>'+
+      '<div style="overflow-x:auto;margin-top:10px"><table class="table tabla-movil"><thead><tr><th>Fecha</th><th>Vence</th><th>Centro</th><th>Categoría</th><th>Contraparte</th><th>Detalle</th><th class="num">Monto</th><th></th></tr></thead><tbody>'+filasGrupo+'</tbody></table></div>'+
     '</details>';
   }).join('');
 
@@ -2983,7 +2989,7 @@ function renderVencimientos(){
     (gruposTarjetaHtml ? gruposTarjetaHtml : '')+
     (pendientesOtros.length ? ''+
       (gruposTarjetaHtml ? '<div style="font-size:11px;color:var(--ink-soft);margin:14px 0 8px;text-transform:uppercase;letter-spacing:.04em">Otros movimientos pendientes</div>' : '')+
-      '<table class="table tabla-movil"><thead><tr><th>Fecha</th><th>Vence</th><th>Centro</th><th>Categoría</th><th>Contraparte</th><th>Detalle</th><th class="num">Ingreso</th><th class="num">Egreso</th><th></th></tr></thead><tbody>'+rowsPendientesOtros+'</tbody></table>'
+      '<table class="table tabla-movil"><thead><tr><th>Fecha</th><th>Vence</th><th>Centro</th><th>Categoría</th><th>Contraparte</th><th>Detalle</th><th class="num">Monto</th><th></th></tr></thead><tbody>'+rowsPendientesOtros+'</tbody></table>'
       : '')+
     (!pendientesMov.length ? '<div class="empty">No hay movimientos con fecha futura.</div>' : '')+
   '</div>';
@@ -4153,7 +4159,7 @@ function renderDolares(){
     var par = movimientoPesosDeCambio(m);
     var montoArs = par ? montoMovimiento(par) : 0;
     return '<tr>'+
-      '<td class="mono" data-label="Fecha">'+esc(fechaISOaDDMMAAAA(m.fecha)||m.fecha||'')+'</td>'+
+      '<td class="mono" data-label="Fecha">'+esc(fechaISOaDDMM(m.fecha)||m.fecha||'')+'</td>'+
       '<td data-label="Tipo">'+(entra?'<i class="bi bi-arrow-up-circle" style="color:var(--accent)"></i> ':'<i class="bi bi-arrow-down-circle" style="color:var(--danger)"></i> ')+TIPOS_USD_CORTO[tipo]+'</td>'+
       '<td data-label="Centro">'+(m.centroId?renderChip(nombreCentro(m.centroId).split(' · ')[0], colorCentro(m.centroId), colorTextoCentro(m.centroId)):'—')+'</td>'+
       '<td class="num mono" data-label="US$">'+(entra?'+':'−')+fmtMonto(cant)+'</td>'+
@@ -4291,7 +4297,7 @@ function renderUsdt(){
   var rows = lista.map(function(u){
     var esVenta = u.tipo==='venta';
     return '<tr>'+
-      '<td class="mono" data-label="Fecha">'+esc(fechaISOaDDMMAAAA(u.fecha)||u.fecha||'')+'</td>'+
+      '<td class="mono" data-label="Fecha">'+esc(fechaISOaDDMM(u.fecha)||u.fecha||'')+'</td>'+
       '<td data-label="Tipo">'+(esVenta?'<i class="bi bi-arrow-down-circle" style="color:var(--danger)"></i> Venta':'<i class="bi bi-arrow-up-circle" style="color:var(--accent)"></i> Ingreso')+'</td>'+
       '<td class="num mono" data-label="Cantidad">'+fmtCantidadUsdt(u.cantidad)+'</td>'+
       '<td class="num mono" data-label="Monto ARS">'+(u.montoArs?fmtMonto(u.montoArs):'—')+'</td>'+

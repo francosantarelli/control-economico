@@ -287,10 +287,14 @@ th{
 }
 td{ padding:8px; border-bottom:1px solid var(--rule); vertical-align:top; }
 tr:last-child td{ border-bottom:none; }
-td.num{ text-align:right; font-variant-numeric:tabular-nums; }
+td.num{ text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
 th.num{ text-align:right; }
 .ingreso{ color:var(--accent); }
 .egreso{ color:var(--danger); }
+/* Bootstrap pinta todas las celdas de .table con --bs-table-color y le gana a las dos reglas de
+   arriba; hay que repetirlas con más especificidad para que el monto se vea verde/rojo. */
+.table td.ingreso{ color:var(--accent); }
+.table td.egreso{ color:var(--danger); }
 .celda-filtrable{ cursor:pointer; }
 .celda-filtrable:hover{ background:var(--track); text-decoration:underline; text-decoration-style:dotted; }
 #tabla-movimientos tbody tr:hover{ background:var(--bg); }
@@ -338,6 +342,12 @@ tfoot td{ border-top:1px solid var(--ink); border-bottom:none; font-weight:600; 
 .actions-cell{ white-space:nowrap; }
 .summary-cards{ display:flex; gap:14px; margin-bottom:18px; flex-wrap:wrap; }
 .summary-card{ flex:1; min-width:150px; background:var(--paper); border:1px solid var(--rule); border-radius:var(--bs-border-radius-lg); padding:16px 18px; }
+/* En escritorio las tarjetas comparten las filas (subgrid): título / valor / detalle. Así, si el
+   título de una ocupa dos renglones, los valores de todas quedan igual a la misma altura. */
+@media (min-width: 641px){
+  .summary-cards:not(.kpis-periodo){ display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); column-gap:14px; row-gap:0; margin-bottom:4px; }
+  .summary-cards:not(.kpis-periodo) > .summary-card{ display:grid; grid-template-rows:subgrid; grid-row:span 3; row-gap:0; margin-bottom:14px; }
+}
 .summary-card .label{ font-size:12px; color:var(--ink-soft); font-weight:500; }
 .summary-card .value{ font-variant-numeric:tabular-nums; font-size:20px; font-weight:600; letter-spacing:-.01em; margin-top:2px; }
 /* Ícono en badge circular de cada KPI (estilo dashboard financiero) */
@@ -470,6 +480,7 @@ footer.small{ margin-top:28px; font-size:11px; color:var(--ink-soft); text-align
   table.tabla-movil td.actions-cell::before{ content:none; }
   table.tabla-movil tfoot, table.tabla-movil tfoot tr{ display:block; }
   table.tabla-movil tfoot td{ display:flex; justify-content:space-between; border-bottom:none; border-top:1px solid var(--ink); padding:8px 0 0; }
+  table.tabla-movil tfoot td:empty{ display:none; }
 }
 
 /* Gastos fijos de un mes posterior al actual (renovados al pagar el de este mes): apagados, con
