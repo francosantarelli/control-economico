@@ -2402,7 +2402,7 @@ function renderMovimientos(){
     idsCheckboxVisibles.push(m.id);
     return '<tr class="fila-detalle-tarjeta'+(incompleto?' fila-incompleta':'')+'"'+tituloFila+'>'+
       '<td data-label=""><input type="checkbox" class="chk-select-mov" data-mov-id="'+m.id+'" '+(seleccionados.indexOf(m.id)!==-1?'checked':'')+'></td>'+
-      '<td class="mono" data-label="Fecha de consumo">'+(incompleto?'<i class="bi bi-exclamation-triangle"></i> ':'')+esc(m.fechaConsumo?fechaISOaDDMM(m.fechaConsumo):'—')+'</td>'+
+      '<td class="mono" data-label="Fecha de consumo" title="Fecha de consumo" style="font-size:12px;color:var(--ink-soft)">'+(incompleto?'<i class="bi bi-exclamation-triangle"></i> ':'')+esc(m.fechaConsumo?fechaISOaDDMM(m.fechaConsumo):'—')+'</td>'+
       '<td class="mono" data-label="Cuotas" style="color:var(--ink-soft)">'+(m.cuotas?esc(m.cuotas):'<i class="bi bi-link-45deg" title="Vinculado al resumen de tarjeta, sin cuota individual"></i>')+'</td>'+
       celdas.categoria + celdas.subcategoria + celdas.proveedor + celdas.detalle +
       celdaMonto(m.ingreso, m.egreso)+
