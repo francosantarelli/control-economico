@@ -3157,7 +3157,9 @@ function etiquetaInversion(){
   return nombres.length ? nombres.join(' + ') : 'Inversión';
 }
 
-var PALETA_DONUT = ['#2F9E6E','#A8D8BE','#E0654B','#F0C48A','#8FBFE0','#C3AEDB','#E3C08D','#7FC4B8','#F2A6A6','#B7D89A'];
+// Colores categóricos neutros respecto del signo: no incluye el verde/coral que en el resto de la app
+// significan ingreso/egreso (una categoría pintada de coral se leía como "algo anda mal").
+var PALETA_DONUT = ['#5B8DB8','#E3B34C','#8E7CC3','#5FB3A8','#D98CA6','#9BB36A','#C9925E','#7FA6D9','#B59AD6','#A3A9A6'];
 
 // ===================== CHIPS (Centro de Costo / Categoría) =====================
 // El color se elige a mano desde el ABM (campo "Color") y se guarda en centros.color /
@@ -3200,7 +3202,7 @@ function colorTextoParaFondo(hex){
 }
 function renderChip(texto, color, colorTexto){
   if(!texto) return '—';
-  var bg = color || '#E1EEE7';
+  var bg = color || '#E2E6E3';
   return '<span class="chip" style="background:'+esc(bg)+';color:'+esc(colorTexto||colorTextoParaFondo(bg))+'">'+esc(texto)+'</span>';
 }
 
@@ -3232,25 +3234,41 @@ function donutChart(segments, size){
   return '<svg viewBox="0 0 '+size+' '+size+'" width="'+size+'" height="'+size+'">'+circles+'</svg>';
 }
 
+// Monto abreviado para ejes de gráficos: 1.250.000 -> "1,3 M", 85.000 -> "85 mil".
+function fmtMontoCompacto(n){
+  var a = Math.abs(n);
+  if(a >= 1e6) return (n/1e6).toFixed(a >= 1e7 ? 0 : 1).replace('.', ',')+' M';
+  if(a >= 1e3) return Math.round(n/1e3)+' mil';
+  return String(Math.round(n));
+}
 function trendChart(meses, dataPorMes, width, height){
   if(!meses.length) return '<div class="empty">No hay suficientes datos para la tendencia mensual.</div>';
-  var padding = 34;
-  var chartW = width - padding*2;
-  var chartH = height - padding*2;
+  // Los colores van por style (no por atributo fill/stroke) porque var(--token) solo se resuelve en CSS:
+  // así el gráfico sigue al tema claro/oscuro sin tener los hex escritos acá.
+  var padLeft = 52, padRight = 12, padTop = 14, padBottom = 30;
+  var chartW = width - padLeft - padRight;
+  var chartH = height - padTop - padBottom;
   var max = 1;
   meses.forEach(function(m){ var d=dataPorMes[m]||{ingreso:0,egreso:0}; max=Math.max(max,d.ingreso,d.egreso); });
   var n = meses.length;
   var groupW = chartW/n;
-  var barW = Math.max(4, Math.min(16, groupW/3));
-  var svg = '<line x1="'+padding+'" y1="'+(padding+chartH)+'" x2="'+(width-padding)+'" y2="'+(padding+chartH)+'" stroke="#C7D6CD" stroke-width="1"></line>';
+  var barW = Math.max(4, Math.min(22, groupW/3.2));
+  var baseY = padTop + chartH;
+  var svg = '';
+  // Grilla: base, mitad y máximo, cada una con su valor a la izquierda.
+  [0, 0.5, 1].forEach(function(t){
+    var y = baseY - t*chartH;
+    svg += '<line x1="'+padLeft+'" y1="'+y+'" x2="'+(width-padRight)+'" y2="'+y+'" stroke-width="1" style="stroke:var(--'+(t===0?'chart-axis':'rule')+')"></line>';
+    svg += '<text x="'+(padLeft-8)+'" y="'+(y+3.5)+'" font-size="10" text-anchor="end" style="fill:var(--ink-soft)">'+esc(fmtMontoCompacto(max*t))+'</text>';
+  });
   meses.forEach(function(m,i){
     var d = dataPorMes[m]||{ingreso:0,egreso:0};
-    var xBase = padding + i*groupW + groupW/2;
+    var xBase = padLeft + i*groupW + groupW/2;
     var hIngreso = (d.ingreso/max)*chartH;
     var hEgreso = (d.egreso/max)*chartH;
-    svg += '<rect x="'+(xBase-barW-1.5)+'" y="'+(padding+chartH-hIngreso)+'" width="'+barW+'" height="'+hIngreso+'" fill="#2F9E6E" rx="3"></rect>';
-    svg += '<rect x="'+(xBase+1.5)+'" y="'+(padding+chartH-hEgreso)+'" width="'+barW+'" height="'+hEgreso+'" fill="#E0654B" rx="3"></rect>';
-    svg += '<text x="'+xBase+'" y="'+(height-12)+'" font-size="10" text-anchor="middle" fill="#71857A">'+esc(mesLabelCorto(m))+'</text>';
+    svg += '<rect x="'+(xBase-barW-1.5)+'" y="'+(baseY-hIngreso)+'" width="'+barW+'" height="'+hIngreso+'" rx="3" style="fill:var(--accent)"><title>'+esc(mesLabelCorto(m))+' · Ingresos '+fmtMonto(d.ingreso)+'</title></rect>';
+    svg += '<rect x="'+(xBase+1.5)+'" y="'+(baseY-hEgreso)+'" width="'+barW+'" height="'+hEgreso+'" rx="3" style="fill:var(--danger)"><title>'+esc(mesLabelCorto(m))+' · Egresos '+fmtMonto(d.egreso)+'</title></rect>';
+    svg += '<text x="'+xBase+'" y="'+(height-10)+'" font-size="10" text-anchor="middle" style="fill:var(--ink-soft)">'+esc(mesLabelCorto(m))+'</text>';
   });
   return '<svg viewBox="0 0 '+width+' '+height+'" width="100%" height="'+height+'" preserveAspectRatio="xMidYMid meet">'+svg+'</svg>';
 }
@@ -3358,7 +3376,7 @@ function renderGrillaMensual(movs, rango){
       var celdas = meses.map(function(m){
         var v = datos[cid][m]||0;
         var intensidad = maxCelda ? (Math.abs(v)/maxCelda) : 0;
-        var colorRgb = v<0 ? '217,123,108' : '78,157,119';
+        var colorRgb = v<0 ? 'var(--bs-danger-rgb)' : 'var(--bs-success-rgb)';
         var estilo = v!==0 ? ' style="background:rgba('+colorRgb+','+(0.08+intensidad*0.32).toFixed(2)+')"' : '';
         return '<td class="num mono"'+estilo+'>'+(v!==0?fmtMonto(v):'—')+'</td>';
       }).join('');
@@ -3463,12 +3481,12 @@ function renderResumen(){
   function deltaHtml(valorActual, favorableSiSube, valorAnterior){
     if(valorAnterior===null || valorAnterior===undefined) return '';
     var diff = valorActual - valorAnterior;
-    if(Math.abs(diff) < 1) return '<div style="font-size:11px;margin-top:2px;color:var(--ink-soft)">= mes anterior</div>';
+    if(Math.abs(diff) < 1) return '<div class="kpi-delta" style="color:var(--ink-soft)">= mes anterior</div>';
     var subio = diff>0;
     var favorable = favorableSiSube ? subio : !subio;
     var color = favorable ? 'var(--accent)' : 'var(--danger)';
     var icono = subio ? 'bi-arrow-up-short' : 'bi-arrow-down-short';
-    return '<div class="mono" style="font-size:11px;margin-top:2px;color:'+color+'"><i class="bi '+icono+'"></i> '+fmtMonto(Math.abs(diff))+' vs. mes ant.</div>';
+    return '<div class="kpi-delta" style="color:'+color+'"><i class="bi '+icono+'"></i> '+fmtMonto(Math.abs(diff))+' vs. mes ant.</div>';
   }
   // Tasa de ahorro: más comparable entre meses que el Saldo en pesos solo, porque no depende de cuánto
   // ingresó ese mes puntual.
@@ -3486,12 +3504,12 @@ function renderResumen(){
   var capAhorro = capacidadAhorroPromedio('6m');
   var estadoActualHtml = '<div class="card">'+
     '<h3>Estado actual</h3>'+
-    '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">La foto de hoy — no depende de los filtros de abajo.</div>'+
-    '<div class="summary-cards">'+
-      '<div class="summary-card"><div class="kpi-ic kpi-ic-accent"><i class="bi bi-bank"></i></div><div class="label">Saldo total (Saldos)</div><div class="value">'+fmtMonto(saldosGlobal.totalGeneral)+'</div></div>'+
-      '<div class="summary-card"><div class="kpi-ic kpi-ic-warning"><i class="bi bi-coin"></i></div><div class="label">Tenencia USDT</div><div class="value">'+fmtCantidadUsdt(saldoUsdtCant)+' USDT'+(valorUsdtArs!==null?'<div class="mono" style="font-size:12px;color:var(--ink-soft);font-weight:400">≈ '+fmtMonto(valorUsdtArs)+'</div>':'')+'</div></div>'+
-      (hayDolares ? '<div class="summary-card"><div class="kpi-ic kpi-ic-accent"><i class="bi bi-currency-dollar"></i></div><div class="label">Tenencia dólares</div><div class="value">'+fmtUsd(tenenciaUsd)+(valorUsdArs!==null?'<div class="mono" style="font-size:12px;color:var(--ink-soft);font-weight:400">≈ '+fmtMonto(valorUsdArs)+' (blue)</div>':'')+'</div></div>' : '')+
-      '<div class="summary-card"><div class="kpi-ic kpi-ic-accent"><i class="bi bi-piggy-bank"></i></div><div class="label">Ahorro promedio / mes</div><div class="value">'+(capAhorro?fmtMonto(capAhorro.promedio):'—')+'</div>'+(capAhorro?'<div style="font-size:11px;color:var(--ink-soft);margin-top:2px">últimos 6 meses cerrados, sin '+esc(etiquetaInversion())+'</div>':'')+'</div>'+
+    '<div style="font-size:12px;color:var(--ink-soft);margin-bottom:12px">La foto de hoy. No depende de los filtros.</div>'+
+    '<div class="estado-actual">'+
+      '<div><div class="label">Saldo en cuentas</div><div class="value'+(saldosGlobal.totalGeneral<0?' egreso':'')+'">'+fmtMonto(saldosGlobal.totalGeneral)+'</div></div>'+
+      '<div><div class="label">Tenencia USDT</div><div class="value">'+fmtCantidadUsdt(saldoUsdtCant)+' USDT</div>'+(valorUsdtArs!==null?'<div class="sub">≈ '+fmtMonto(valorUsdtArs)+'</div>':'')+'</div>'+
+      (hayDolares ? '<div><div class="label">Tenencia dólares</div><div class="value">'+fmtUsd(tenenciaUsd)+'</div>'+(valorUsdArs!==null?'<div class="sub">≈ '+fmtMonto(valorUsdArs)+' (blue)</div>':'')+'</div>' : '')+
+      '<div><div class="label">Ahorro promedio / mes</div><div class="value">'+(capAhorro?fmtMonto(capAhorro.promedio):'—')+'</div>'+(capAhorro?'<div class="sub">últimos 6 meses cerrados, sin '+esc(etiquetaInversion())+'</div>':'')+'</div>'+
     '</div>'+
   '</div>';
 
@@ -3521,7 +3539,7 @@ function renderResumen(){
   var totalLista = lista.reduce(function(s,x){ return s+x.monto; },0);
   var claseColorTotalLista = totalLista >= 0 ? 'ingreso' : 'egreso';
   var totalListaHtml = lista.length ? ''+
-    '<div class="bar-row" style="border-top:2px solid var(--accent);border-bottom:none;margin-top:4px;padding-top:10px;font-weight:600">'+
+    '<div class="bar-row" style="border-top:1px solid var(--ink);border-bottom:none;margin-top:4px;padding-top:10px;font-weight:600">'+
       '<div class="name">Total</div><div class="bar-track"></div>'+
       '<div class="amt '+claseColorTotalLista+'">'+fmtMonto(totalLista)+'</div>'+
     '</div>' : '';
@@ -3551,7 +3569,7 @@ function renderResumen(){
   // Donut: top 8 + "Otros" (no incluye las inversiones, que ya tienen su propia tarjeta aparte). Usa el valor absoluto para el tamaño de cada porción (una torta no puede tener porciones negativas), pero muestra el monto real (con signo) en la leyenda.
   var segmentos = lista.slice(0,8).map(function(x,i){ return {label:x.nombre, value:Math.abs(x.monto), montoReal:x.monto, color:PALETA_DONUT[i%PALETA_DONUT.length]}; });
   var restoMonto = lista.slice(8).reduce(function(s,x){return s+x.monto;},0);
-  if(restoMonto!==0) segmentos.push({label:'Otros', value:Math.abs(restoMonto), montoReal:restoMonto, color:'#E1EEE7'});
+  if(restoMonto!==0) segmentos.push({label:'Otros', value:Math.abs(restoMonto), montoReal:restoMonto, color:'var(--track)'});
   var donutSvg = donutChart(segmentos, 160);
   var leyenda = segmentos.filter(function(s){return s.value>0;}).map(function(s){
     return '<div style="display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:4px">'+
@@ -3574,7 +3592,7 @@ function renderResumen(){
     dataPorMes[mes].ingreso += Number(m.ingreso)||0;
     dataPorMes[mes].egreso += Number(m.egreso)||0;
   });
-  var trendSvg = trendChart(mesesTrend, dataPorMes, 640, 220);
+  var trendSvg = trendChart(mesesTrend, dataPorMes, (window.innerWidth||1024) <= 640 ? 420 : 960, 240);
 
   return alertaVencimientosProximosHtml()+
   '<div class="card card-filtros">'+
@@ -3589,15 +3607,17 @@ function renderResumen(){
       '</select></div>'+
     '</div>'+
   '</div>'+
-  estadoActualHtml+
-  '<div class="summary-cards">'+
-    '<div class="summary-card"><div class="kpi-ic kpi-ic-accent"><i class="bi bi-arrow-up"></i></div><div class="label">Total ingresos</div><div class="value ingreso">'+fmtMonto(totalIngreso)+'</div>'+deltaHtml(totalIngreso, true, anterior?anterior.totalIngreso:null)+'</div>'+
-    '<div class="summary-card"><div class="kpi-ic kpi-ic-danger"><i class="bi bi-arrow-down"></i></div><div class="label">Total egresos</div><div class="value egreso">'+fmtMonto(totalEgreso)+'</div>'+deltaHtml(totalEgreso, false, anterior?anterior.totalEgreso:null)+'</div>'+
-    '<div class="summary-card"><div class="kpi-ic kpi-ic-warning"><i class="bi bi-building"></i></div><div class="label">'+esc(etiquetaInversion())+'</div><div class="value egreso">'+fmtMonto(totalInversion)+'</div></div>'+
-    '<div class="summary-card"><div class="kpi-ic kpi-ic-accent"><i class="bi bi-wallet2"></i></div><div class="label">Saldo</div><div class="value">'+fmtMonto(saldo)+'</div>'+(tasaAhorro!==null?'<div style="font-size:11px;color:var(--ink-soft);margin-top:2px">'+tasaAhorro+'% del ingreso</div>':'')+deltaHtml(saldo, true, anterior?anterior.saldo:null)+'</div>'+
+  '<div class="kpis-periodo">'+
+    '<div class="summary-card kpi-hero"><div class="label">Saldo del período</div><div class="value'+(saldo<0?' egreso':'')+'">'+fmtMonto(saldo)+'</div>'+deltaHtml(saldo, true, anterior?anterior.saldo:null)+
+      (tasaAhorro!==null ? '<div class="kpi-meter"><div style="width:'+Math.max(0, Math.min(100, tasaAhorro))+'%"></div></div><div class="kpi-nota">'+(tasaAhorro>=0 ? 'Quedó el '+tasaAhorro+'% de lo que ingresó' : 'Se gastó más de lo que ingresó')+'</div>' : '')+
+    '</div>'+
+    '<div class="summary-card"><div class="label">Ingresos</div><div class="value ingreso">'+fmtMonto(totalIngreso)+'</div>'+deltaHtml(totalIngreso, true, anterior?anterior.totalIngreso:null)+'</div>'+
+    '<div class="summary-card"><div class="label">Egresos</div><div class="value">'+fmtMonto(totalEgreso)+'</div>'+deltaHtml(totalEgreso, false, anterior?anterior.totalEgreso:null)+'</div>'+
+    '<div class="summary-card"><div class="label">'+esc(etiquetaInversion())+'</div><div class="value">'+fmtMonto(totalInversion)+'</div></div>'+
   '</div>'+
+  estadoActualHtml+
   '<div class="card">'+
-    '<h3>Tendencia mensual (Ingresos vs Egresos)</h3>'+
+    '<h3>Tendencia mensual<span class="chart-leyenda"><span><i style="background:var(--accent)"></i>Ingresos</span><span><i style="background:var(--danger)"></i>Egresos</span></span></h3>'+
     trendSvg+
   '</div>'+
   '<div class="card">'+
@@ -3608,7 +3628,7 @@ function renderResumen(){
   '</div>'+
   '<div class="card">'+
     '<h3>Total por '+(f.vista==='centro'?'Centro de Costo':'Categoría')+'</h3>'+
-    '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Ingresos menos egresos de cada '+(f.vista==='centro'?'centro':'categoría')+'. Verde = neto a favor (ingreso), coral = neto en contra (egreso). No incluye TEC (transferencias entre cuentas), '+esc(etiquetaInversion())+' ni Sueldo (quedan afuera de esta comparación).</div>'+
+    '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Ingresos menos egresos de cada '+(f.vista==='centro'?'centro':'categoría')+'. Verde = neto a favor (ingreso), rojo = neto en contra (egreso). No incluye TEC (transferencias entre cuentas), '+esc(etiquetaInversion())+' ni Sueldo (quedan afuera de esta comparación).</div>'+
     (lista.length ? bars+totalListaHtml : '<div class="empty">Todavía no hay movimientos cargados.</div>')+
   '</div>'+
   '<div class="card">'+
@@ -3633,7 +3653,7 @@ function renderResumen(){
         '<option value="anio" '+(STATE.grillaRango==='anio'?'selected':'')+'>Este año</option>'+
       '</select></div>'+
     '</div>'+
-    '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Ingresos menos egresos por categoría, mes a mes'+(f.centro.length?' (Centro de Costo: '+f.centro.map(function(cid){ return esc(nombreCentro(cid).split(' · ')[0]); }).join(', ')+')':'')+'. Verde = neto a favor, coral = neto en contra. No incluye TEC, Solo control ni Sueldo. Las categorías de tipo Inversión van aparte, debajo del Total. Ignora el filtro de Mes/Categoría de arriba (usa el selector de rango de acá al lado).</div>'+
+    '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Ingresos menos egresos por categoría, mes a mes'+(f.centro.length?' (Centro de Costo: '+f.centro.map(function(cid){ return esc(nombreCentro(cid).split(' · ')[0]); }).join(', ')+')':'')+'. Verde = neto a favor, rojo = neto en contra. No incluye TEC, Solo control ni Sueldo. Las categorías de tipo Inversión van aparte, debajo del Total. Ignora el filtro de Mes/Categoría de arriba (usa el selector de rango de acá al lado).</div>'+
     renderGrillaMensual(movsCentro, STATE.grillaRango)+
   '</div>';
 }
@@ -3787,12 +3807,12 @@ function lineChart(meses, valores, width, height){
     return {x:x, y:y, v:v};
   });
   var pathD = puntos.map(function(p,i){ return (i===0?'M':'L')+p.x.toFixed(1)+' '+p.y.toFixed(1); }).join(' ');
-  var svg = '<line x1="'+padding+'" y1="'+zeroY+'" x2="'+(width-padding)+'" y2="'+zeroY+'" stroke="#C7D6CD" stroke-width="1" stroke-dasharray="3 3"></line>';
-  svg += '<path d="'+pathD+'" fill="none" stroke="#2F9E6E" stroke-width="2"></path>';
-  puntos.forEach(function(p){ svg += '<circle cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="3.5" fill="'+(p.v>=0?'#2F9E6E':'#E0654B')+'"></circle>'; });
+  var svg = '<line x1="'+padding+'" y1="'+zeroY+'" x2="'+(width-padding)+'" y2="'+zeroY+'" stroke-width="1" stroke-dasharray="3 3" style="stroke:var(--chart-axis)"></line>';
+  svg += '<path d="'+pathD+'" fill="none" stroke-width="2" style="stroke:var(--accent)"></path>';
+  puntos.forEach(function(p){ svg += '<circle cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="3.5" style="fill:var(--'+(p.v>=0?'accent':'danger')+')"></circle>'; });
   meses.forEach(function(m,i){
     var x = padding + (n>1 ? i*stepX : chartW/2);
-    svg += '<text x="'+x+'" y="'+(height-12)+'" font-size="10" text-anchor="middle" fill="#71857A">'+esc(mesLabelCorto(m))+'</text>';
+    svg += '<text x="'+x+'" y="'+(height-12)+'" font-size="10" text-anchor="middle" style="fill:var(--ink-soft)">'+esc(mesLabelCorto(m))+'</text>';
   });
   return '<svg viewBox="0 0 '+width+' '+height+'" width="100%" height="'+height+'" preserveAspectRatio="xMidYMid meet">'+svg+'</svg>';
 }
