@@ -2451,7 +2451,7 @@ function renderMovimientos(){
     var destinoOpts = [comboOpcionVacia()].concat(STATE.centros.filter(function(c){return c.id!==e.centroId && centroAdmitePesos(c);}).map(function(c){ return {value:c.id, label:c.codigo+' · '+c.nombre}; }));
     var campoDestino = esTec ? ''+
       '<div class="fields-row" style="margin-top:12px">'+
-        '<div class="field" style="flex:1 1 240px"><label>Centro de Costo Destino (transferencia, opcional)</label>'+renderCombo('mov-centro-destino', 'f-mov-centro-destino', destinoOpts, STATE.movDraftCentroDestinoId, 'Elegir...')+'</div>'+
+        '<div class="field" style="flex:1 1 240px"><label id="lbl-mov-centro-destino">'+etiquetaCentroContraparteTec(e.tipo)+' (transferencia, opcional)</label>'+renderCombo('mov-centro-destino', 'f-mov-centro-destino', destinoOpts, STATE.movDraftCentroDestinoId, 'Elegir...')+'</div>'+
         '<div class="field" style="flex:2 1 260px;justify-content:flex-end"><div style="font-size:11px;color:var(--ink-soft);padding-bottom:8px">'+(editing ?
           'Si lo completás, se va a crear un movimiento espejo nuevo en ese centro (misma fecha y categoría, mismo monto, tipo contrario) — pensado para cuando falta la contrapartida de un movimiento importado. No hace falta si ya la cargaste.' :
           'Si lo completás, se va a crear automáticamente el movimiento espejo en ese centro (misma fecha y categoría, mismo monto, tipo contrario). Si lo dejás vacío, se carga solo este movimiento.'
@@ -2776,6 +2776,11 @@ function renderImportar(){
 }
 
 // ===================== VENCIMIENTOS =====================
+// En una TEC, el "otro" centro es el destino si este movimiento es un egreso (la plata sale de acá)
+// y el origen si es un ingreso (la plata llega acá). El espejo siempre se crea con el tipo contrario.
+function etiquetaCentroContraparteTec(tipo){
+  return tipo==='ingreso' ? 'Centro de Costo Origen' : 'Centro de Costo Destino';
+}
 function fechaVencCortaAISO(s){
   var m = (s||'').trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
   if(!m) return '';
@@ -4580,6 +4585,14 @@ function bindEvents(){
 
   // Mostrar/ocultar los campos de cuotas al tildar "Pagado con tarjeta de crédito",
   // y refrescar la ayuda ("se van a crear N movimientos...") al cambiar la cantidad de cuotas.
+  // TEC: la etiqueta del otro centro (Origen/Destino) acompaña al Tipo elegido.
+  var movTipoSel = document.getElementById('f-mov-tipo');
+  if(movTipoSel){
+    movTipoSel.addEventListener('change', function(){
+      var lbl = document.getElementById('lbl-mov-centro-destino');
+      if(lbl) lbl.textContent = etiquetaCentroContraparteTec(movTipoSel.value)+' (transferencia, opcional)';
+    });
+  }
   var movTarjetaChk = document.getElementById('f-mov-tarjeta');
   if(movTarjetaChk){
     movTarjetaChk.addEventListener('change', function(){
@@ -5330,7 +5343,7 @@ async function handleAction(action, id){
     var centroDestino = centroDestinoEl ? centroDestinoEl.value : '';
 
     if(esTecMov && centroDestino && centroDestino === v.centroId){
-      STATE.movFormMsg = 'El Centro de Costo Destino tiene que ser distinto al de origen.';
+      STATE.movFormMsg = 'El '+etiquetaCentroContraparteTec(v.tipo)+' tiene que ser distinto al Centro de Costo de este movimiento.';
       render(); return;
     }
 

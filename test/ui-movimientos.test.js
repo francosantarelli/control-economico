@@ -105,6 +105,17 @@ describe('Movimientos: alta, edición y borrado', () => {
     expect(sbMock.calls[0].rows).toHaveLength(2);
   });
 
+  it('en una TEC, el otro centro se rotula Destino si es egreso y Origen si es ingreso', () => {
+    win.STATE.movDraft = Object.assign({ fecha:'', centroId:'', categoriaId:'cat-tec', subcategoriaId:'', proveedor:'', detalle:'', tipo:'ingreso', monto:'', tarjeta:false, fechaConsumo:'', tarjetaMarca:'', cuotas:1 });
+    win.render();
+    const lbl = () => win.document.getElementById('lbl-mov-centro-destino').textContent;
+    expect(lbl()).toMatch(/Centro de Costo Origen/);
+    const tipo = win.document.getElementById('f-mov-tipo');
+    tipo.value = 'egreso';
+    tipo.dispatchEvent(new win.Event('change'));
+    expect(lbl()).toMatch(/Centro de Costo Destino/);
+  });
+
   it('rechaza Centro Destino igual al de origen en un movimiento TEC', async () => {
     win.STATE.movDraft = Object.assign({ fecha:'', centroId:'', categoriaId:'cat-tec', subcategoriaId:'', proveedor:'', detalle:'', tipo:'egreso', monto:'', tarjeta:false, fechaConsumo:'', tarjetaMarca:'', cuotas:1 });
     win.render();
@@ -113,7 +124,7 @@ describe('Movimientos: alta, edición y borrado', () => {
       proveedor: 'Transferencia', tipo: 'egreso', monto: '10000', centroDestinoId: 'c-ef'
     });
     await win.handleAction('save-mov');
-    expect(win.STATE.movFormMsg).toMatch(/distinto al de origen/i);
+    expect(win.STATE.movFormMsg).toMatch(/Centro de Costo Destino tiene que ser distinto/i);
     expect(win.STATE.movimientos).toHaveLength(0);
   });
 

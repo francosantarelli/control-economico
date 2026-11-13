@@ -78,7 +78,7 @@ Antes de cargar datos, armá la base en **ABM** (cada sección es una subpestañ
 Tocá **+ Movimiento**. Campos principales: Fecha, Centro de Costo, Tipo (ingreso/egreso), Monto, Contraparte, Detalle, Categoría y Subcategoría.
 
 - Los desplegables de Centro/Categoría/Subcategoría tienen **buscador**: escribí para filtrar y confirmá con **Enter** o **Tab**.
-- **Transferencia:** completá *Centro de Costo Destino* (opcional) para registrar el movimiento de pasaje entre cuentas.
+- **Transferencia:** completá *Centro de Costo Destino* (opcional; si el movimiento es un Ingreso el campo pasa a llamarse *Centro de Costo Origen*) para registrar el movimiento de pasaje entre cuentas.
 - **Cuotas:** indicá *Cuotas a generar* y la app crea una por mes (con fecha futura, visibles en Vencimientos). *Cuota manual* es solo para escribir la etiqueta a mano en un movimiento suelto; dejala vacía si ya pusiste una cantidad.
 - **Tarjeta:** *Marca de tarjeta* y *Fecha de consumo* son opcionales.
 
