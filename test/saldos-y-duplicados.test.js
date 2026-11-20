@@ -102,6 +102,29 @@ describe('calcularSaldos', () => {
     const s = win.calcularSaldos();
     expect(s.filas.find(function(f){ return f.id === 'cA'; }).saldo).toBe(600);
   });
+
+  it('categoriasControl: saldo pendiente por categoría Solo control, sin fechas futuras ni las que dan cero', () => {
+    win.STATE.categorias = [
+      { id: 'ctrl-b', nombre: 'Préstamo Juan', tipo: 'control' },
+      { id: 'ctrl-a', nombre: 'Gastos de mamá', tipo: 'control' },
+      { id: 'ctrl-0', nombre: 'Saldada', tipo: 'control' },
+      { id: 'normal', nombre: 'Comida', tipo: '' },
+    ];
+    win.STATE.movimientos = [
+      { fecha: '2026-08-01', centroId: 'cA', categoriaId: 'ctrl-a', ingreso: 0, egreso: 800 },
+      { fecha: '2026-08-03', centroId: 'cF', categoriaId: 'ctrl-a', ingreso: 300, egreso: 0 },
+      { fecha: '2026-09-01', centroId: 'cF', categoriaId: 'ctrl-a', ingreso: 500, egreso: 0 }, // futuro: no cuenta
+      { fecha: '2026-08-02', centroId: 'cF', categoriaId: 'ctrl-b', ingreso: 1000, egreso: 0 },
+      { fecha: '2026-08-02', centroId: 'cF', categoriaId: 'ctrl-0', ingreso: 200, egreso: 0 },
+      { fecha: '2026-08-04', centroId: 'cA', categoriaId: 'ctrl-0', ingreso: 0, egreso: 200 },
+      { fecha: '2026-08-02', centroId: 'cA', categoriaId: 'normal', ingreso: 0, egreso: 50 },
+    ];
+    const s = win.calcularSaldos();
+    expect(s.categoriasControl.map(function(c){ return [c.nombre, c.saldo]; })).toEqual([
+      ['Gastos de mamá', -500],
+      ['Préstamo Juan', 1000],
+    ]);
+  });
 });
 
 describe('esTipoCategoria / esCategoriaInversion / esCategoriaSueldo', () => {

@@ -126,7 +126,7 @@ En **Resumen** aparece un aviso con los vencimientos próximos.
 
 ## 9. Saldos
 
-Muestra el saldo real de cada Centro de Costo: parte del “Saldo Inicial” y suma/resta **todos** los movimientos (incluso TEC, Inversión y Solo control). Se recalcula con cada movimiento nuevo; **Recalcular** trae cambios hechos desde otra sesión. Desde una cuenta se puede saltar a sus movimientos. Debajo se muestran los saldos en dólares y la tenencia de USDT (aparte del total en pesos).
+Muestra el saldo real de cada Centro de Costo: parte del “Saldo Inicial” y suma/resta **todos** los movimientos (incluso TEC, Inversión y Solo control). Se recalcula con cada movimiento nuevo; **Recalcular** trae cambios hechos desde otra sesión. Desde una cuenta se puede saltar a sus movimientos. Si alguna categoría *Solo control* no quedó en cero, aparece su **saldo pendiente** (ingresos − egresos: positivo si entró más de lo que salió, negativo si al revés), con un acceso a sus movimientos. Debajo se muestran los saldos en dólares y la tenencia de USDT (aparte del total en pesos).
 
 ## 10. Flujo de Caja y deudas
 

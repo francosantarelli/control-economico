@@ -2689,8 +2689,7 @@ function renderImportar(){
         '<td>'+provInput+'</td>'+
         '<td>'+detInput+'</td>'+
         '<td>'+cuotasInput+'</td>'+
-        '<td class="num ingreso">'+(r.monto>0?fmtMonto(r.monto):'')+'</td>'+
-        '<td class="num egreso">'+(r.monto<0?fmtMonto(-r.monto):'')+'</td>'+
+        celdaMonto(r.monto>0?r.monto:0, r.monto<0?-r.monto:0)+
         '<td style="text-align:center"><input type="checkbox" data-rowid="'+r.id+'" data-field="guardarRegla" '+(r.guardarRegla?'checked':'')+' title="Guardar esta relación contraparte → categoría como regla para futuras importaciones"></td>'+
       '</tr>';
     }).join('');
@@ -2712,7 +2711,7 @@ function renderImportar(){
       '<h3>Previsualización ('+STATE.importPreview.length+' movimiento(s), '+incluidos+' seleccionado(s))</h3>'+
       (duplicados>0 ? '<div class="msg err"><i class="bi bi-exclamation-triangle"></i> '+duplicados+' fila(s) marcada(s) como posible duplicado (mismo Centro, fecha y monto que otro movimiento). Revisalas antes de confirmar.</div>' : '')+
       (cantGemelos>0 ? '<div class="msg ok"><i class="bi bi-arrow-repeat"></i> '+cantGemelos+' fila(s) ya estaban cargadas como cuota de tarjeta con otra fecha (misma cuenta y monto, hasta '+VENTANA_GEMELOS_TARJETA+' días de diferencia). En vez de duplicarlas, se mueve la que ya tenías a la fecha de este resumen, conservando su categoría y detalle. Desmarcá "Ya cargado" si alguna es una compra distinta.</div>' : '')+
-      '<table id="import-preview-table" class="table"><thead><tr><th></th><th>Fecha</th><th>Fecha de consumo</th><th>Centro</th><th>Categoría</th><th>Subcategoría</th><th>Contraparte</th><th>Detalle</th><th>Cuotas</th><th class="num">Ingreso</th><th class="num">Egreso</th><th title="Guardar la relación contraparte → categoría como regla para futuras importaciones">Regla</th></tr></thead>'+
+      '<table id="import-preview-table" class="table"><thead><tr><th></th><th>Fecha</th><th>Fecha de consumo</th><th>Centro</th><th>Categoría</th><th>Subcategoría</th><th>Contraparte</th><th>Detalle</th><th>Cuotas</th><th class="num">Monto</th><th title="Guardar la relación contraparte → categoría como regla para futuras importaciones">Regla</th></tr></thead>'+
       '<tbody>'+rows+'</tbody></table>'+
       '<div class="fields-row" style="margin-top:14px">'+
         '<button data-action="confirm-import">Importar '+incluidos+' movimiento(s)</button>'+
@@ -2742,8 +2741,7 @@ function renderImportar(){
         '<td>'+esc(r.subcategoriaText)+tagSub+'</td>'+
         '<td>'+esc(r.proveedor)+'</td>'+
         '<td>'+esc(r.detalle)+'</td>'+
-        '<td class="num ingreso">'+(r.ingreso>0?fmtMonto(r.ingreso):'')+'</td>'+
-        '<td class="num egreso">'+(r.egreso>0?fmtMonto(r.egreso):'')+'</td>'+
+        celdaMonto(r.ingreso, r.egreso)+
       '</tr>';
     }).join('');
     var incluidosExcel = STATE.importPreviewExcel.filter(function(r){return r.incluir;}).length;
@@ -2756,7 +2754,7 @@ function renderImportar(){
       '<h3>Previsualización ('+STATE.importPreviewExcel.length+' movimiento(s), '+incluidosExcel+' seleccionado(s))</h3>'+
       (nuevosCC>0||nuevasCat>0 ? '<div class="msg ok">Se van a crear automáticamente: '+nuevosCC+' Centro(s) de Costo nuevo(s), '+nuevasCat+' Categoría(s) nueva(s) (marcados en rojo abajo). Revisá que no sean errores de tipeo antes de confirmar.</div>' : '')+
       (duplicadosExcel>0 ? '<div class="msg err"><i class="bi bi-exclamation-triangle"></i> '+duplicadosExcel+' fila(s) marcada(s) como posible duplicado (mismo Centro, fecha y monto que otro movimiento). Revisalas antes de confirmar.</div>' : '')+
-      '<table id="import-preview-excel-table" class="table"><thead><tr><th></th><th>Fecha</th><th>CC</th><th>Categoría</th><th>Subcategoría</th><th>Contraparte</th><th>Detalle</th><th class="num">Ingreso</th><th class="num">Egreso</th></tr></thead>'+
+      '<table id="import-preview-excel-table" class="table"><thead><tr><th></th><th>Fecha</th><th>CC</th><th>Categoría</th><th>Subcategoría</th><th>Contraparte</th><th>Detalle</th><th class="num">Monto</th></tr></thead>'+
       '<tbody>'+rowsExcel+'</tbody></table>'+
       '<div class="fields-row" style="margin-top:14px">'+
         '<button data-action="confirm-import-excel">Importar '+incluidosExcel+' movimiento(s)</button>'+
@@ -3034,7 +3032,20 @@ function calcularSaldos(){
   var totalOtros = filas.filter(function(f){return f.titular==='Otros';}).reduce(function(s,f){return s+f.saldo;},0) + saldoSinCentro;
   var totalGeneral = totalAna + totalFranco + totalOtros;
 
-  return { filas:filas, saldoSinCentro:saldoSinCentro, totalAna:totalAna, totalFranco:totalFranco, hayOtros:hayOtros, totalOtros:totalOtros, totalGeneral:totalGeneral, calculadoEn: new Date() };
+  // Saldo pendiente de cada categoría Solo control (ingresos − egresos, con el mismo criterio de
+  // fechas que el saldo de las cuentas). Solo se listan las que no quedaron en cero.
+  var saldoPorControl = {};
+  STATE.movimientos.forEach(function(m){
+    if(esMovimientoPendiente(m) || !esTipoCategoria(m.categoriaId, 'control')) return;
+    saldoPorControl[m.categoriaId] = (saldoPorControl[m.categoriaId]||0) + (Number(m.ingreso)||0) - (Number(m.egreso)||0);
+  });
+  var categoriasControl = STATE.categorias.filter(function(c){
+    return c.tipo === 'control' && Math.abs(saldoPorControl[c.id]||0) >= 0.005;
+  }).map(function(c){
+    return { id:c.id, nombre:c.nombre, saldo:saldoPorControl[c.id] };
+  }).sort(function(a,b){ return a.nombre.localeCompare(b.nombre); });
+
+  return { filas:filas, saldoSinCentro:saldoSinCentro, totalAna:totalAna, totalFranco:totalFranco, hayOtros:hayOtros, totalOtros:totalOtros, totalGeneral:totalGeneral, categoriasControl:categoriasControl, calculadoEn: new Date() };
 }
 function obtenerSaldos(){
   if(STATE.saldosDirty || !STATE.saldosCache){
@@ -3116,6 +3127,20 @@ function renderSaldos(){
     (filas.length || saldoSinCentro!==0 ? '<div class="saldos-grupos">'+gruposHtml+'</div>' : '<div class="empty">Todavía no cargaste ningún Centro de Costo.</div>')+
   '</div>';
 
+  var tablaControl = (s.categoriasControl||[]).length ? '<div class="card">'+
+    '<h3 style="margin-bottom:4px">Saldo pendiente de categorías Solo control</h3>'+
+    '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">Ingresos menos egresos de cada categoría Solo control (sin fechas futuras). Positivo: entró más de lo que salió; negativo: salió más de lo que entró. Ya está incluido en los saldos de arriba; solo se muestran las que no están en cero.</div>'+
+    '<div class="saldos-grupos">'+s.categoriasControl.map(function(c){
+      return '<div class="saldo-item" style="flex:1 1 220px;min-width:200px;margin-bottom:0">'+
+        '<div class="saldo-item-encabezado">'+
+          '<div style="min-width:0;flex:1">'+renderChip(c.nombre, colorCategoria(c.id), colorTextoCategoria(c.id))+'</div>'+
+          '<button type="button" class="icon-btn" data-action="ir-a-movimientos-categoria" data-id="'+c.id+'" title="Ver movimientos de esta categoría" aria-label="Ver movimientos"><i class="bi bi-receipt"></i></button>'+
+        '</div>'+
+        '<div class="saldo-item-monto '+(c.saldo<0?'egreso':'ingreso')+'">'+fmtMonto(c.saldo)+'</div>'+
+      '</div>';
+    }).join('')+'</div>'+
+  '</div>' : '';
+
   var sUsd = calcularSaldosUsd();
   var tablaUsd = (sUsd.filas.length || sUsd.saldoSinCentro!==0) ? '<div class="card">'+
     '<div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:10px;margin-bottom:4px">'+
@@ -3136,7 +3161,7 @@ function renderSaldos(){
     '<div style="font-size:11px;color:var(--ink-soft)">Aparte del saldo en pesos (no se suma al total de arriba). Se carga y se detalla en la pestaña USDT.</div>'+
   '</div>' : '';
 
-  return cards + tabla + tablaUsd + tablaUsdt;
+  return cards + tabla + tablaControl + tablaUsd + tablaUsdt;
 }
 
 // ===================== RESUMEN =====================
@@ -4776,6 +4801,16 @@ async function handleAction(action, id){
   if(action==='mov-pagina-anterior'){ STATE.movPaginaActual = Math.max(1, STATE.movPaginaActual-1); render(); return; }
   if(action==='mov-pagina-siguiente'){ STATE.movPaginaActual = STATE.movPaginaActual+1; render(); return; }
   if(action==='ir-a-vencimientos'){ STATE.activeTab = 'vencimientos'; render(); return; }
+  if(action==='ir-a-movimientos-categoria'){
+    STATE.filtros.categoria = id ? [id] : [];
+    STATE.filtros.centro = [];
+    STATE.filtros.subcategoria = [];
+    STATE.filtros.mes = []; // el saldo es histórico: sin filtro de mes, el total de Movimientos coincide
+    STATE.movPaginaActual = 1;
+    STATE.activeTab = 'movimientos';
+    render();
+    return;
+  }
   if(action==='ir-a-movimientos-centro'){
     STATE.filtros.centro = id ? [id] : [];
     STATE.movPaginaActual = 1;
