@@ -371,6 +371,9 @@ tfoot td{ border-top:1px solid var(--ink); border-bottom:none; font-weight:600; 
 .entidad-logo{ height:24px; width:auto; max-width:84px; object-fit:contain; }
 
 .bar-row{ display:flex; align-items:center; gap:10px; padding:6px 0; border-bottom:1px solid var(--rule); }
+.bar-row-link{ cursor:pointer; }
+.bar-row-link:hover{ background:var(--bg); }
+.bar-row-link:hover .name{ text-decoration:underline; text-decoration-style:dotted; }
 .bar-row .name{ width:180px; font-size:12px; flex-shrink:0; }
 .bar-track{ flex:1; background:var(--track); border-radius:3px; height:8px; overflow:hidden; }
 .bar-fill{ background:var(--danger); height:100%; }

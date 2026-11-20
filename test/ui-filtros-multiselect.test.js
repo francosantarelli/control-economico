@@ -22,7 +22,30 @@ describe('Filtro múltiple con buscador (Movimientos > Filtros > Centro de Costo
     const panel = win.document.querySelector('[data-multiselect-wrap="ff-centro"] .multiselect-panel');
     expect(panel).toBeTruthy();
     const items = panel.querySelectorAll('.multiselect-item');
-    expect(items).toHaveLength(2); // los 2 centros del fixture
+    expect(items).toHaveLength(3); // "(Sin centro)" + los 2 centros del fixture
+  });
+
+  it('"(Sin centro)" / "(Sin categoría)" filtran los movimientos que no tienen ese dato', () => {
+    win.STATE.movimientos = [
+      { id: 'm1', fecha: '2026-01-05', centroId: 'c-ef', categoriaId: 'cat-super', ingreso: 0, egreso: 10 },
+      { id: 'm2', fecha: '2026-01-06', centroId: null, categoriaId: null, ingreso: 0, egreso: 20 },
+    ];
+    win.STATE.filtros.categoria = ['__vacio__'];
+    expect(win.movimientosFiltrados(win.STATE.filtros).map(function(m){ return m.id; })).toEqual(['m2']);
+    win.STATE.filtros.categoria = [];
+    win.STATE.filtros.centro = ['__vacio__'];
+    expect(win.movimientosFiltrados(win.STATE.filtros).map(function(m){ return m.id; })).toEqual(['m2']);
+  });
+
+  it('desde Resumen (vista por categoría) abre Movimientos con esa categoría y los filtros de Centro/Mes de Resumen', () => {
+    win.STATE.resumenFiltros = { centro: ['c-ef'], categoria: [], mes: ['2026-01'], vista: 'categoria' };
+    win.STATE.filtros.texto = 'viejo';
+    win.handleAction('ir-a-movimientos-desde-resumen', 'cat-super');
+    expect(win.STATE.activeTab).toBe('movimientos');
+    expect(win.STATE.filtros.categoria).toEqual(['cat-super']);
+    expect(win.STATE.filtros.centro).toEqual(['c-ef']);
+    expect(win.STATE.filtros.mes).toEqual(['2026-01']);
+    expect(win.STATE.filtros.texto).toBe('');
   });
 
   it('tildar un checkbox agrega el valor al filtro y actualiza el resumen del botón', () => {

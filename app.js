@@ -2231,8 +2231,8 @@ function movimientosFiltrados(f){
     // Los movimientos con fecha futura se muestran en Vencimientos, no acá; salvo en "Solo incompletos",
     // para poder categorizarlos antes de su fecha (Resumen ya los suma en su mes).
     if(esMovimientoPendiente(m) && !f.soloIncompletos) return false;
-    if(f.centro.length && f.centro.indexOf(m.centroId)===-1) return false;
-    if(f.categoria.length && f.categoria.indexOf(m.categoriaId)===-1) return false;
+    if(f.centro.length && f.centro.indexOf(m.centroId||'__vacio__')===-1) return false;
+    if(f.categoria.length && f.categoria.indexOf(m.categoriaId||'__vacio__')===-1) return false;
     if(f.mes.length && f.mes.indexOf((m.fecha||'').slice(0,7))===-1) return false;
     if(f.subcategoria.length){
       var valorSub = m.subcategoriaId || '__vacio__';
@@ -2304,8 +2304,8 @@ function alertaVencimientosProximosHtml(){
 function renderMovimientos(){
   var f = STATE.filtros || {centro:[], categoria:[], mes:[], texto:'', subcategoria:[], soloIncompletos:false};
 
-  var centroOptions = centrosOrdenados().map(function(c){ return {value:c.id, label:c.codigo}; });
-  var categoriaOptions = categoriasOrdenadas().map(function(c){ return {value:c.id, label:c.nombre}; });
+  var centroOptions = [{value:'__vacio__', label:'(Sin centro)'}].concat(centrosOrdenados().map(function(c){ return {value:c.id, label:c.codigo}; }));
+  var categoriaOptions = [{value:'__vacio__', label:'(Sin categoría)'}].concat(categoriasOrdenadas().map(function(c){ return {value:c.id, label:c.nombre}; }));
   var meses = getMesesHastaHoy();
   var mesOptions = meses.map(function(m){ return {value:m, label:m}; });
   var subsParaFiltro = subcategoriasOrdenadas(f.categoria.length ? STATE.subcategorias.filter(function(s){ return f.categoria.indexOf(s.categoriaId)!==-1; }) : STATE.subcategorias);
@@ -3560,7 +3560,7 @@ function renderResumen(){
   });
   var lista = Object.keys(porGrupo).map(function(k){
     var nombre = f.vista === 'centro' ? (k ? nombreCentro(k).split(' · ')[0] : 'Sin centro') : (k ? nombreCategoria(k) : 'Sin categoría');
-    return { nombre: nombre, monto: porGrupo[k].monto, cant: porGrupo[k].cant };
+    return { key: k || '__vacio__', nombre: nombre, monto: porGrupo[k].monto, cant: porGrupo[k].cant };
   }).filter(function(x){return x.monto!==0;}).sort(function(a,b){ return Math.abs(b.monto)-Math.abs(a.monto); });
   var maxBar = lista.length ? Math.abs(lista[0].monto) : 1;
 
@@ -3568,7 +3568,8 @@ function renderResumen(){
   var bars = lista.map(function(x){
     var pct = maxBar ? Math.round((Math.abs(x.monto)/maxBar)*100) : 0;
     var claseColor = x.monto >= 0 ? 'ingreso' : 'egreso';
-    return '<div class="bar-row"><div class="name">'+esc(x.nombre)+etiquetaCant(x.cant)+'</div>'+
+    return '<div class="bar-row bar-row-link" role="button" data-action="ir-a-movimientos-desde-resumen" data-id="'+esc(x.key)+'" title="Ver los movimientos que componen este total">'+
+      '<div class="name">'+esc(x.nombre)+etiquetaCant(x.cant)+'</div>'+
       '<div class="bar-track"><div class="bar-fill '+claseColor+'-fill" style="width:'+pct+'%"></div></div>'+
       '<div class="amt '+claseColor+'">'+fmtMonto(x.monto)+'</div></div>';
   }).join('');
@@ -4801,6 +4802,27 @@ async function handleAction(action, id){
   if(action==='mov-pagina-anterior'){ STATE.movPaginaActual = Math.max(1, STATE.movPaginaActual-1); render(); return; }
   if(action==='mov-pagina-siguiente'){ STATE.movPaginaActual = STATE.movPaginaActual+1; render(); return; }
   if(action==='ir-a-vencimientos'){ STATE.activeTab = 'vencimientos'; render(); return; }
+  // Desde "Total por Categoría/Centro" de Resumen: abre Movimientos con el mismo recorte (Centro,
+  // Categoría y Mes de Resumen) más el grupo elegido.
+  if(action==='ir-a-movimientos-desde-resumen'){
+    var rf = STATE.resumenFiltros || {centro:[], categoria:[], mes:[], vista:'categoria'};
+    var porCentro = rf.vista === 'centro';
+    // En la vista por Centro, el total de Resumen deja afuera TEC, Solo control, Sueldo e Inversión:
+    // se filtra Movimientos por las categorías restantes para que el número coincida.
+    var categoriasDelTotal = ['__vacio__'].concat(STATE.categorias.filter(function(c){
+      return !esCategoriaFueraDeReportes(c.id) && !esCategoriaSueldo(c.id) && !esCategoriaInversion(c.id);
+    }).map(function(c){ return c.id; }));
+    if(porCentro && rf.categoria.length) categoriasDelTotal = categoriasDelTotal.filter(function(c){ return rf.categoria.indexOf(c)!==-1; });
+    STATE.filtros = {
+      centro: porCentro ? [id] : rf.centro.slice(),
+      categoria: porCentro ? categoriasDelTotal : [id],
+      subcategoria: [], mes: rf.mes.slice(), texto:'', soloIncompletos:false, soloTarjeta:false
+    };
+    STATE.movPaginaActual = 1;
+    STATE.activeTab = 'movimientos';
+    render();
+    return;
+  }
   if(action==='ir-a-movimientos-categoria'){
     STATE.filtros.categoria = id ? [id] : [];
     STATE.filtros.centro = [];
